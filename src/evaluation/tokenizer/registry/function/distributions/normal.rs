@@ -1,8 +1,7 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        distributions::special::erfinv,
-        operators::FunctionOp,
+        distributions::special::erfinv, operators::FunctionOp,
     },
 };
 use std::f64::consts::TAU;

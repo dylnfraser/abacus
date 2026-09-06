@@ -41,10 +41,14 @@ impl RangeSeq {
 
         let diff = (end_val - start_val).abs();
         let epsilon = 1e-12 * step_abs.max(1.0);
-        let count = ((diff + epsilon) / step_abs).floor() as usize + 1;
-        if count > Self::MAX_RANGE_ELEMENTS {
+        let count_f64 = ((diff + epsilon) / step_abs).floor();
+        if !count_f64.is_finite()
+            || count_f64 < 0.0
+            || count_f64 > (Self::MAX_RANGE_ELEMENTS - 1) as f64
+        {
             return Err(AbacusError::IncompatibleFunctionArguments);
         }
+        let count = count_f64 as usize + 1;
         let step = if start_val <= end_val {
             step_abs
         } else {

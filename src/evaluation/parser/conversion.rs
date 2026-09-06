@@ -1,7 +1,7 @@
 use crate::{
+    AbacusError, Token,
     evaluation::parser::pratt::Parser,
     units::{eval_result::EvalResult, unit::Unit, unit::UnitExpr, value::Value},
-    AbacusError, Token,
 };
 use std::sync::Arc;
 

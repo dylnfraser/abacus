@@ -1,7 +1,7 @@
 use crate::{
+    AbacusError, Token,
     evaluation::parser::pratt::Parser,
     units::{eval_result::EvalResult, interval::Interval, interval::IntervalStyle, value::Value},
-    AbacusError, Token,
 };
 
 impl<'a> Parser<'a> {
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
                         _ => {
                             return Err(AbacusError::EvaluationError(
                                 "expected a date after 'until'".to_string(),
-                            ))
+                            ));
                         }
                     };
                     let now = self.get_now().clone();
@@ -70,7 +70,9 @@ impl<'a> Parser<'a> {
                     {
                         let ms = (v.canonical * 1000.0).round() as i64;
                         if name == "before" || name == "ago" {
-                            Ok(EvalResult::Date(self.get_now().add_milliseconds(-ms)))
+                            Ok(EvalResult::Date(
+                                self.get_now().add_milliseconds(ms.saturating_neg()),
+                            ))
                         } else {
                             Ok(EvalResult::Date(self.get_now().add_milliseconds(ms)))
                         }
@@ -153,9 +155,7 @@ impl<'a> Parser<'a> {
                 })?;
 
                 self.expect(&Token::Comma).map_err(|_| {
-                    AbacusError::UnexpectedToken(
-                        "expected ',' between interval bounds".to_string(),
-                    )
+                    AbacusError::UnexpectedToken("expected ',' between interval bounds".to_string())
                 })?;
 
                 let hi_result = self.parse_expr(0)?;
@@ -178,11 +178,12 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                let style = self.config.default_interval_style.unwrap_or(IntervalStyle::Bracket);
+                let style = self
+                    .config
+                    .default_interval_style
+                    .unwrap_or(IntervalStyle::Bracket);
                 Ok(EvalResult::Interval(Interval::new_with_style(
-                    lo,
-                    hi,
-                    style,
+                    lo, hi, style,
                 )?))
             }
 

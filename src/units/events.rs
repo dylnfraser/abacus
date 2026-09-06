@@ -1,5 +1,5 @@
 use crate::error::AbacusError;
-use crate::units::date::{days_in_month, Date, DayOfWeek};
+use crate::units::date::{Date, DayOfWeek, days_in_month};
 
 /// Computes the nth occurrence of a weekday in a given year and month.
 ///

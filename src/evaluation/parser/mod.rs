@@ -9,10 +9,7 @@ pub use config::EvalConfig;
 pub use pratt::{MAX_RECURSION_DEPTH, Parser};
 pub use range::RangeSeq;
 
-use crate::{
-    units::eval_result::EvalResult,
-    AbacusError, TokenRegistry, UnitRegistry,
-};
+use crate::{AbacusError, TokenRegistry, UnitRegistry, units::eval_result::EvalResult};
 
 /// Convenience function: tokenize and parse an expression string into an `EvalResult`.
 pub fn evaluate(

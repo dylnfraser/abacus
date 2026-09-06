@@ -10,8 +10,8 @@ use crate::{
             computing_niche_units::register_computing_niche_units,
             derived_units::register_derived_units, humorous_units::register_humorous_units,
             imperial_units::register_imperial_units, nautical_units::register_nautical_units,
-            speed_units::register_speed_units,
-            storage_units::register_storage_units, temporal_units::register_temporal_units,
+            speed_units::register_speed_units, storage_units::register_storage_units,
+            temporal_units::register_temporal_units,
             trade_historical_units::register_trade_historical_units,
             typography_units::register_typography_units,
             volume_units::register_volume_and_area_units,
@@ -207,28 +207,16 @@ pub fn register_metric_prefixed_units(
         );
 
         if let Some(name) = base_name {
-            map.insert(
-                format!("{}{}", pref.name, name),
-                Arc::clone(&pref_unit),
-            );
+            map.insert(format!("{}{}", pref.name, name), Arc::clone(&pref_unit));
             if add_plural && !name.ends_with('s') {
-                map.insert(
-                    format!("{}{}s", pref.name, name),
-                    Arc::clone(&pref_unit),
-                );
+                map.insert(format!("{}{}s", pref.name, name), Arc::clone(&pref_unit));
             }
         }
 
         for extra in extra_names {
-            map.insert(
-                format!("{}{}", pref.name, extra),
-                Arc::clone(&pref_unit),
-            );
+            map.insert(format!("{}{}", pref.name, extra), Arc::clone(&pref_unit));
             if add_plural && !extra.ends_with('s') {
-                map.insert(
-                    format!("{}{}s", pref.name, extra),
-                    Arc::clone(&pref_unit),
-                );
+                map.insert(format!("{}{}s", pref.name, extra), Arc::clone(&pref_unit));
             }
         }
     }

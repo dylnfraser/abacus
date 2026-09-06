@@ -336,4 +336,3 @@ impl From<i64> for EvalResult {
         EvalResult::Scalar(Value::dimensionless(n as f64))
     }
 }
-

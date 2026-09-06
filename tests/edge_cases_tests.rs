@@ -305,11 +305,17 @@ fn test_numerical_stability_edge_cases() {
     let abacus = Abacus::standard();
 
     // 1. Poisson PMF and CDF with k > 170
-    let p_pdf = abacus.eval_scalar("poissonpdf(200, 200)").unwrap().canonical;
+    let p_pdf = abacus
+        .eval_scalar("poissonpdf(200, 200)")
+        .unwrap()
+        .canonical;
     assert!(p_pdf.is_finite() && p_pdf > 0.0);
     assert!((p_pdf - 0.0282).abs() < 1e-3);
 
-    let p_cdf = abacus.eval_scalar("poissoncdf(200, 200)").unwrap().canonical;
+    let p_cdf = abacus
+        .eval_scalar("poissoncdf(200, 200)")
+        .unwrap()
+        .canonical;
     assert!(p_cdf.is_finite() && (p_cdf - 0.5188).abs() < 1e-2);
 
     // 2. Hypergeometric rejection of negative / invalid arguments
@@ -318,4 +324,85 @@ fn test_numerical_stability_edge_cases() {
 
     // 3. IRR divergence handling when no rate exists
     assert!(abacus.eval("irr(100, 200, 300)").is_err());
+}
+
+#[test]
+fn test_code_review_findings_cr_001_through_cr_006() {
+    let abacus = Abacus::standard();
+
+    // CR-001: Range overflow in RangeSeq::new on massive bounds
+    assert!(abacus.eval("mean(0..1e308)").is_err());
+    assert!(abacus.eval("sum(1..1e300)").is_err());
+
+    // CR-002: Interval division singularity with non-SI units preserves correct canonical scaling
+    let int_div = abacus.eval("[10 km, 20 km] / [0 h, 2 h]").unwrap();
+    assert_eq!(int_div.to_display(), "[5 km/h, inf km/h]");
+
+    // CR-003: Affine units rejected by abs and sign
+    assert!(matches!(
+        abacus.eval("abs(-20 °C)"),
+        Err(AbacusError::AffineUnitOperation(_))
+    ));
+    assert!(matches!(
+        abacus.eval("sign(-20 °C)"),
+        Err(AbacusError::AffineUnitOperation(_))
+    ));
+
+    // CR-004: Unary sqrt unit simplification doesn't drop units in compound products
+    let sqrt_res = abacus.eval("sqrt(4 m * s)").unwrap();
+    assert_eq!(sqrt_res.to_display(), "2 (m*s)^0.5");
+
+    // CR-005: Significant figure rounding when decade shifts
+    let calc = Abacus::standard().with_significant_figures(2);
+    let sf2_a = calc.eval("0.0999").unwrap();
+    assert_eq!(calc.format_result(&sf2_a), "0.10");
+    let sf2_b = calc.eval("9.99").unwrap();
+    assert_eq!(calc.format_result(&sf2_b), "10");
+
+    // CR-006: Clamp with NaN bounds returns Err instead of panicking
+    assert!(abacus.eval("clamp(5, 0/0, 10)").is_err());
+    assert!(abacus.eval("clamp(5, 0, 0/0)").is_err());
+}
+
+#[test]
+fn test_code_review_findings_cr_007_through_cr_009() {
+    let abacus = Abacus::standard();
+
+    // CR-007: round_to_decimals with decimals >= 308 does not produce NaN
+    let val = abacus::units::value::Value::dimensionless(123.456);
+    let rounded = val.round_to_decimals(400);
+    assert_eq!(rounded.canonical, 123.456);
+    assert!(!rounded.canonical.is_nan());
+
+    let calc_dec = Abacus::standard().with_decimal_places(400);
+    let res = calc_dec.eval("123.456").unwrap();
+    if let abacus::EvalResult::Scalar(v) = res {
+        assert_eq!(v.canonical, 123.456);
+        assert!(!v.canonical.is_nan());
+    }
+
+    // CR-008: UnitRegistry inherits and enforces configured max_exponent
+    let low_exp_calc = Abacus::standard().with_max_exponent(5.0);
+    assert_eq!(low_exp_calc.units.max_exponent, 5.0);
+    assert!(low_exp_calc.eval("5 m^5").is_ok());
+    assert!(matches!(
+        low_exp_calc.eval("5 m^6"),
+        Err(AbacusError::ExponentLimitExceeded)
+    ));
+    assert!(matches!(
+        low_exp_calc.eval("5 m^-6"),
+        Err(AbacusError::ExponentLimitExceeded)
+    ));
+
+    // CR-009: Date arithmetic does not overflow or panic on extreme bounds
+    let d = abacus::units::date::Date::new(2025, 1, 1);
+    let _ = d.add_days(i64::MAX);
+    let _ = d.add_days(i64::MIN);
+    let _ = d.add_seconds(i64::MAX);
+    let _ = d.add_minutes(i64::MAX);
+    let _ = d.add_hours(i64::MAX);
+    let _ = d.add_milliseconds(i64::MAX);
+    let _ = d.add_years(i32::MAX);
+    let _ = d.sub_days(i64::MAX);
+    let _ = abacus.eval("2025-01-01 + 100000000000000 days");
 }

@@ -99,9 +99,9 @@ fn highlight_syntax(line: &str) -> String {
                     // Units & Conversion keywords
                     "meters" | "meter" | "m" | "inches" | "inch" | "in" | "feet" | "ft" | "cm"
                     | "mm" | "km" | "miles" | "mi" | "kg" | "g" | "lbs" | "to" | "as" | "at"
-                    | "per" | "of"
-                    | "hours" | "hour" | "h" | "minutes" | "mins" | "seconds" | "s" | "days"
-                    | "day" | "weeks" | "week" | "months" | "years" | "workdays" | "business" => {
+                    | "per" | "of" | "hours" | "hour" | "h" | "minutes" | "mins" | "seconds"
+                    | "s" | "days" | "day" | "weeks" | "week" | "months" | "years" | "workdays"
+                    | "business" => {
                         result.push_str("\x1b[38;2;189;147;249m"); // Soft Purple Unit
                         result.push_str(word);
                         result.push_str("\x1b[0m");
@@ -160,7 +160,9 @@ fn print_welcome_banner(use_color: bool) {
             "    • \x1b[38;2;139;233;253msqrt(14 m^3)\x1b[0m                                       "
         );
         println!(" \x1b[90mType '.help' for help, '.clear' to clear, 'exit' to leave.\x1b[0m");
-        println!("\x1b[1;36m=============================================================\x1b[0m\n");
+        println!(
+            "\x1b[1;36m=============================================================\x1b[0m\n"
+        );
     } else {
         println!("=============================================================");
         println!("               ABACUS INTERACTIVE SHELL (1.0)               ");
@@ -204,7 +206,11 @@ fn main() {
 
     print_welcome_banner(use_color);
 
-    let prompt = if use_color { "\x1b[36m›\x1b[0m " } else { "› " };
+    let prompt = if use_color {
+        "\x1b[36m›\x1b[0m "
+    } else {
+        "› "
+    };
 
     loop {
         let readline = rl.readline(prompt);

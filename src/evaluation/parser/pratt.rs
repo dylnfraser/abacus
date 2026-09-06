@@ -1,7 +1,7 @@
 use crate::{
+    AbacusError, Token, TokenRegistry, UnitRegistry,
     evaluation::parser::config::EvalConfig,
     units::{eval_result::EvalResult, interval::Interval, interval::IntervalStyle, value::Value},
-    AbacusError, Token, TokenRegistry, UnitRegistry,
 };
 
 pub const MAX_RECURSION_DEPTH: usize = 64;
@@ -240,12 +240,11 @@ impl<'a> Parser<'a> {
                         return Err(AbacusError::IncompatibleDimensions);
                     }
                 }
-                let style = self.config.default_interval_style.unwrap_or(IntervalStyle::Range);
-                lhs = EvalResult::Interval(Interval::new_with_style(
-                    lo,
-                    hi,
-                    style,
-                )?);
+                let style = self
+                    .config
+                    .default_interval_style
+                    .unwrap_or(IntervalStyle::Range);
+                lhs = EvalResult::Interval(Interval::new_with_style(lo, hi, style)?);
                 continue;
             }
 
@@ -279,10 +278,7 @@ impl<'a> Parser<'a> {
                     if rhs_val.unit.is_percent() {
                         let is_discount = self.last_percent_tag == Some("discount")
                             || self.last_percent_tag == Some("off")
-                            || matches!(
-                                self.peek(),
-                                Some(Token::PercentTag("discount" | "off"))
-                            );
+                            || matches!(self.peek(), Some(Token::PercentTag("discount" | "off")));
                         if matches!(self.peek(), Some(Token::PercentTag(_))) {
                             self.advance();
                         }
@@ -308,7 +304,7 @@ impl<'a> Parser<'a> {
                         _ => {
                             return Err(AbacusError::EvaluationError(
                                 "expected a date after 'until'".to_string(),
-                            ))
+                            ));
                         }
                     };
                     let now = self.get_now().clone();
@@ -328,14 +324,20 @@ impl<'a> Parser<'a> {
                     if val.unit.is_business_day_unit() {
                         let bdays =
                             now.business_days_between_with(&target_date, self.config.weekend);
-                        lhs = EvalResult::Scalar(Value::new(bdays as f64, std::sync::Arc::clone(&val.unit)));
+                        lhs = EvalResult::Scalar(Value::new(
+                            bdays as f64,
+                            std::sync::Arc::clone(&val.unit),
+                        ));
                         continue;
                     }
 
                     let unit_str = val.unit.display.render();
                     if unit_str == "d" || unit_str == "days" || unit_str == "day" {
                         let days_diff = target_date.to_epoch_days() - now.to_epoch_days();
-                        lhs = EvalResult::Scalar(Value::new(days_diff as f64, std::sync::Arc::clone(&val.unit)));
+                        lhs = EvalResult::Scalar(Value::new(
+                            days_diff as f64,
+                            std::sync::Arc::clone(&val.unit),
+                        ));
                         continue;
                     }
 
@@ -358,7 +360,8 @@ impl<'a> Parser<'a> {
 
                 match op_name {
                     "ago" => {
-                        lhs = EvalResult::Date(self.get_now().add_milliseconds(-ms));
+                        lhs =
+                            EvalResult::Date(self.get_now().add_milliseconds(ms.saturating_neg()));
                         continue;
                     }
                     "from_now" => {
@@ -375,7 +378,7 @@ impl<'a> Parser<'a> {
                         } else {
                             self.get_now().clone()
                         };
-                        lhs = EvalResult::Date(ref_date.add_milliseconds(-ms));
+                        lhs = EvalResult::Date(ref_date.add_milliseconds(ms.saturating_neg()));
                         continue;
                     }
                     "after" => {
@@ -427,11 +430,13 @@ impl<'a> Parser<'a> {
                         EvalResult::Scalar(val.clone())
                     }
                     EvalResult::Date(d) => {
-                        let num = d.get_property_with(prop, self.config.weekend).ok_or_else(|| {
-                            AbacusError::UnexpectedToken(format!(
-                                "unknown property '.{prop}' on Date"
-                            ))
-                        })?;
+                        let num =
+                            d.get_property_with(prop, self.config.weekend)
+                                .ok_or_else(|| {
+                                    AbacusError::UnexpectedToken(format!(
+                                        "unknown property '.{prop}' on Date"
+                                    ))
+                                })?;
                         EvalResult::Scalar(Value::dimensionless(num))
                     }
                     _ => {

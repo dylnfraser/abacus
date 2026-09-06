@@ -95,6 +95,8 @@ impl Mul<f64> for Dimensions {
     type Output = Self;
 
     fn mul(self, rhs: f64) -> Self::Output {
-        Self(std::array::from_fn(|i| (self.0[i] as f64 * rhs).round() as i16))
+        Self(std::array::from_fn(|i| {
+            (self.0[i] as f64 * rhs).round() as i16
+        }))
     }
 }

@@ -1,4 +1,4 @@
-use abacus::{eval, Abacus, AbacusError};
+use abacus::{Abacus, AbacusError, eval};
 
 #[test]
 fn test_basic_currencies() {
@@ -173,7 +173,10 @@ fn test_update_rates_from_json() {
 
     assert_eq!(calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
     assert_eq!(calc.eval("100 USD in GBP").unwrap().to_display(), "25 GBP");
-    assert_eq!(calc.eval("100 USD in JPY").unwrap().to_display(), "20000 JPY");
+    assert_eq!(
+        calc.eval("100 USD in JPY").unwrap().to_display(),
+        "20000 JPY"
+    );
 }
 
 #[test]
@@ -181,7 +184,10 @@ fn test_a_million_dollars_and_articles() {
     // "a million dollars"
     let million_dollars = eval("a million dollars").unwrap();
     assert_eq!(million_dollars.to_display(), "$1000000");
-    assert_eq!(million_dollars.into_scalar().unwrap().canonical, 1_000_000.0);
+    assert_eq!(
+        million_dollars.into_scalar().unwrap().canonical,
+        1_000_000.0
+    );
 
     // "a billion dollars in EUR"
     let billion_eur = eval("a billion dollars in EUR").unwrap();
@@ -253,9 +259,18 @@ fn test_daily_currency_caching() {
     new_calc.update_daily_rates().unwrap();
 
     // Rates should now reflect the cached values: 100 USD = 50 EUR, 25 GBP, 20000 JPY
-    assert_eq!(new_calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
-    assert_eq!(new_calc.eval("100 USD in GBP").unwrap().to_display(), "25 GBP");
-    assert_eq!(new_calc.eval("100 USD in JPY").unwrap().to_display(), "20000 JPY");
+    assert_eq!(
+        new_calc.eval("100 USD in EUR").unwrap().to_display(),
+        "50 EUR"
+    );
+    assert_eq!(
+        new_calc.eval("100 USD in GBP").unwrap().to_display(),
+        "25 GBP"
+    );
+    assert_eq!(
+        new_calc.eval("100 USD in JPY").unwrap().to_display(),
+        "20000 JPY"
+    );
 
     // Clean up
     let _ = std::fs::remove_file(&cache_file);
@@ -344,4 +359,3 @@ fn test_a_and_an_as_rate_division() {
     let daily = eval("a thousand dollars a day").unwrap();
     assert_eq!(daily.to_display(), "1000 $/d");
 }
-

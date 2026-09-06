@@ -1,4 +1,4 @@
-use abacus::{eval, AbacusError};
+use abacus::{AbacusError, eval};
 
 #[test]
 fn test_recursion_depth_limit_nested_parentheses() {
@@ -112,20 +112,86 @@ fn test_pseudo_random_string_fuzzing() {
     // Deterministic linear congruential generator (LCG) for reproducible fuzzing
     let mut seed: u64 = 0xDEADBEEFCAFEBABE;
     let mut next_rand = || -> u64 {
-        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         seed
     };
 
     let corpus_tokens = [
-        "0", "1", "-1", "3.14", "1e308", "1e-308", "inf", "nan",
-        "+", "-", "*", "/", "^", "%", "!", "++", "--", "..",
-        "(", ")", "[", "]", "{", "}", ",", ";", ":", ".",
-        "m", "s", "kg", "J", "N", "deg", "rad", "USD", "h", "hour",
-        "in", "to", "as", "of", "ago", "before", "after",
-        "sin", "cos", "tan", "sqrt", "ln", "log", "exp", "abs",
-        "poissonpdf", "hypgeompdf", "irr", "npv",
-        "tdy", "tmr", "yesterday", "now",
-        " ", "\t", "\n", "\0", "@", "#", "$", "&", "|", "~", "`", "\\",
+        "0",
+        "1",
+        "-1",
+        "3.14",
+        "1e308",
+        "1e-308",
+        "inf",
+        "nan",
+        "+",
+        "-",
+        "*",
+        "/",
+        "^",
+        "%",
+        "!",
+        "++",
+        "--",
+        "..",
+        "(",
+        ")",
+        "[",
+        "]",
+        "{",
+        "}",
+        ",",
+        ";",
+        ":",
+        ".",
+        "m",
+        "s",
+        "kg",
+        "J",
+        "N",
+        "deg",
+        "rad",
+        "USD",
+        "h",
+        "hour",
+        "in",
+        "to",
+        "as",
+        "of",
+        "ago",
+        "before",
+        "after",
+        "sin",
+        "cos",
+        "tan",
+        "sqrt",
+        "ln",
+        "log",
+        "exp",
+        "abs",
+        "poissonpdf",
+        "hypgeompdf",
+        "irr",
+        "npv",
+        "tdy",
+        "tmr",
+        "yesterday",
+        "now",
+        " ",
+        "\t",
+        "\n",
+        "\0",
+        "@",
+        "#",
+        "$",
+        "&",
+        "|",
+        "~",
+        "`",
+        "\\",
     ];
 
     // Run 5,000 generated randomized inputs through eval

@@ -1,6 +1,5 @@
 use crate::{
-    AbacusError, Value,
-    evaluation::tokenizer::registry::function::operators::FunctionOp,
+    AbacusError, Value, evaluation::tokenizer::registry::function::operators::FunctionOp,
     units::unit::Unit,
 };
 use std::sync::Arc;

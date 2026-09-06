@@ -1,4 +1,5 @@
 use crate::{
+    AbacusError, Token,
     evaluation::parser::{pratt::Parser, range::RangeSeq},
     units::{
         dimensions::Dimensions,
@@ -6,7 +7,6 @@ use crate::{
         unit::{Unit, UnitExpr},
         value::Value,
     },
-    AbacusError, Token,
 };
 use std::sync::Arc;
 

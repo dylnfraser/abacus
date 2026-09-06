@@ -9,13 +9,13 @@ pub enum Token<'a> {
     Function(&'static str), // e.g., 'sin', 'binompdf', 'mean'
 
     ConversionOp,
-    RelTimeOp(&'static str), // "ago", "from_now", "before", "after"
-    PercentChangeFrom,       // "% change from", "percent change from"
+    RelTimeOp(&'static str),  // "ago", "from_now", "before", "after"
+    PercentChangeFrom,        // "% change from", "percent change from"
     PercentTag(&'static str), // "tip", "tax", "vat", "gst", "fee", "discount", "off", "markup"
 
     // Values
-    Float(f64),    // parsed number
-    Unit(&'a str), // "kg", "m", "ft" borrowed directly from input text
+    Float(f64),     // parsed number
+    Unit(&'a str),  // "kg", "m", "ft" borrowed directly from input text
     Ident(&'a str), // variable or constant identifier, e.g. "x", "pi", "e"
 
     // Grouping & Delimiters

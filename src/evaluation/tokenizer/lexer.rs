@@ -1,4 +1,5 @@
 use crate::{
+    AbacusError, UnitRegistry,
     evaluation::tokenizer::{
         date_literal::try_parse_date_literal_with_anchor,
         implicit::resolve_tokens,
@@ -6,7 +7,6 @@ use crate::{
         registry::token_registry::{MatchedOpKind, TokenRegistry},
         tokens::Token,
     },
-    AbacusError, UnitRegistry,
 };
 
 const CONVERSION_KEYWORDS: [&str; 2] = ["as", "to"];
@@ -17,7 +17,10 @@ fn match_rel_time_op(remaining: &str) -> Option<(&'static str, usize)> {
     let b = remaining.as_bytes();
     let len = b.len();
 
-    if len >= 8 && b[..8].eq_ignore_ascii_case(b"from now") && (len == 8 || !b[8].is_ascii_alphanumeric()) {
+    if len >= 8
+        && b[..8].eq_ignore_ascii_case(b"from now")
+        && (len == 8 || !b[8].is_ascii_alphanumeric())
+    {
         return Some(("from_now", 8));
     }
     if len >= 4 && b[..4].eq_ignore_ascii_case(b"from") {
@@ -31,19 +34,34 @@ fn match_rel_time_op(remaining: &str) -> Option<(&'static str, usize)> {
             return Some(("from_now", 4 + ws_len + 3));
         }
     }
-    if len >= 3 && b[..3].eq_ignore_ascii_case(b"ago") && (len == 3 || !b[3].is_ascii_alphanumeric()) {
+    if len >= 3
+        && b[..3].eq_ignore_ascii_case(b"ago")
+        && (len == 3 || !b[3].is_ascii_alphanumeric())
+    {
         return Some(("ago", 3));
     }
-    if len >= 6 && b[..6].eq_ignore_ascii_case(b"before") && (len == 6 || !b[6].is_ascii_alphanumeric()) {
+    if len >= 6
+        && b[..6].eq_ignore_ascii_case(b"before")
+        && (len == 6 || !b[6].is_ascii_alphanumeric())
+    {
         return Some(("before", 6));
     }
-    if len >= 5 && b[..5].eq_ignore_ascii_case(b"after") && (len == 5 || !b[5].is_ascii_alphanumeric()) {
+    if len >= 5
+        && b[..5].eq_ignore_ascii_case(b"after")
+        && (len == 5 || !b[5].is_ascii_alphanumeric())
+    {
         return Some(("after", 5));
     }
-    if len >= 5 && b[..5].eq_ignore_ascii_case(b"until") && (len == 5 || !b[5].is_ascii_alphanumeric()) {
+    if len >= 5
+        && b[..5].eq_ignore_ascii_case(b"until")
+        && (len == 5 || !b[5].is_ascii_alphanumeric())
+    {
         return Some(("until", 5));
     }
-    if len >= 4 && b[..4].eq_ignore_ascii_case(b"till") && (len == 4 || !b[4].is_ascii_alphanumeric()) {
+    if len >= 4
+        && b[..4].eq_ignore_ascii_case(b"till")
+        && (len == 4 || !b[4].is_ascii_alphanumeric())
+    {
         return Some(("until", 4));
     }
     None
@@ -93,9 +111,7 @@ fn match_conversational_binary_op(remaining: &str) -> Option<(&'static str, usiz
 #[inline]
 fn match_percent_tag(remaining: &str) -> Option<(&'static str, usize)> {
     let lower = remaining.to_ascii_lowercase();
-    const TAGS: &[&str] = &[
-        "tip", "tax", "vat", "gst", "fee", "discount", "markup",
-    ];
+    const TAGS: &[&str] = &["tip", "tax", "vat", "gst", "fee", "discount", "markup"];
     for &tag in TAGS {
         if let Some(rest) = lower.strip_prefix(tag) {
             let next_char = rest.chars().next();
@@ -462,11 +478,13 @@ pub fn tokenize_string_with_anchor<'a>(
                             if pattern == "%" {
                                 let after = rest.trim_start();
                                 let is_of = after.to_ascii_lowercase().starts_with("of")
-                                    && (after.len() == 2 || !after.as_bytes()[2].is_ascii_alphanumeric());
+                                    && (after.len() == 2
+                                        || !after.as_bytes()[2].is_ascii_alphanumeric());
                                 if is_of {
                                     continue;
                                 }
-                                let starts_expr = after.starts_with(|c: char| c.is_ascii_digit() || c == '(');
+                                let starts_expr =
+                                    after.starts_with(|c: char| c.is_ascii_digit() || c == '(');
                                 if !starts_expr {
                                     continue;
                                 }
@@ -504,7 +522,9 @@ pub fn tokenize_string_with_anchor<'a>(
                                 }
                             }
                             if let Some(last_char) = pattern.chars().last()
-                                && (last_char.is_alphanumeric() || last_char == '_' || last_char == '-')
+                                && (last_char.is_alphanumeric()
+                                    || last_char == '_'
+                                    || last_char == '-')
                                 && let Some(next_char) = rest.chars().next()
                                 && (next_char.is_alphanumeric()
                                     || next_char == '_'
@@ -699,8 +719,7 @@ pub fn tokenize_string_with_anchor<'a>(
                 tokens.push(Token::Ident(sym));
             } else if sym == "a"
                 || sym.eq_ignore_ascii_case("an")
-                || (sym == "A"
-                    && !matches!(tokens.last(), Some(Token::Float(_) | Token::Val(_))))
+                || (sym == "A" && !matches!(tokens.last(), Some(Token::Float(_) | Token::Val(_))))
             {
                 // Check if this "a" / "an" is used as "per" (e.g. "5 usd a second", "60 miles an hour", "$50 an hour")
                 // Preceded by a unit or value, and followed by a unit (that is not a number scale word or conversion keyword).
@@ -715,7 +734,8 @@ pub fn tokenize_string_with_anchor<'a>(
                 );
                 let is_next_unit = !next_word.is_empty()
                     && unit_registry.contains(next_word)
-                    && crate::evaluation::tokenizer::implicit::number_scale_factor(next_word).is_none()
+                    && crate::evaluation::tokenizer::implicit::number_scale_factor(next_word)
+                        .is_none()
                     && !CONVERSION_KEYWORDS.contains(&next_word);
 
                 if is_prev_unit_or_val && is_next_unit {
@@ -750,7 +770,9 @@ pub fn tokenize_string_with_anchor<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation::tokenizer::sig_figs::{count_significant_figures, min_significant_figures_in_expr};
+    use crate::evaluation::tokenizer::sig_figs::{
+        count_significant_figures, min_significant_figures_in_expr,
+    };
 
     #[test]
     fn tokenizes_spaced_and_unspaced_expressions() {

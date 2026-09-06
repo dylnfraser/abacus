@@ -1,7 +1,4 @@
-use crate::{
-    evaluation::tokenizer::tokens::Token,
-    AbacusError, UnitRegistry, Value,
-};
+use crate::{AbacusError, UnitRegistry, Value, evaluation::tokenizer::tokens::Token};
 use std::iter::Peekable;
 use std::str::CharIndices;
 

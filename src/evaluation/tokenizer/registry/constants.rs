@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::units::{eval_result::EvalResult, value::Value};
+use std::collections::HashMap;
 
 /// Golden ratio constant \(\phi = \frac{1 + \sqrt{5}}{2}\).
 pub const PHI: f64 = 1.618_033_988_749_895;
@@ -45,6 +45,11 @@ pub fn get_standard_constant(name: &str) -> Option<EvalResult> {
 pub fn standard_variables_map() -> HashMap<String, EvalResult> {
     STANDARD_CONSTANTS
         .iter()
-        .map(|&(name, val)| (name.to_string(), EvalResult::Scalar(Value::dimensionless(val))))
+        .map(|&(name, val)| {
+            (
+                name.to_string(),
+                EvalResult::Scalar(Value::dimensionless(val)),
+            )
+        })
         .collect()
 }

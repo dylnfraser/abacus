@@ -27,10 +27,10 @@ pub use evaluation::tokenizer::registry::{
     function::operators::FunctionTarget, token_registry::TokenRegistry, unary::operators::UnaryOp,
 };
 
-pub use evaluation::tokenizer::tokens::Token;
 pub use evaluation::tokenizer::sig_figs::{
     count_significant_figures, min_significant_figures_in_expr,
 };
+pub use evaluation::tokenizer::tokens::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -374,6 +374,7 @@ impl Abacus {
     #[must_use]
     pub fn set_max_exponent(mut self, max: f64) -> Self {
         self.max_exponent = max;
+        self.units.set_max_exponent(max);
         self
     }
 
@@ -381,12 +382,14 @@ impl Abacus {
     #[must_use]
     pub fn with_max_exponent(mut self, max: f64) -> Self {
         self.max_exponent = max;
+        self.units.set_max_exponent(max);
         self
     }
 
     /// In-place setter for maximum exponent limit.
     pub fn set_max_exp(&mut self, max: f64) {
         self.max_exponent = max;
+        self.units.set_max_exponent(max);
     }
 
     /// Sets whether implicit multiplication (e.g. `2(3)`) is allowed.
@@ -499,8 +502,7 @@ impl Abacus {
             let cache_path = self.currency_cache_path.clone().unwrap_or_else(
                 crate::registry::units::currency_units::default_currency_cache_path,
             );
-            let rates =
-                crate::registry::units::currency_units::fetch_and_cache_rates(&cache_path)?;
+            let rates = crate::registry::units::currency_units::fetch_and_cache_rates(&cache_path)?;
             self.units.update_currency_rates(&rates);
             Ok(())
         }
@@ -520,7 +522,8 @@ impl Abacus {
             let rates = crate::registry::units::currency_units::parse_frankfurter_json(_json_str)?;
             self.units.update_currency_rates(&rates);
             if let Some(ref path) = self.currency_cache_path {
-                let _ = crate::registry::units::currency_units::save_rates_to_cache(_json_str, path);
+                let _ =
+                    crate::registry::units::currency_units::save_rates_to_cache(_json_str, path);
             }
             Ok(())
         }
@@ -576,7 +579,6 @@ pub fn default_currency_cache_path() -> std::path::PathBuf {
 }
 
 impl Abacus {
-
     // Tokenize an expression into a vector of `Token`s
     pub fn tokenize<'a>(&self, expr: &'a str) -> Result<Vec<Token<'a>>, AbacusError> {
         crate::evaluation::tokenizer::tokenize_string_full(
@@ -766,8 +768,7 @@ impl Abacus {
                     res = res.round_to_decimals(dec);
                 }
                 EvalResult::Interval(inv)
-                    if inv.lo.unit.dimensions
-                        == crate::units::dimensions::Dimensions::CURRENCY =>
+                    if inv.lo.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY =>
                 {
                     let unit_str = inv.lo.unit.display.render();
                     let dec = crate::units::value::currency_decimal_places(&unit_str);

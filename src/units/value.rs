@@ -155,6 +155,9 @@ impl Value {
     /// Returns a new `Value` with the displayed quantity rounded to `decimals` decimal places.
     #[must_use]
     pub fn round_to_decimals(&self, decimals: usize) -> Self {
+        if decimals >= 308 {
+            return self.clone();
+        }
         let amt = self.amount();
         let scale = 10.0f64.powi(decimals as i32);
         let rounded_amt = (amt * scale).round() / scale;
@@ -220,7 +223,10 @@ impl Value {
 /// Returns true if `sym` should be rendered as a prefix before the number (e.g. `$`, `€`, `£`, `¥`).
 #[must_use]
 pub fn is_prefix_symbol(sym: &str) -> bool {
-    matches!(sym, "$" | "€" | "£" | "¥" | "₹" | "₩" | "₺" | "₪" | "฿" | "R$")
+    matches!(
+        sym,
+        "$" | "€" | "£" | "¥" | "₹" | "₩" | "₺" | "₪" | "฿" | "R$"
+    )
 }
 
 /// Returns the standard number of decimal places for a currency (0 for JPY, KRW, etc., 2 for USD, EUR, GBP, etc.).
@@ -287,6 +293,9 @@ pub fn round_f64_sig_figs(val: f64, sig_figs: usize) -> f64 {
     }
     let magnitude = val.abs().log10().floor();
     let scale = 10.0f64.powf(sig_figs as f64 - 1.0 - magnitude);
+    if !scale.is_finite() || scale == 0.0 {
+        return val;
+    }
     (val * scale).round() / scale
 }
 
@@ -304,12 +313,18 @@ pub fn format_f64_sig_figs(val: f64, sig_figs: usize) -> String {
         return "0".to_string();
     }
 
-    let magnitude = val.abs().log10().floor() as i32;
+    let rounded = round_f64_sig_figs(val, sig_figs);
+    if rounded == 0.0 {
+        if sig_figs > 1 {
+            return format!("0.{:0<width$}", "", width = sig_figs - 1);
+        }
+        return "0".to_string();
+    }
+
+    let magnitude = rounded.abs().log10().floor() as i32;
     let sig_figs_i32 = sig_figs as i32;
 
     if magnitude >= sig_figs_i32 - 1 {
-        let scale = 10.0f64.powi(magnitude - sig_figs_i32 + 1);
-        let rounded = (val / scale).round() * scale;
         if rounded.abs() >= 1e15 {
             format!("{:.precision$e}", rounded, precision = sig_figs - 1)
         } else {
@@ -317,8 +332,6 @@ pub fn format_f64_sig_figs(val: f64, sig_figs: usize) -> String {
         }
     } else {
         let decimals = (sig_figs_i32 - 1 - magnitude) as usize;
-        let scale = 10.0f64.powi(decimals as i32);
-        let rounded = (val * scale).round() / scale;
         if rounded.abs() < 1e-4 {
             format!("{:.precision$e}", rounded, precision = sig_figs - 1)
         } else {
@@ -367,13 +380,9 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = self.amount();
         let nearest_integer = value.round();
-        let is_integer = value.is_finite()
-            && (value - nearest_integer).abs() <= 1e-12 * value.abs().max(1.0);
-        let display_value = if is_integer {
-            nearest_integer
-        } else {
-            value
-        };
+        let is_integer =
+            value.is_finite() && (value - nearest_integer).abs() <= 1e-12 * value.abs().max(1.0);
+        let display_value = if is_integer { nearest_integer } else { value };
 
         let unit_str = self.unit.display.render();
         let val_str = if !is_integer
@@ -395,10 +404,18 @@ impl Value {
         if !self.unit.is_compatible_with(&rhs.unit) {
             if rhs.unit.is_dimensionless() && !self.unit.is_dimensionless() {
                 let rhs_promoted = Value::new(rhs.amount(), Arc::clone(&self.unit));
-                return Ok((self.canonical, rhs_promoted.canonical, Arc::clone(&self.unit)));
+                return Ok((
+                    self.canonical,
+                    rhs_promoted.canonical,
+                    Arc::clone(&self.unit),
+                ));
             } else if self.unit.is_dimensionless() && !rhs.unit.is_dimensionless() {
                 let self_promoted = Value::new(self.amount(), Arc::clone(&rhs.unit));
-                return Ok((self_promoted.canonical, rhs.canonical, Arc::clone(&rhs.unit)));
+                return Ok((
+                    self_promoted.canonical,
+                    rhs.canonical,
+                    Arc::clone(&rhs.unit),
+                ));
             }
             return Err(AbacusError::IncompatibleDimensions);
         }

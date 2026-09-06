@@ -258,7 +258,8 @@ impl Time {
 
     #[must_use]
     pub fn to_total_milliseconds(&self) -> u64 {
-        ((u64::from(self.hour) * 3600 + u64::from(self.minute) * 60 + u64::from(self.second)) * 1000)
+        ((u64::from(self.hour) * 3600 + u64::from(self.minute) * 60 + u64::from(self.second))
+            * 1000)
             + u64::from(self.millisecond)
     }
 
@@ -561,11 +562,11 @@ pub fn date_to_epoch_days(year: i32, month: u32, day: u32) -> i64 {
 /// Convert days since Unix epoch 1970-01-01 to (year, month, day).
 #[must_use]
 pub fn epoch_days_to_date(epoch_days: i64) -> (i32, u32, u32) {
-    let z = epoch_days + 719468;
+    let z = epoch_days.saturating_add(719468);
     let era = if z >= 0 {
         z / 146097
     } else {
-        (z - 146096) / 146097
+        (z.saturating_sub(146096)) / 146097
     };
     let doe = z - era * 146097;
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
@@ -808,13 +809,21 @@ impl Date {
             "millisecond" | "ms" => Some(f64::from(self.time.millisecond)),
             "day_of_week" | "weekday" => Some(f64::from(self.day_of_week() as u32)),
             "day_of_year" => Some(f64::from(self.day_of_year())),
-            "is_weekend" => Some(if self.is_weekend_with(weekend) { 1.0 } else { 0.0 }),
-            "is_workday" | "is_business_day" => {
-                Some(if self.is_business_day_with(weekend) { 1.0 } else { 0.0 })
-            }
-            "offset" | "offset_minutes" => {
-                Some(self.timezone.as_ref().map_or(0.0, |tz| f64::from(tz.offset_minutes)))
-            }
+            "is_weekend" => Some(if self.is_weekend_with(weekend) {
+                1.0
+            } else {
+                0.0
+            }),
+            "is_workday" | "is_business_day" => Some(if self.is_business_day_with(weekend) {
+                1.0
+            } else {
+                0.0
+            }),
+            "offset" | "offset_minutes" => Some(
+                self.timezone
+                    .as_ref()
+                    .map_or(0.0, |tz| f64::from(tz.offset_minutes)),
+            ),
             _ => None,
         }
     }
@@ -895,12 +904,12 @@ impl Date {
 
     #[must_use]
     pub fn to_epoch_milliseconds(&self) -> i64 {
-        let local_days_ms = self.to_epoch_days() * 86_400_000;
+        let local_days_ms = self.to_epoch_days().saturating_mul(86_400_000);
         let local_time_ms = self.time.to_total_milliseconds() as i64;
-        let local_ms = local_days_ms + local_time_ms;
+        let local_ms = local_days_ms.saturating_add(local_time_ms);
 
         if let Some(ref tz) = self.timezone {
-            local_ms - (i64::from(tz.offset_minutes) * 60_000)
+            local_ms.saturating_sub(i64::from(tz.offset_minutes).saturating_mul(60_000))
         } else {
             local_ms
         }
@@ -956,14 +965,16 @@ impl Date {
     #[must_use]
     pub fn add_milliseconds(&self, ms: i64) -> Self {
         if let Some(ref tz) = self.timezone {
-            let utc_ms = self.to_epoch_milliseconds() + ms;
-            let target_ms = utc_ms + (i64::from(tz.offset_minutes) * 60_000);
+            let utc_ms = self.to_epoch_milliseconds().saturating_add(ms);
+            let target_ms =
+                utc_ms.saturating_add(i64::from(tz.offset_minutes).saturating_mul(60_000));
             let mut d = Self::from_epoch_milliseconds(target_ms);
             d.timezone = Some(tz.clone());
             d.format = self.format;
             d
         } else {
-            let mut d = Self::from_epoch_milliseconds(self.to_epoch_milliseconds() + ms);
+            let mut d =
+                Self::from_epoch_milliseconds(self.to_epoch_milliseconds().saturating_add(ms));
             d.format = self.format;
             d
         }
@@ -971,32 +982,35 @@ impl Date {
 
     #[must_use]
     pub fn add_seconds(&self, seconds: i64) -> Self {
-        self.add_milliseconds(seconds * 1000)
+        self.add_milliseconds(seconds.saturating_mul(1000))
     }
 
     #[must_use]
     pub fn add_minutes(&self, minutes: i64) -> Self {
-        self.add_milliseconds(minutes * 60_000)
+        self.add_milliseconds(minutes.saturating_mul(60_000))
     }
 
     #[must_use]
     pub fn add_hours(&self, hours: i64) -> Self {
-        self.add_milliseconds(hours * 3_600_000)
+        self.add_milliseconds(hours.saturating_mul(3_600_000))
     }
 
     #[must_use]
     pub fn add_days(&self, days: i64) -> Self {
-        self.add_milliseconds(days * 86_400_000)
+        self.add_milliseconds(days.saturating_mul(86_400_000))
     }
 
     #[must_use]
     pub fn sub_days(&self, days: i64) -> Self {
-        self.add_days(-days)
+        self.add_days(days.saturating_neg())
     }
 
     #[must_use]
     pub fn add_months(&self, months: i32) -> Self {
-        let total_months = i64::from(self.year) * 12 + (i64::from(self.month) - 1) + i64::from(months);
+        let total_months = i64::from(self.year)
+            .saturating_mul(12)
+            .saturating_add(i64::from(self.month) - 1)
+            .saturating_add(i64::from(months));
         let new_year = total_months.div_euclid(12) as i32;
         let new_month = (total_months.rem_euclid(12) + 1) as u32;
 
@@ -1015,7 +1029,7 @@ impl Date {
 
     #[must_use]
     pub fn add_years(&self, years: i32) -> Self {
-        self.add_months(years * 12)
+        self.add_months(years.saturating_mul(12))
     }
 
     #[must_use]
@@ -1025,7 +1039,10 @@ impl Date {
 
     #[must_use]
     pub fn seconds_between(&self, other: &Self) -> i64 {
-        (other.to_epoch_milliseconds() - self.to_epoch_milliseconds()) / 1000
+        (other
+            .to_epoch_milliseconds()
+            .saturating_sub(self.to_epoch_milliseconds()))
+            / 1000
     }
 
     #[must_use]
@@ -1216,18 +1233,21 @@ impl FromStr for Date {
             s.to_string()
         };
 
-        let (year, month, day, consumed) = if let Some(res) = Date::parse_ymd_components(&normalized) {
-            res
-        } else if let Some((date, consumed)) =
-            crate::evaluation::tokenizer::date_literal::try_parse_textual_date(
-                &normalized,
-                &Date::today(),
-            )
-        {
-            (date.year, date.month, date.day, consumed)
-        } else {
-            return Err(AbacusError::InvalidDate(format!("invalid date format: '{s}'")));
-        };
+        let (year, month, day, consumed) =
+            if let Some(res) = Date::parse_ymd_components(&normalized) {
+                res
+            } else if let Some((date, consumed)) =
+                crate::evaluation::tokenizer::date_literal::try_parse_textual_date(
+                    &normalized,
+                    &Date::today(),
+                )
+            {
+                (date.year, date.month, date.day, consumed)
+            } else {
+                return Err(AbacusError::InvalidDate(format!(
+                    "invalid date format: '{s}'"
+                )));
+            };
 
         let mut time = Time::new(0, 0, 0, 0);
         let mut timezone = None;

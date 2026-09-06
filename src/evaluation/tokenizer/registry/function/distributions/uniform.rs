@@ -1,9 +1,6 @@
 use crate::{
     AbacusError, Value,
-    evaluation::tokenizer::registry::function::{
-        check_dimensionless,
-        operators::FunctionOp,
-    },
+    evaluation::tokenizer::registry::function::{check_dimensionless, operators::FunctionOp},
 };
 
 /// unifpdf(a, b, x)

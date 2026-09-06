@@ -1,9 +1,7 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        check_dimensionless,
-        distributions::special::n_cr,
-        operators::FunctionOp,
+        check_dimensionless, distributions::special::n_cr, operators::FunctionOp,
     },
 };
 

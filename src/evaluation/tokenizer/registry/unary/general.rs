@@ -28,15 +28,36 @@ fn sqrt(a: Value) -> Result<Value, AbacusError> {
 
     let mut new_display = a.unit.display.clone();
 
-    if new_display.numerator.len().is_multiple_of(2)
-        && new_display.denominator.len().is_multiple_of(2)
-    {
-        new_display
-            .numerator
-            .truncate(new_display.numerator.len() / 2);
-        new_display
-            .denominator
-            .truncate(new_display.denominator.len() / 2);
+    let can_halve_counts = |list: &[String]| -> Option<Vec<String>> {
+        let mut counts = std::collections::HashMap::with_capacity(list.len());
+        let mut order = Vec::with_capacity(list.len());
+        for item in list {
+            let entry = counts.entry(item.as_str()).or_insert(0usize);
+            if *entry == 0 {
+                order.push(item.as_str());
+            }
+            *entry += 1;
+        }
+        if counts.values().all(|&c| c.is_multiple_of(2)) {
+            let mut halved = Vec::with_capacity(list.len() / 2);
+            for item in order {
+                let count = counts[item];
+                for _ in 0..(count / 2) {
+                    halved.push(item.to_string());
+                }
+            }
+            Some(halved)
+        } else {
+            None
+        }
+    };
+
+    if let (Some(num), Some(den)) = (
+        can_halve_counts(&new_display.numerator),
+        can_halve_counts(&new_display.denominator),
+    ) {
+        new_display.numerator = num;
+        new_display.denominator = den;
     } else if !a.unit.is_dimensionless() {
         let current = a.unit.display.render();
         new_display.numerator.clear();

@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use abacus::{eval, Abacus};
+use abacus::{Abacus, eval};
+use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 fn bench_tokenizer(c: &mut Criterion) {
     let abacus = Abacus::standard();
@@ -10,7 +10,9 @@ fn bench_tokenizer(c: &mut Criterion) {
     group.throughput(Throughput::Elements(token_count));
     group.bench_function("tokenize_expression", |b| {
         b.iter(|| {
-            let tokens = abacus.tokenize(black_box(expr)).expect("tokenization succeeds");
+            let tokens = abacus
+                .tokenize(black_box(expr))
+                .expect("tokenization succeeds");
             black_box(tokens);
         })
     });
@@ -45,8 +47,8 @@ fn bench_complex_expressions(c: &mut Criterion) {
     });
     group.bench_function("relative_date", |b| {
         b.iter(|| {
-            let res = eval(black_box("last thursday at 3pm + 2 weeks"))
-                .expect("evaluation succeeds");
+            let res =
+                eval(black_box("last thursday at 3pm + 2 weeks")).expect("evaluation succeeds");
             black_box(res);
         })
     });

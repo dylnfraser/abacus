@@ -1,7 +1,4 @@
-use crate::{
-    AbacusError, Value,
-    evaluation::tokenizer::registry::function::operators::FunctionOp,
-};
+use crate::{AbacusError, Value, evaluation::tokenizer::registry::function::operators::FunctionOp};
 use std::sync::Arc;
 
 /// Validates that all values in the slice are dimensionless.
@@ -55,7 +52,7 @@ fn clamp_fn(args: &[Value]) -> Result<Value, AbacusError> {
         return Err(AbacusError::IncompatibleDimensions);
     };
 
-    if min_canonical > max_canonical {
+    if min_canonical > max_canonical || min_canonical.is_nan() || max_canonical.is_nan() {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 

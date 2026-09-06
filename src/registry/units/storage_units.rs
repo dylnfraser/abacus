@@ -2,8 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     registry::{
-        helpers::storage_prefixes::BINARY_STORAGE_PREFIXES,
-        units::metric_units::METRIC_PREFIXES,
+        helpers::storage_prefixes::BINARY_STORAGE_PREFIXES, units::metric_units::METRIC_PREFIXES,
     },
     units::{
         dimensions::Dimensions,

@@ -1,4 +1,4 @@
-use abacus::{eval, Abacus};
+use abacus::{Abacus, eval};
 
 #[test]
 fn test_standard_constant_pi() {
@@ -35,7 +35,9 @@ fn test_standard_constant_e() {
 
     // e^2
     let e_squared = eval("e^2").unwrap();
-    assert!((e_squared.into_scalar().unwrap().canonical - std::f64::consts::E.powi(2)).abs() < 1e-12);
+    assert!(
+        (e_squared.into_scalar().unwrap().canonical - std::f64::consts::E.powi(2)).abs() < 1e-12
+    );
 }
 
 #[test]
@@ -110,7 +112,8 @@ fn test_variables_with_physical_units() {
 #[test]
 fn test_variables_with_intervals() {
     let mut calc = Abacus::standard();
-    calc.set_variable_expr("tolerance", "[95 ohm, 105 ohm]").unwrap();
+    calc.set_variable_expr("tolerance", "[95 ohm, 105 ohm]")
+        .unwrap();
 
     let doubled = calc.eval("tolerance * 2").unwrap();
     assert_eq!(doubled.to_display(), "[190 Ω, 210 Ω]");

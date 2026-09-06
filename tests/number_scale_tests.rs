@@ -31,7 +31,10 @@ fn test_unspaced_number_scales() {
 #[test]
 fn test_number_scale_arithmetic() {
     // Addition
-    assert_eq!(eval("3 million + 500 thousand").unwrap().to_display(), "3500000");
+    assert_eq!(
+        eval("3 million + 500 thousand").unwrap().to_display(),
+        "3500000"
+    );
 
     // Division
     assert_eq!(eval("5 billion / 2 million").unwrap().to_display(), "2500");
@@ -43,7 +46,10 @@ fn test_number_scale_arithmetic() {
     assert_eq!(eval("10% of 2 million").unwrap().to_display(), "200000");
 
     // Chained scales
-    assert_eq!(eval("100 thousand million").unwrap().to_display(), "100000000000");
+    assert_eq!(
+        eval("100 thousand million").unwrap().to_display(),
+        "100000000000"
+    );
 }
 
 #[test]
@@ -67,20 +73,31 @@ fn test_number_scales_with_physical_units() {
 #[test]
 fn test_conversions_to_and_from_scales() {
     // 3 million in thousand
-    assert_eq!(eval("3 million in thousand").unwrap().to_display(), "3000 thousand");
+    assert_eq!(
+        eval("3 million in thousand").unwrap().to_display(),
+        "3000 thousand"
+    );
 
     // 5000000 to million
-    assert_eq!(eval("5000000 to million").unwrap().to_display(), "5 million");
+    assert_eq!(
+        eval("5000000 to million").unwrap().to_display(),
+        "5 million"
+    );
 
     // 24 to dozen
     assert_eq!(eval("24 to dozen").unwrap().to_display(), "2 dozen");
 
     // 3.5 billion in million
-    assert_eq!(eval("3.5 billion in million").unwrap().to_display(), "3500 million");
+    assert_eq!(
+        eval("3.5 billion in million").unwrap().to_display(),
+        "3500 million"
+    );
 
     // (3 million + 500 thousand) in million
     assert_eq!(
-        eval("(3 million + 500 thousand) in million").unwrap().to_display(),
+        eval("(3 million + 500 thousand) in million")
+            .unwrap()
+            .to_display(),
         "3.5 million"
     );
 }
@@ -105,8 +122,14 @@ fn test_standalone_scale_words() {
 
 #[test]
 fn test_higher_order_scales() {
-    assert_eq!(eval("2 quadrillion").unwrap().to_display(), "2000000000000000");
-    assert_eq!(eval("1 quintillion").unwrap().to_display(), "1000000000000000000");
+    assert_eq!(
+        eval("2 quadrillion").unwrap().to_display(),
+        "2000000000000000"
+    );
+    assert_eq!(
+        eval("1 quintillion").unwrap().to_display(),
+        "1000000000000000000"
+    );
 
     let googol = eval("1 googol").unwrap();
     assert_eq!(googol.into_scalar().unwrap().canonical, 1e100);
@@ -118,7 +141,10 @@ fn test_number_scales_config_option() {
 
     // Enabled by default
     let default_calc = Abacus::standard();
-    assert_eq!(default_calc.eval("3 million").unwrap().to_display(), "3000000");
+    assert_eq!(
+        default_calc.eval("3 million").unwrap().to_display(),
+        "3000000"
+    );
 
     // Disabled via builder
     let disabled_calc = Abacus::standard().with_number_scales(false);
@@ -129,5 +155,8 @@ fn test_number_scales_config_option() {
     // Re-enabled in place
     let mut mutable_calc = disabled_calc;
     mutable_calc.set_scales(true);
-    assert_eq!(mutable_calc.eval("3 million").unwrap().to_display(), "3000000");
+    assert_eq!(
+        mutable_calc.eval("3 million").unwrap().to_display(),
+        "3000000"
+    );
 }

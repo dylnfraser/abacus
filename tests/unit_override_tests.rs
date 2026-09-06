@@ -35,7 +35,10 @@ fn test_single_unit_display_override_kmph() {
 fn test_common_speed_overrides() {
     let calc = Abacus::standard().with_common_speed_overrides();
 
-    assert_eq!(calc.eval("60 miles per hour").unwrap().to_display(), "60 mph");
+    assert_eq!(
+        calc.eval("60 miles per hour").unwrap().to_display(),
+        "60 mph"
+    );
     assert_eq!(calc.eval("100 km / 1 h").unwrap().to_display(), "100 kmph");
 }
 
@@ -61,7 +64,13 @@ fn test_hash_regression_unit_display_override() {
     let calc = Abacus::standard().with_common_speed_overrides();
 
     let reg = calc.eval("linreg(1 h, 2 h, 60 mi, 120 mi)").unwrap();
-    let slope = reg.clone().into_hash().unwrap().get("slope").unwrap().clone();
+    let slope = reg
+        .clone()
+        .into_hash()
+        .unwrap()
+        .get("slope")
+        .unwrap()
+        .clone();
     assert_eq!(slope.to_display(), "60 mph");
 }
 

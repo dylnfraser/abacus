@@ -9,17 +9,17 @@ use crate::evaluation::tokenizer::registry::{
     unary::{general::register_general, operators::UnaryOp},
 };
 
+#[cfg(feature = "date")]
+use crate::evaluation::tokenizer::registry::function::date::register_date_functions;
+#[cfg(feature = "distributions")]
+use crate::evaluation::tokenizer::registry::function::distributions::register_distributions;
+#[cfg(feature = "financial")]
+use crate::evaluation::tokenizer::registry::function::financial::register_financial;
 #[cfg(feature = "stats")]
 use crate::evaluation::tokenizer::registry::function::{
     ci::register_ci, hypothesis::register_hypothesis, regression::register_regression,
     stats::register_stats,
 };
-#[cfg(feature = "distributions")]
-use crate::evaluation::tokenizer::registry::function::distributions::register_distributions;
-#[cfg(feature = "financial")]
-use crate::evaluation::tokenizer::registry::function::financial::register_financial;
-#[cfg(feature = "date")]
-use crate::evaluation::tokenizer::registry::function::date::register_date_functions;
 
 #[derive(Debug, Default)]
 pub struct TokenRegistry {

@@ -141,4 +141,3 @@ fn test_adding_and_subtracting_percentages() {
     let res5 = eval("10% + 20% + 30%").unwrap();
     assert_eq!(res5.to_display(), "60%");
 }
-

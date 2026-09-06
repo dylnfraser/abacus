@@ -1,9 +1,6 @@
 use crate::{
     AbacusError, Value,
-    evaluation::tokenizer::registry::function::{
-        check_dimensionless,
-        operators::FunctionOp,
-    },
+    evaluation::tokenizer::registry::function::{check_dimensionless, operators::FunctionOp},
 };
 use std::sync::Arc;
 
@@ -66,6 +63,9 @@ fn exp_fn(args: &[Value]) -> Result<Value, AbacusError> {
 /// abs(x) — Absolute value (preserves unit)
 fn abs_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
+    if val.unit.is_affine() {
+        return Err(AbacusError::AffineUnitOperation("abs"));
+    }
     let canonical = val.canonical.abs();
     Ok(Value {
         canonical,
@@ -99,7 +99,11 @@ fn round_fn(args: &[Value]) -> Result<Value, AbacusError> {
 
 /// sign(x) — Signum (1.0, 0.0, -1.0)
 fn sign_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let x = args[0].canonical;
+    let val = &args[0];
+    if val.unit.is_affine() {
+        return Err(AbacusError::AffineUnitOperation("sign"));
+    }
+    let x = val.amount();
     Ok(Value::dimensionless(x.signum()))
 }
 

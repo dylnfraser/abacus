@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    registry::helpers::{register_unit_definitions, UnitDefinition},
+    registry::helpers::{UnitDefinition, register_unit_definitions},
     units::{dimensions::Dimensions, unit::Unit},
 };
 

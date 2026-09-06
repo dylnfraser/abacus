@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    AbacusError,
     units::{
         dimensions::Dimensions,
         unit::{Unit, UnitExpr},
     },
-    AbacusError,
 };
 
 pub struct CurrencyDefinition {
@@ -337,22 +337,23 @@ pub fn is_cache_fresh(cache_path: &std::path::Path) -> bool {
 }
 
 /// Saves raw JSON to the specified cache path, creating parent directories if necessary.
-pub fn save_rates_to_cache(json_str: &str, cache_path: &std::path::Path) -> Result<(), AbacusError> {
+pub fn save_rates_to_cache(
+    json_str: &str,
+    cache_path: &std::path::Path,
+) -> Result<(), AbacusError> {
     if let Some(parent) = cache_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    std::fs::write(cache_path, json_str).map_err(|e| {
-        AbacusError::EvaluationError(format!("failed to write currency cache: {e}"))
-    })
+    std::fs::write(cache_path, json_str)
+        .map_err(|e| AbacusError::EvaluationError(format!("failed to write currency cache: {e}")))
 }
 
 /// Loads exchange rates from a cached JSON file.
 pub fn load_rates_from_cache(
     cache_path: &std::path::Path,
 ) -> Result<HashMap<String, f64>, AbacusError> {
-    let content = std::fs::read_to_string(cache_path).map_err(|e| {
-        AbacusError::EvaluationError(format!("failed to read currency cache: {e}"))
-    })?;
+    let content = std::fs::read_to_string(cache_path)
+        .map_err(|e| AbacusError::EvaluationError(format!("failed to read currency cache: {e}")))?;
     parse_frankfurter_json(&content)
 }
 

@@ -1,5 +1,3 @@
-
-
 /// Computes n! as f64. Returns 1.0 for n=0.
 #[must_use]
 pub fn factorial(n: u64) -> f64 {

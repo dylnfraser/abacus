@@ -1,9 +1,6 @@
 use crate::{
-    evaluation::tokenizer::{
-        registry::token_registry::TokenRegistry,
-        tokens::Token,
-    },
     UnitRegistry, Value,
+    evaluation::tokenizer::{registry::token_registry::TokenRegistry, tokens::Token},
 };
 
 /// Returns scale multiplier for natural number words (e.g. "million" -> 1e6).

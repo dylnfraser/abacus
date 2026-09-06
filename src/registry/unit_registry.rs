@@ -11,15 +11,27 @@ use crate::{
 };
 
 const PRIORITY_DERIVED_SYMBOLS: [&str; 20] = [
-    "N", "J", "W", "Pa", "Hz", "V", "C", "F", "Ω", "S", "Wb", "T", "H", "A", "lx", "kat",
-    "Bq", "Gy", "Sv", "lm",
+    "N", "J", "W", "Pa", "Hz", "V", "C", "F", "Ω", "S", "Wb", "T", "H", "A", "lx", "kat", "Bq",
+    "Gy", "Sv", "lm",
 ];
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct UnitRegistry {
     units: HashMap<String, Arc<Unit>>,
     cache: RwLock<HashMap<String, Arc<Unit>>>,
     priority_derived_units: Vec<(crate::units::dimensions::Dimensions, Arc<Unit>)>,
+    pub max_exponent: f64,
+}
+
+impl Default for UnitRegistry {
+    fn default() -> Self {
+        Self {
+            units: HashMap::new(),
+            cache: RwLock::new(HashMap::new()),
+            priority_derived_units: Vec::new(),
+            max_exponent: 1_000.0,
+        }
+    }
 }
 
 impl UnitRegistry {
@@ -29,6 +41,7 @@ impl UnitRegistry {
             units: HashMap::new(),
             cache: RwLock::new(HashMap::new()),
             priority_derived_units: Vec::new(),
+            max_exponent: 1_000.0,
         }
     }
 
@@ -47,7 +60,21 @@ impl UnitRegistry {
             units,
             cache: RwLock::new(HashMap::new()),
             priority_derived_units,
+            max_exponent: 1_000.0,
         }
+    }
+
+    pub fn set_max_exponent(&mut self, max: f64) {
+        self.max_exponent = max;
+        if let Ok(mut guard) = self.cache.write() {
+            guard.clear();
+        }
+    }
+
+    #[must_use]
+    pub fn with_max_exponent(mut self, max: f64) -> Self {
+        self.set_max_exponent(max);
+        self
     }
 
     pub fn is_empty(&self) -> bool {
@@ -93,7 +120,7 @@ impl UnitRegistry {
             && let Ok(exp) = exp_str.parse::<f64>()
             && let Some(base_unit) = self.units.get(base_sym)
         {
-            if exp.abs() > 1_000.0 {
+            if exp.abs() > self.max_exponent {
                 return Err(AbacusError::ExponentLimitExceeded);
             }
             let scalar = base_unit.scalar.powf(exp);
@@ -151,10 +178,15 @@ impl UnitRegistry {
     pub fn insert_unit(&mut self, key: impl Into<String>, unit: Arc<Unit>) {
         let key = key.into();
         if PRIORITY_DERIVED_SYMBOLS.contains(&key.as_str()) {
-            if let Some(pos) = self.priority_derived_units.iter().position(|(_, u)| u.display.render() == key) {
+            if let Some(pos) = self
+                .priority_derived_units
+                .iter()
+                .position(|(_, u)| u.display.render() == key)
+            {
                 self.priority_derived_units[pos] = (unit.dimensions, Arc::clone(&unit));
             } else {
-                self.priority_derived_units.push((unit.dimensions, Arc::clone(&unit)));
+                self.priority_derived_units
+                    .push((unit.dimensions, Arc::clone(&unit)));
             }
         }
         self.units.insert(key, unit);
@@ -162,8 +194,14 @@ impl UnitRegistry {
 
     #[cfg(feature = "currencies")]
     pub fn update_currency_rates(&mut self, rates: &HashMap<String, f64>) {
-        crate::registry::units::currency_units::update_currency_rates_in_map(&mut self.units, rates);
-        self.cache.write().unwrap_or_else(|e| e.into_inner()).clear();
+        crate::registry::units::currency_units::update_currency_rates_in_map(
+            &mut self.units,
+            rates,
+        );
+        self.cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 
     #[cfg(feature = "currencies")]
@@ -183,7 +221,10 @@ impl UnitRegistry {
         } else {
             crate::registry::units::currency_units::register_currency_units(&mut self.units);
         }
-        self.cache.write().unwrap_or_else(|e| e.into_inner()).clear();
+        self.cache
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 }
 

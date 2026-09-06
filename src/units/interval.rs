@@ -51,11 +51,7 @@ impl Interval {
     }
 
     /// Create a new interval with an explicit display style (Bracket or Range).
-    pub fn new_with_style(
-        a: Value,
-        b: Value,
-        style: IntervalStyle,
-    ) -> Result<Self, AbacusError> {
+    pub fn new_with_style(a: Value, b: Value, style: IntervalStyle) -> Result<Self, AbacusError> {
         let (a, b) = if a.unit.is_dimensionless() && !b.unit.is_dimensionless() {
             (Value::new(a.canonical, Arc::clone(&b.unit)), b)
         } else if !a.unit.is_dimensionless() && b.unit.is_dimensionless() {
@@ -69,9 +65,17 @@ impl Interval {
             return Err(AbacusError::IncompatibleDimensions);
         }
         if a.canonical <= b.canonical {
-            Ok(Self { lo: a, hi: b, style })
+            Ok(Self {
+                lo: a,
+                hi: b,
+                style,
+            })
         } else {
-            Ok(Self { lo: b, hi: a, style })
+            Ok(Self {
+                lo: b,
+                hi: a,
+                style,
+            })
         }
     }
 
@@ -136,8 +140,14 @@ impl Interval {
                 }
             };
 
-            let lo = Value::new(lo_val, Arc::clone(&sample_unit));
-            let hi = Value::new(hi_val, sample_unit);
+            let lo = Value {
+                canonical: lo_val,
+                unit: Arc::clone(&sample_unit),
+            };
+            let hi = Value {
+                canonical: hi_val,
+                unit: sample_unit,
+            };
             return Ok(Interval { lo, hi, style });
         }
 
