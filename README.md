@@ -27,7 +27,7 @@ Add Abacus to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-abacus = { git = "https://github.com/SimplyPickles/abacus", branch = "main" }
+abacus = { git = "https://github.com/dylnfraser/abacus", branch = "main" }
 ```
 
 ### Basic Usage
