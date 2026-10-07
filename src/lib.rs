@@ -1066,4 +1066,15 @@ mod tests {
         assert!(invalid.is_err());
         assert!(invalid.and_then(|duration| distance / duration).is_err());
     }
+
+    #[test]
+    fn consolidates_mixed_units_of_same_dimension() {
+        assert_eq!(crate::eval("2342km * m^2").unwrap().to_display(), "0.002342 km^3");
+        assert_eq!(crate::eval("2342km * m").unwrap().to_display(), "2.342 km^2");
+        assert_eq!(crate::eval("1 m^2 * 2342km").unwrap().to_display(), "2342000 m^3");
+        assert_eq!(crate::eval("5 m * 2 km").unwrap().to_display(), "10000 m^2");
+        assert_eq!(crate::eval("10 km * 5 m").unwrap().to_display(), "0.05 km^2");
+        assert_eq!(crate::eval("2 ft * 6 in").unwrap().to_display(), "1 ft^2");
+        assert_eq!(crate::eval("5 h * 30 min").unwrap().to_display(), "2.5 h^2");
+    }
 }

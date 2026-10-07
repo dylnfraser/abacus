@@ -223,6 +223,58 @@ impl Unit {
             }
         }
 
+        // Consolidate same-dimension units within numerator to the leading unit
+        let mut i = 0;
+        while i < display.numerator.len() {
+            let target_sym = display.numerator[i].clone();
+            if let Some(target_un) = lookup(&target_sym)
+                && !target_un.dimensions.is_dimensionless()
+            {
+                let mut j = i + 1;
+                while j < display.numerator.len() {
+                    let other_sym = &display.numerator[j];
+                    if other_sym != &target_sym
+                        && let Some(other_un) = lookup(other_sym)
+                        && target_un.dimensions == other_un.dimensions
+                        && other_un.scalar != 0.0
+                        && other_un.scalar.is_finite()
+                        && target_un.scalar.is_finite()
+                    {
+                        scalar *= target_un.scalar / other_un.scalar;
+                        display.numerator[j] = target_sym.clone();
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+
+        // Consolidate same-dimension units within denominator to the leading unit
+        let mut i = 0;
+        while i < display.denominator.len() {
+            let target_sym = display.denominator[i].clone();
+            if let Some(target_un) = lookup(&target_sym)
+                && !target_un.dimensions.is_dimensionless()
+            {
+                let mut j = i + 1;
+                while j < display.denominator.len() {
+                    let other_sym = &display.denominator[j];
+                    if other_sym != &target_sym
+                        && let Some(other_un) = lookup(other_sym)
+                        && target_un.dimensions == other_un.dimensions
+                        && other_un.scalar != 0.0
+                        && other_un.scalar.is_finite()
+                        && target_un.scalar.is_finite()
+                    {
+                        scalar /= target_un.scalar / other_un.scalar;
+                        display.denominator[j] = target_sym.clone();
+                    }
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+
         Unit {
             dimensions: self.dimensions,
             scalar,
