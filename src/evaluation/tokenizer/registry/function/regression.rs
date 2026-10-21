@@ -1,6 +1,7 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
+        math_helpers::delta_unit,
         operators::FunctionOp,
         stats::{compute_mean, parse_paired_data},
     },
@@ -72,17 +73,27 @@ impl RegStats {
         self.mean_y - self.slope() * self.mean_x
     }
 
-    fn r(&self) -> f64 {
+    /// Pearson r; `None` when y is constant (r is undefined, matching `corr`).
+    fn r(&self) -> Option<f64> {
         if self.syy <= 0.0 {
-            0.0
+            None
         } else {
-            self.sxy / (self.sxx * self.syy).sqrt()
+            Some(self.sxy / (self.sxx * self.syy).sqrt())
         }
     }
 
-    fn r2(&self) -> f64 {
-        let r_val = self.r();
-        r_val * r_val
+    fn r_or_err(&self) -> Result<f64, AbacusError> {
+        // Correlation is undefined when y is constant (consistent with `corr`).
+        self.r().ok_or(AbacusError::IncompatibleFunctionArguments)
+    }
+
+    /// Residual standard error s = √(SSE / (n − 2)); `None` for n ≤ 2.
+    fn residual_se(&self) -> Option<f64> {
+        (self.n > 2.0).then(|| {
+            ((self.syy - self.slope() * self.sxy) / (self.n - 2.0))
+                .max(0.0)
+                .sqrt()
+        })
     }
 
     fn slope_unit(&self) -> Arc<Unit> {
@@ -96,203 +107,168 @@ impl RegStats {
 }
 
 // ── linreg(x_data..., y_data...) -> EvalResult::Hash ──
+//
+// Keys: `slope`, `intercept`, `r`, `r2`, `se` (residual standard error s = √(SSE/(n−2))),
+// `slope_se` (standard error of the slope, s/√Sxx), `intercept_se`
+// (s·√(1/n + x̄²/Sxx)), `mean_x`, `mean_y`. `se`/`slope_se`/`intercept_se` need n > 2;
+// `r`/`r2` are omitted when y is constant (correlation is undefined).
 fn linreg_hash_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (x_data, y_data) = parse_regression_inputs(args)?;
     let stats = RegStats::compute(x_data, y_data)?;
 
     let mut hash = Hash::new();
-
-    // slope
-    let m = stats.slope();
-    let slope_unit = stats.slope_unit();
     hash.insert(
         "slope",
-        AbacusValue {
-            canonical: m,
-            unit: slope_unit,
-        },
+        AbacusValue::from_canonical(stats.slope(), stats.slope_unit()),
     );
-
-    // intercept
-    let b = stats.intercept();
     hash.insert(
         "intercept",
-        AbacusValue {
-            canonical: b,
-            unit: Arc::clone(&stats.y_unit),
-        },
+        AbacusValue::from_canonical(stats.intercept(), Arc::clone(&stats.y_unit)),
     );
 
-    // r2
-    hash.insert("r2", Value::dimensionless(stats.r2()));
+    if let Some(r) = stats.r() {
+        hash.insert("r2", Value::dimensionless(r * r));
+        hash.insert("r", Value::dimensionless(r));
+    }
 
-    // r
-    hash.insert("r", Value::dimensionless(stats.r()));
-
-    // se (if n > 2)
-    if stats.n > 2.0 {
-        let s_e = ((stats.syy - m * stats.sxy) / (stats.n - 2.0))
-            .max(0.0)
-            .sqrt();
+    if let Some(s) = stats.residual_se() {
+        let y_delta = delta_unit(&stats.y_unit);
+        hash.insert("se", AbacusValue::from_canonical(s, Arc::clone(&y_delta)));
         hash.insert(
-            "se",
-            AbacusValue {
-                canonical: s_e,
-                unit: Arc::clone(&stats.y_unit),
-            },
+            "slope_se",
+            AbacusValue::from_canonical(s / stats.sxx.sqrt(), stats.slope_unit()),
+        );
+        let intercept_se = s * (1.0 / stats.n + stats.mean_x * stats.mean_x / stats.sxx).sqrt();
+        hash.insert(
+            "intercept_se",
+            AbacusValue::from_canonical(intercept_se, y_delta),
         );
     }
 
-    // mean_x & mean_y
     hash.insert(
         "mean_x",
-        AbacusValue {
-            canonical: stats.mean_x,
-            unit: Arc::clone(&stats.x_unit),
-        },
+        AbacusValue::from_canonical(stats.mean_x, Arc::clone(&stats.x_unit)),
     );
     hash.insert(
         "mean_y",
-        AbacusValue {
-            canonical: stats.mean_y,
-            unit: Arc::clone(&stats.y_unit),
-        },
+        AbacusValue::from_canonical(stats.mean_y, Arc::clone(&stats.y_unit)),
     );
 
     Ok(EvalResult::Hash(hash))
 }
 
+fn compute_stats(args: &[Value]) -> Result<RegStats, AbacusError> {
+    let (x_data, y_data) = parse_regression_inputs(args)?;
+    RegStats::compute(x_data, y_data)
+}
+
 // ── linreg_slope(x_data..., y_data...) ──
 fn linreg_slope_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    let (x_data, y_data) = parse_regression_inputs(args)?;
-    let stats = RegStats::compute(x_data, y_data)?;
-    let m = stats.slope();
-    let unit = stats.slope_unit();
-
-    Ok(AbacusValue { canonical: m, unit })
+    let stats = compute_stats(args)?;
+    Ok(AbacusValue::from_canonical(
+        stats.slope(),
+        stats.slope_unit(),
+    ))
 }
 
 // ── linreg_intercept(x_data..., y_data...) ──
 fn linreg_intercept_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    let (x_data, y_data) = parse_regression_inputs(args)?;
-    let stats = RegStats::compute(x_data, y_data)?;
-    let b = stats.intercept();
-
-    Ok(AbacusValue {
-        canonical: b,
-        unit: stats.y_unit,
-    })
+    let stats = compute_stats(args)?;
+    Ok(AbacusValue::from_canonical(stats.intercept(), stats.y_unit))
 }
 
 // ── linreg_r2(x_data..., y_data...) ──
 fn linreg_r2_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    let (x_data, y_data) = parse_regression_inputs(args)?;
-    let stats = RegStats::compute(x_data, y_data)?;
-    Ok(Value::dimensionless(stats.r2()))
+    let r = compute_stats(args)?.r_or_err()?;
+    Ok(Value::dimensionless(r * r))
 }
 
 // ── linreg_r(x_data..., y_data...) ──
 fn linreg_r_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    let (x_data, y_data) = parse_regression_inputs(args)?;
-    let stats = RegStats::compute(x_data, y_data)?;
-    Ok(Value::dimensionless(stats.r()))
+    Ok(Value::dimensionless(compute_stats(args)?.r_or_err()?))
 }
 
-// ── linreg_se(x_data..., y_data...) ──
+// ── linreg_se(x_data..., y_data...) — residual standard error ──
 fn linreg_se_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    let (x_data, y_data) = parse_regression_inputs(args)?;
-    let stats = RegStats::compute(x_data, y_data)?;
-
-    if stats.n <= 2.0 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    let m = stats.slope();
-    let s_e = ((stats.syy - m * stats.sxy) / (stats.n - 2.0))
-        .max(0.0)
-        .sqrt();
-
-    Ok(AbacusValue {
-        canonical: s_e,
-        unit: stats.y_unit,
-    })
+    let stats = compute_stats(args)?;
+    let s = stats
+        .residual_se()
+        .ok_or(AbacusError::IncompatibleFunctionArguments)?;
+    Ok(AbacusValue::from_canonical(s, delta_unit(&stats.y_unit)))
 }
 
-// ── linreg_predict(x_target, x_data..., y_data...) or linreg_predict(x_data..., y_data..., x_target) ──
-fn linreg_predict_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
-    if args.len() < 5 || !(args.len() - 1).is_multiple_of(2) {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    // Determine if x_target is first or last argument
-    let total = args.len();
-    let _n = (total - 1) / 2;
-    let last = total - 1;
-
-    // Check if the last argument is x_target:
-    // In postfix mode `(x_data..., y_data..., x_target)`, args[last] is compatible with args[0] (x_data[0]),
-    // while args[last - 1] (y_data[n-1]) is NOT compatible with args[0] (unless X and Y have same units).
-    let last_is_target = args[last].unit.is_compatible_with(&args[0].unit)
-        && !args[last - 1].unit.is_compatible_with(&args[0].unit);
-
-    let (x_target, reg_args) = if last_is_target {
-        (&args[last], &args[..last])
-    } else {
-        (&args[0], &args[1..])
-    };
-
+fn predict_with(x_target: &Value, reg_args: &[Value]) -> Result<AbacusValue, AbacusError> {
     let (x_data, y_data) = parse_regression_inputs(reg_args)?;
     if !x_target.unit.is_compatible_with(&x_data[0].unit) {
         return Err(AbacusError::IncompatibleDimensions);
     }
-
     let stats = RegStats::compute(x_data, y_data)?;
-    let m = stats.slope();
-    let b = stats.intercept();
-    let y_pred = m * x_target.canonical + b;
+    let y_pred = stats.slope() * x_target.canonical + stats.intercept();
+    Ok(AbacusValue::from_canonical(y_pred, stats.y_unit))
+}
 
-    Ok(AbacusValue {
-        canonical: y_pred,
-        unit: stats.y_unit,
-    })
+fn check_predict_arity(args: &[Value]) -> Result<(), AbacusError> {
+    if args.len() < 5 || !(args.len() - 1).is_multiple_of(2) {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(())
+}
+
+// ── predict(x_target, x_data..., y_data...) — target first ──
+fn predict_target_first_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
+    check_predict_arity(args)?;
+    predict_with(&args[0], &args[1..])
+}
+
+// ── linreg_predict(x_data..., y_data..., x_target) — target last ──
+fn predict_target_last_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
+    check_predict_arity(args)?;
+    let (x_target, reg_args) = args.split_last().ok_or(AbacusError::UnexpectedEnd)?;
+    predict_with(x_target, reg_args)
 }
 
 pub fn register_regression() -> Vec<FunctionOp> {
     let mut ops = Vec::new();
 
-    // linreg / LinReg -> Returns EvalResult::Hash containing slope, intercept, r2, r, se, mean_x, mean_y
+    // linreg / LinReg -> Returns EvalResult::Hash (see `linreg_hash_fn` for keys)
     for name in &["linreg", "LinReg"] {
         ops.push(FunctionOp::eval_result(name, 4, usize::MAX, linreg_hash_fn));
     }
 
-    // linreg_slope / LinRegSlope -> Returns scalar Value slope
     for name in &["linreg_slope", "LinRegSlope"] {
         ops.push(FunctionOp::scalar(name, 4, usize::MAX, linreg_slope_fn));
     }
 
-    // linreg_intercept / LinRegIntercept
     for name in &["linreg_intercept", "LinRegIntercept"] {
         ops.push(FunctionOp::scalar(name, 4, usize::MAX, linreg_intercept_fn));
     }
 
-    // linreg_r2 / LinRegR2 / r2
     for name in &["linreg_r2", "LinRegR2", "r2", "R2"] {
         ops.push(FunctionOp::scalar(name, 4, usize::MAX, linreg_r2_fn));
     }
 
-    // linreg_r / LinRegR
     for name in &["linreg_r", "LinRegR"] {
         ops.push(FunctionOp::scalar(name, 4, usize::MAX, linreg_r_fn));
     }
 
-    // linreg_se / LinRegSE
     for name in &["linreg_se", "LinRegSE"] {
         ops.push(FunctionOp::scalar(name, 4, usize::MAX, linreg_se_fn));
     }
 
-    // linreg_predict / LinRegPredict / predict
-    for name in &["linreg_predict", "LinRegPredict", "predict"] {
-        ops.push(FunctionOp::scalar(name, 5, usize::MAX, linreg_predict_fn));
+    // Each prediction name has one fixed argument order (no guessing from units).
+    ops.push(FunctionOp::scalar(
+        "predict",
+        5,
+        usize::MAX,
+        predict_target_first_fn,
+    ));
+    for name in &["linreg_predict", "LinRegPredict"] {
+        ops.push(FunctionOp::scalar(
+            name,
+            5,
+            usize::MAX,
+            predict_target_last_fn,
+        ));
     }
 
     ops

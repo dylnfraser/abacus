@@ -22,7 +22,7 @@ fn test_section4_hypothesis_testing_expanded() {
     let p_val = calc
         .eval_scalar("ZTest(100 m, 105 m, 15 m, 50).p_value")
         .unwrap();
-    assert!((p_val.canonical - 0.01842).abs() < 0.001);
+    assert!((p_val.canonical - 0.018_422_125_454_099_01).abs() < 1e-14);
 
     // TTest(100 m, 105 m, 15 m, 25)
     let t_hash = calc.eval_hash("TTest(100 m, 105 m, 15 m, 25)").unwrap();
@@ -38,7 +38,7 @@ fn test_section4_hypothesis_testing_expanded() {
     let chi2_p = calc
         .eval_scalar("Chi2Test(15, 25, 10, 30).p_value")
         .unwrap();
-    assert!((chi2_p.canonical - 0.067889).abs() < 0.001);
+    assert!((chi2_p.canonical - 0.067_889_154_861_829_02).abs() < 1e-14);
 }
 
 #[test]
@@ -49,18 +49,26 @@ fn test_z_test_summary_stats() {
     let p = hash.get("p").unwrap().canonical;
 
     // z = (105 - 100) / (15 / sqrt(50)) = 5 / 2.12132 = 2.35702
-    assert!((z - 2.357).abs() < 0.01, "Expected z ≈ 2.357, got {}", z);
-    assert!((p - 0.0184).abs() < 0.01, "Expected p ≈ 0.0184, got {}", p);
+    assert!(
+        (z - 2.357_022_603_955_158).abs() < 1e-12,
+        "Expected z ≈ 2.357, got {}",
+        z
+    );
+    assert!(
+        (p - 0.018_422_125_454_099_01).abs() < 1e-14,
+        "Expected p ≈ 0.0184, got {}",
+        p
+    );
 
     // Test dot property access on ZTest
     let z_prop = eval_scalar("ZTest(100 m, 105 m, 15 m, 50).z").unwrap();
-    assert!((z_prop.canonical - 2.357).abs() < 0.01);
+    assert!((z_prop.canonical - 2.357_022_603_955_158).abs() < 1e-12);
 }
 
 #[test]
 fn test_z_test_data_list() {
-    // ZTest(mu0: 10 m, sigma: 2 m, data: 12 m, 14 m, 10 m, 16 m)
-    let hash = eval_hash("ZTest(10 m, 2 m, 12 m, 14 m, 10 m, 16 m)").unwrap();
+    // ZTestData(mu0: 10 m, sigma: 2 m, data: 12 m, 14 m, 10 m, 16 m)
+    let hash = eval_hash("ZTestData(10 m, 2 m, 12 m, 14 m, 10 m, 16 m)").unwrap();
     let mean = hash.get("mean").unwrap();
     assert_eq!(mean.to_display(), "13 m");
     let z = hash.get("z").unwrap().canonical;
@@ -79,17 +87,27 @@ fn test_t_test_summary_stats() {
     let df = hash.get("df").unwrap().canonical;
 
     // t = (105 - 100) / (15 / 5) = 5 / 3 = 1.66667
-    assert!((t - 1.6667).abs() < 0.01, "Expected t ≈ 1.6667, got {}", t);
+    assert!(
+        (t - 5.0 / 3.0).abs() < 1e-12,
+        "Expected t ≈ 1.6667, got {}",
+        t
+    );
     assert_eq!(df, 24.0);
-    assert!((p - 0.1086).abs() < 0.01, "Expected p ≈ 0.1086, got {}", p);
+    assert!(
+        (p - 0.108_580_123_024_722_97).abs() < 1e-13,
+        "Expected p ≈ 0.1086, got {}",
+        p
+    );
 }
 
 #[test]
 fn test_t_test_data_list() {
-    // TTest(10 m, 12 m, 14 m, 10 m, 16 m)
-    let hash = eval_hash("TTest(10 m, 12 m, 14 m, 10 m, 16 m)").unwrap();
+    // TTestData(mu0: 10 m, data: 12 m, 14 m, 10 m, 16 m)
+    let hash = eval_hash("TTestData(10 m, 12 m, 14 m, 10 m, 16 m)").unwrap();
     let t = hash.get("t").unwrap().canonical;
-    assert!((t - 2.32379).abs() < 0.01);
+    assert!((t - 2.323_790_007_724_45).abs() < 1e-12);
+    let p = hash.get("p").unwrap().canonical;
+    assert!((p - 0.102_728_078_858_399).abs() < 1e-13);
 }
 
 // ── 3. 1-PropZTest ──
@@ -121,7 +139,7 @@ fn test_2_samp_z_test() {
 
     // diff = 10 m, SE = sqrt(225/50 + 100/50) = sqrt(6.5) ≈ 2.5495, z ≈ 3.9223
     assert_eq!(diff.to_display(), "10 m");
-    assert!((z - 3.9223).abs() < 0.01);
+    assert!((z - 10.0 / 6.5_f64.sqrt()).abs() < 1e-12);
 }
 
 // ── 5. 2-SampTTest ──
@@ -134,12 +152,18 @@ fn test_2_samp_t_test() {
     let df = hash.get("df").unwrap().canonical;
 
     // t ≈ 2.846, Welch df ≈ 40.475
-    assert!((t - 2.846).abs() < 0.02, "Expected t ≈ 2.846, got {}", t);
     assert!(
-        (df - 40.475).abs() < 0.05,
+        (t - 2.847_473_987_257_497).abs() < 1e-12,
+        "Expected t ≈ 2.847, got {}",
+        t
+    );
+    assert!(
+        (df - 40.475_086_020_135_08).abs() < 1e-9,
         "Expected df ≈ 40.475, got {}",
         df
     );
+    let p = hash.get("p").unwrap().canonical;
+    assert!((p - 0.006_891_426_705_032_224).abs() < 1e-14);
 }
 
 // ── 6. 2-PropZTest ──
@@ -160,17 +184,17 @@ fn test_2_prop_z_test() {
 
 #[test]
 fn test_chi2_test() {
-    // Chi2Test(obs1: 15, exp1: 10, obs2: 25, exp2: 30)
+    // Chi2Test(obs1: 15, obs2: 25, exp1: 10, exp2: 30) — observed counts first, then expected
     let hash = eval_hash("Chi2Test(15, 25, 10, 30)").unwrap();
     let chi2 = hash.get("chi2").unwrap().canonical;
     let df = hash.get("df").unwrap().canonical;
 
     // chi2 = (15-10)^2/10 + (25-30)^2/30 = 25/10 + 25/30 = 2.5 + 0.8333 = 3.3333
-    assert!((chi2 - 3.3333).abs() < 0.01);
+    assert!((chi2 - 10.0 / 3.0).abs() < 1e-12);
     assert_eq!(df, 1.0);
 
     let p_val = eval_scalar("Chi2Test(15, 25, 10, 30).p_value").unwrap();
-    assert!((p_val.canonical - 0.0679).abs() < 0.01);
+    assert!((p_val.canonical - 0.067_889_154_861_829_02).abs() < 1e-14);
 }
 
 // ── Error handling ──

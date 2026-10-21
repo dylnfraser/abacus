@@ -95,6 +95,9 @@ fn pv_fn(args: &[Value]) -> Result<Value, AbacusError> {
 }
 
 /// npv(rate, cashflow1, cashflow2, ...)
+///
+/// Uses the Excel convention: the first cash flow is discounted by one period (t = 1).
+/// To include an undiscounted initial outlay, add it outside: `cf0 + npv(rate, cf1, …)`.
 fn npv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(&args[0..1])?;
     let rate = args[0].canonical;
@@ -115,62 +118,128 @@ fn npv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// irr(cashflow0, cashflow1, cashflow2, ...)
+/// NPV of `cfs` at rate `r`, with the first cash flow at t = 0.
+fn npv_at(cfs: &[f64], r: f64) -> f64 {
+    let factor = 1.0 / (1.0 + r);
+    let mut discount = 1.0;
+    let mut total = 0.0;
+    for &cf in cfs {
+        total += cf * discount;
+        discount *= factor;
+    }
+    total
+}
+
+/// Σ |cf| / (1 + r)^t — the scale against which an NPV of "zero" is judged.
+fn discounted_magnitude(cfs: &[f64], r: f64) -> f64 {
+    let factor = 1.0 / (1.0 + r);
+    let mut discount = 1.0;
+    let mut total = 0.0;
+    for &cf in cfs {
+        total += cf.abs() * discount;
+        discount *= factor;
+    }
+    total
+}
+
+/// d(NPV)/dr at rate `r`.
+fn dnpv_at(cfs: &[f64], r: f64) -> f64 {
+    let factor = 1.0 / (1.0 + r);
+    let mut discount = factor;
+    let mut total = 0.0;
+    for (t, &cf) in cfs.iter().enumerate().skip(1) {
+        discount *= factor;
+        total -= (t as f64) * cf * discount;
+    }
+    total
+}
+
+/// Bisects a bracketed NPV root between rates `a` and `b`.
+fn bisect_root(cfs: &[f64], a: f64, b: f64) -> f64 {
+    let (mut lo, mut hi) = if a < b { (a, b) } else { (b, a) };
+    let lo_sign = npv_at(cfs, lo).signum();
+    for _ in 0..200 {
+        let mid = 0.5 * (lo + hi);
+        if mid <= lo || mid >= hi {
+            break;
+        }
+        if npv_at(cfs, mid).signum() == lo_sign {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
+/// irr(cashflow0, cashflow1, cashflow2, ...) — internal rate of return.
+///
+/// The first cash flow is at t = 0. Requires at least one positive and one negative cash
+/// flow. Newton's method is tried first from a 10% guess (Excel's default), so when several
+/// rates make the NPV zero the root nearest 10% is typically returned. If Newton fails, the
+/// rate axis is scanned for a sign change and the root is refined by bisection. An error is
+/// returned if no root is found. Convergence is judged relative to the discounted cash-flow
+/// magnitudes, so the result does not depend on the currency scale.
 fn irr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_cf = &args[0];
-    for cf in args {
-        if !cf.unit.is_compatible_with(&first_cf.unit) {
-            return Err(AbacusError::IncompatibleDimensions);
-        }
+    if args
+        .iter()
+        .any(|cf| !cf.unit.is_compatible_with(&first_cf.unit))
+    {
+        return Err(AbacusError::IncompatibleDimensions);
     }
 
     let cfs: Vec<f64> = args.iter().map(|v| v.canonical).collect();
-
-    // Helper to compute NPV at rate r
-    let npv_at = |r: f64| -> f64 {
-        cfs.iter()
-            .enumerate()
-            .fold(0.0, |acc, (t, &cf)| acc + cf / (1.0 + r).powi(t as i32))
-    };
-
-    // Helper to compute derivative d(NPV)/dr
-    let dnpv_at = |r: f64| -> f64 {
-        cfs.iter().enumerate().skip(1).fold(0.0, |acc, (t, &cf)| {
-            acc - (t as f64) * cf / (1.0 + r).powi((t + 1) as i32)
-        })
-    };
-
-    let mut r = 0.1; // initial guess 10%
-    let mut converged = false;
+    if !cfs.iter().any(|&c| c > 0.0) || !cfs.iter().any(|&c| c < 0.0) {
+        // IRR needs at least one positive and one negative cash flow.
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    // Newton from 10%. Convergence is measured against the size of the *discounted* cash
+    // flows at the current rate, so heavily discounted or tiny cash flows are handled alike.
+    let mut r = 0.1;
     for _ in 0..100 {
-        let npv_val = npv_at(r);
-        if npv_val.abs() < 1e-10 {
-            converged = true;
+        let f = npv_at(&cfs, r);
+        if f == 0.0 {
+            return Ok(Value::dimensionless(r));
+        }
+        let d = dnpv_at(&cfs, r);
+        if d == 0.0 || !d.is_finite() {
             break;
         }
-        let dnpv_val = dnpv_at(r);
-        if dnpv_val.abs() < 1e-12 {
+        let next = r - f / d;
+        if !next.is_finite() || next <= -1.0 {
             break;
         }
-        let next_r = r - npv_val / dnpv_val;
-        if !next_r.is_finite() {
-            break;
-        }
-        if (next_r - r).abs() < 1e-12 {
-            r = next_r;
-            if npv_at(r).abs() < 1e-6 {
-                converged = true;
+        if (next - r).abs() <= 4.0 * f64::EPSILON * next.abs().max(1e-3) {
+            if npv_at(&cfs, next).abs() <= 1e-9 * discounted_magnitude(&cfs, next) {
+                return Ok(Value::dimensionless(next));
             }
             break;
         }
-        r = next_r;
+        r = next;
     }
 
-    if !converged && (!r.is_finite() || npv_at(r).abs() >= 1e-6) {
-        return Err(AbacusError::IncompatibleFunctionArguments);
+    // 2. Sweep outwards from 10% — downwards towards -100% and upwards towards 1e6 — for a
+    //    sign change of the NPV, then bisect it.
+    let downward = std::iter::successors(Some(0.1_f64), |&x| Some(-1.0 + (x + 1.0) * 0.8))
+        .take_while(|&x| x > -1.0 + 1e-12);
+    let upward =
+        std::iter::successors(Some(0.1_f64), |&x| Some(x * 1.25 + 0.01)).take_while(|&x| x < 1e6);
+    let sweeps: [&mut dyn Iterator<Item = f64>; 2] = [&mut downward.skip(1), &mut upward.skip(1)];
+    for sweep in sweeps {
+        let (mut prev, mut f_prev) = (0.1, npv_at(&cfs, 0.1));
+        for x in sweep {
+            let f = npv_at(&cfs, x);
+            if f.is_finite() && f_prev.is_finite() && f.signum() != f_prev.signum() {
+                return Ok(Value::dimensionless(bisect_root(&cfs, prev, x)));
+            }
+            (prev, f_prev) = (x, f);
+        }
     }
 
-    Ok(Value::dimensionless(r))
+    Err(AbacusError::EvaluationError(
+        "irr did not converge: no rate makes the NPV zero".to_string(),
+    ))
 }
 
 /// compound(principal, rate, time) or compound(principal, rate, time, n)

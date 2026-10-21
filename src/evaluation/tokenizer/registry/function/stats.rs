@@ -1,5 +1,22 @@
+//! Descriptive statistics.
+//!
+//! Conventions:
+//! - `var`/`std`/`cov` (and the `_s` aliases) are *sample* statistics (n − 1 denominator);
+//!   `var_p`/`std_p`/`cov_p` are population statistics.
+//! - `skew` and `kurt` are the sample-adjusted estimators used by Excel's `SKEW` and `KURT`;
+//!   `kurt` is *excess* kurtosis (0 for a normal distribution).
+//! - `quantile`, `percentile` and `iqr` use linear interpolation between order statistics
+//!   (Hyndman–Fan type 7, the same as Excel's `PERCENTILE.INC` and R's default).
+//! - Affine units (°C, °F): location results (mean, median, min, …) are temperatures in the
+//!   input unit; spread results (std, var, range, mad, iqr, …) are temperature differences and
+//!   are reported in kelvin. `sum` of affine temperatures is rejected.
+
 use crate::{
-    AbacusError, Value, evaluation::tokenizer::registry::function::operators::FunctionOp,
+    AbacusError, Value,
+    evaluation::tokenizer::registry::function::{
+        math_helpers::{delta_unit, positive_spread},
+        operators::FunctionOp,
+    },
     units::unit::Unit,
 };
 use std::sync::Arc;
@@ -17,24 +34,44 @@ fn check_compatible_units(args: &[Value]) -> Result<&Arc<Unit>, AbacusError> {
     Ok(first_unit)
 }
 
+/// Builds the unit for the product of two spreads (variance, covariance).
+fn product_unit(a: &Arc<Unit>, b: &Arc<Unit>) -> Arc<Unit> {
+    let a = delta_unit(a);
+    let b = delta_unit(b);
+    Arc::new(Unit {
+        scalar: a.scalar * b.scalar,
+        offset: 0.0,
+        dimensions: a.dimensions + b.dimensions,
+        display: a.display.multiply(&b.display),
+    })
+}
+
+fn spread_value(canonical: f64, unit: &Arc<Unit>) -> Value {
+    Value::from_canonical(canonical, delta_unit(unit))
+}
+
+fn location_value(canonical: f64, unit: &Arc<Unit>) -> Value {
+    Value::from_canonical(canonical, Arc::clone(unit))
+}
+
+fn sorted_canonicals(data: &[Value]) -> Vec<f64> {
+    let mut values: Vec<f64> = data.iter().map(|v| v.canonical).collect();
+    values.sort_by(f64::total_cmp);
+    values
+}
+
 fn sum_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
+    if first_unit.is_affine() {
+        return Err(AbacusError::AffineUnitOperation("sum"));
+    }
     let sum: f64 = args.iter().map(|v| v.canonical).sum();
-
-    Ok(Value {
-        canonical: sum,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(sum, first_unit))
 }
 
 fn mean_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let sum: f64 = args.iter().map(|v| v.canonical).sum();
-
-    Ok(Value {
-        canonical: sum / (args.len() as f64),
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(compute_mean(args), first_unit))
 }
 
 fn min_fn(args: &[Value]) -> Result<Value, AbacusError> {
@@ -43,11 +80,7 @@ fn min_fn(args: &[Value]) -> Result<Value, AbacusError> {
         .iter()
         .map(|v| v.canonical)
         .fold(f64::INFINITY, f64::min);
-
-    Ok(Value {
-        canonical: min_val,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(min_val, first_unit))
 }
 
 fn max_fn(args: &[Value]) -> Result<Value, AbacusError> {
@@ -56,73 +89,62 @@ fn max_fn(args: &[Value]) -> Result<Value, AbacusError> {
         .iter()
         .map(|v| v.canonical)
         .fold(f64::NEG_INFINITY, f64::max);
-
-    Ok(Value {
-        canonical: max_val,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(max_val, first_unit))
 }
 
 fn range_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let min_val = args
+    let (min_val, max_val) = args
         .iter()
-        .map(|v| v.canonical)
-        .fold(f64::INFINITY, f64::min);
-    let max_val = args
-        .iter()
-        .map(|v| v.canonical)
-        .fold(f64::NEG_INFINITY, f64::max);
-
-    Ok(Value {
-        canonical: max_val - min_val,
-        unit: Arc::clone(first_unit),
-    })
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+            (lo.min(v.canonical), hi.max(v.canonical))
+        });
+    Ok(spread_value(max_val - min_val, first_unit))
 }
 
 fn median_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let mut values: Vec<f64> = args.iter().map(|v| v.canonical).collect();
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
+    let values = sorted_canonicals(args);
     let len = values.len();
     let median_val = if len.is_multiple_of(2) {
         f64::midpoint(values[len / 2 - 1], values[len / 2])
     } else {
         values[len / 2]
     };
-
-    Ok(Value {
-        canonical: median_val,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(median_val, first_unit))
 }
 
+/// mode(data...) — the most frequent value.
+///
+/// Values are compared with a relative tolerance of 1e-12 (so `0.1 + 0.2` and `0.3` count as
+/// equal). If several values are equally frequent, the smallest is returned. If every value
+/// occurs exactly once (and there is more than one value) there is no mode and an error is
+/// returned, matching Excel's `MODE`.
 fn mode_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    if args.is_empty() {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
+    let values = sorted_canonicals(args);
+    let same = |a: f64, b: f64| a == b || (a - b).abs() <= 1e-12 * a.abs().max(b.abs());
 
-    let mut max_count = 0;
-    let mut mode_val = args[0].canonical;
-
-    for (i, v1) in args.iter().enumerate() {
-        let count = args
-            .iter()
-            .skip(i)
-            .filter(|v2| (v1.canonical - v2.canonical).abs() < 1e-9)
-            .count();
-        if count > max_count {
-            max_count = count;
-            mode_val = v1.canonical;
+    let mut best = (values[0], 0usize);
+    let mut i = 0;
+    while i < values.len() {
+        let start = values[i];
+        let mut j = i + 1;
+        while j < values.len() && same(start, values[j]) {
+            j += 1;
         }
+        if j - i > best.1 {
+            best = (start, j - i);
+        }
+        i = j;
     }
 
-    Ok(Value {
-        canonical: mode_val,
-        unit: Arc::clone(first_unit),
-    })
+    if best.1 == 1 && values.len() > 1 {
+        return Err(AbacusError::EvaluationError(
+            "mode is undefined: all values are distinct".to_string(),
+        ));
+    }
+    Ok(location_value(best.0, first_unit))
 }
 
 /// Splits interleaved args into two equal halves: `(x_data, y_data, n)`.
@@ -144,7 +166,7 @@ pub fn compute_mean(args: &[Value]) -> f64 {
     args.iter().map(|v| v.canonical).sum::<f64>() / (args.len() as f64)
 }
 
-/// Computes the (co)variance of a single dataset with delta-degrees-of-freedom `ddof`.
+/// Computes the variance of a single dataset with delta-degrees-of-freedom `ddof`.
 /// `ddof = 1` → sample variance, `ddof = 0` → population variance.
 #[must_use]
 pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
@@ -158,7 +180,6 @@ pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
 
 /// Computes Pearson correlation coefficient between two datasets.
 pub fn compute_pearson_r(x_data: &[Value], y_data: &[Value]) -> Result<f64, AbacusError> {
-    let n = x_data.len();
     let x_mean = compute_mean(x_data);
     let y_mean = compute_mean(y_data);
 
@@ -166,9 +187,9 @@ pub fn compute_pearson_r(x_data: &[Value], y_data: &[Value]) -> Result<f64, Abac
     let mut sxx = 0.0;
     let mut syy = 0.0;
 
-    for i in 0..n {
-        let dx = x_data[i].canonical - x_mean;
-        let dy = y_data[i].canonical - y_mean;
+    for (x, y) in x_data.iter().zip(y_data) {
+        let dx = x.canonical - x_mean;
+        let dy = y.canonical - y_mean;
         sxy += dx * dy;
         sxx += dx * dx;
         syy += dy * dy;
@@ -176,101 +197,74 @@ pub fn compute_pearson_r(x_data: &[Value], y_data: &[Value]) -> Result<f64, Abac
 
     let denom = (sxx * syy).sqrt();
     if denom == 0.0 {
+        // Correlation is undefined when x or y is constant.
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 
     Ok(sxy / denom)
 }
 
-/// Computes the cross-covariance sum and the xy-unit for a paired dataset.
-fn compute_covariance(x_data: &[Value], y_data: &[Value], n: usize, ddof: f64) -> (f64, Arc<Unit>) {
-    let x_unit = &x_data[0].unit;
-    let y_unit = &y_data[0].unit;
+/// Computes the covariance and its unit (product of the two spread units) for paired data.
+fn compute_covariance(x_data: &[Value], y_data: &[Value], ddof: f64) -> (f64, Arc<Unit>) {
+    let n = x_data.len() as f64;
+    let x_mean = compute_mean(x_data);
+    let y_mean = compute_mean(y_data);
 
-    let x_mean = x_data.iter().map(|v| v.canonical).sum::<f64>() / (n as f64);
-    let y_mean = y_data.iter().map(|v| v.canonical).sum::<f64>() / (n as f64);
-
-    let cov_sum: f64 = (0..n)
-        .map(|i| (x_data[i].canonical - x_mean) * (y_data[i].canonical - y_mean))
+    let cov_sum: f64 = x_data
+        .iter()
+        .zip(y_data)
+        .map(|(x, y)| (x.canonical - x_mean) * (y.canonical - y_mean))
         .sum();
 
-    let product_unit = Arc::new(Unit {
-        scalar: x_unit.scalar * y_unit.scalar,
-        offset: 0.0,
-        dimensions: x_unit.dimensions + y_unit.dimensions,
-        display: x_unit.display.multiply(&y_unit.display),
-    });
+    (
+        cov_sum / (n - ddof),
+        product_unit(&x_data[0].unit, &y_data[0].unit),
+    )
+}
 
-    (cov_sum / (n as f64 - ddof), product_unit)
+fn variance_with(args: &[Value], ddof: f64) -> Result<Value, AbacusError> {
+    let first_unit = check_compatible_units(args)?;
+    if (args.len() as f64) <= ddof {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(Value::from_canonical(
+        compute_variance(args, ddof),
+        product_unit(first_unit, first_unit),
+    ))
+}
+
+fn std_with(args: &[Value], ddof: f64) -> Result<Value, AbacusError> {
+    let first_unit = check_compatible_units(args)?;
+    if (args.len() as f64) <= ddof {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(spread_value(
+        compute_variance(args, ddof).sqrt(),
+        first_unit,
+    ))
 }
 
 fn var_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let first_unit = check_compatible_units(args)?;
-    if args.len() < 2 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-    let variance = compute_variance(args, 1.0);
-    let squared_unit = Arc::new(Unit {
-        scalar: first_unit.scalar * first_unit.scalar,
-        offset: 0.0,
-        dimensions: first_unit.dimensions * 2.0,
-        display: first_unit.display.multiply(&first_unit.display),
-    });
-    Ok(Value {
-        canonical: variance,
-        unit: squared_unit,
-    })
+    variance_with(args, 1.0)
 }
 
 fn std_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let first_unit = check_compatible_units(args)?;
-    if args.len() < 2 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-    Ok(Value {
-        canonical: compute_variance(args, 1.0).sqrt(),
-        unit: Arc::clone(first_unit),
-    })
+    std_with(args, 1.0)
 }
 
 fn var_p_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let first_unit = check_compatible_units(args)?;
-    if args.is_empty() {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-    let variance = compute_variance(args, 0.0);
-    let squared_unit = Arc::new(Unit {
-        scalar: first_unit.scalar * first_unit.scalar,
-        offset: 0.0,
-        dimensions: first_unit.dimensions * 2.0,
-        display: first_unit.display.multiply(&first_unit.display),
-    });
-    Ok(Value {
-        canonical: variance,
-        unit: squared_unit,
-    })
+    variance_with(args, 0.0)
 }
 
 fn std_p_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let first_unit = check_compatible_units(args)?;
-    if args.is_empty() {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-    Ok(Value {
-        canonical: compute_variance(args, 0.0).sqrt(),
-        unit: Arc::clone(first_unit),
-    })
+    std_with(args, 0.0)
 }
 
-/// Helper for linear interpolation quantile calculation
-fn calc_quantile(data: &[Value], q: f64) -> f64 {
-    let mut values: Vec<f64> = data.iter().map(|v| v.canonical).collect();
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
+/// Type-7 quantile of already-sorted values.
+fn quantile_sorted(values: &[f64], q: f64) -> f64 {
     if values.len() == 1 {
         return values[0];
     }
-
     let pos = q * ((values.len() - 1) as f64);
     let idx = pos.floor() as usize;
     let frac = pos - (idx as f64);
@@ -282,8 +276,9 @@ fn calc_quantile(data: &[Value], q: f64) -> f64 {
     }
 }
 
-/// quantile(data..., q) where q in [0, 1]
-fn quantile_fn(args: &[Value]) -> Result<Value, AbacusError> {
+/// Shared implementation of `quantile(data..., q)` (q ∈ [0, 1]) and
+/// `percentile(data..., p)` (p ∈ [0, 100]).
+fn quantile_with_scale(args: &[Value], scale: f64) -> Result<Value, AbacusError> {
     if args.len() < 2 {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
@@ -294,56 +289,32 @@ fn quantile_fn(args: &[Value]) -> Result<Value, AbacusError> {
     }
 
     let q = q_arg.canonical;
-    if !(0.0..=1.0).contains(&q) {
+    if !(0.0..=scale).contains(&q) {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 
     let data = &args[..args.len() - 1];
     let first_unit = check_compatible_units(data)?;
-    let val = calc_quantile(data, q);
+    let val = quantile_sorted(&sorted_canonicals(data), q / scale);
+    Ok(location_value(val, first_unit))
+}
 
-    Ok(Value {
-        canonical: val,
-        unit: Arc::clone(first_unit),
-    })
+/// quantile(data..., q) where q in [0, 1]
+fn quantile_fn(args: &[Value]) -> Result<Value, AbacusError> {
+    quantile_with_scale(args, 1.0)
 }
 
 /// percentile(data..., p) where p in [0, 100]
 fn percentile_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    if args.len() < 2 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    let p_arg = &args[args.len() - 1];
-    if !p_arg.unit.is_dimensionless() {
-        return Err(AbacusError::IncompatibleDimensions);
-    }
-
-    let p = p_arg.canonical;
-    if !(0.0..=100.0).contains(&p) {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    let data = &args[..args.len() - 1];
-    let first_unit = check_compatible_units(data)?;
-    let val = calc_quantile(data, p / 100.0);
-
-    Ok(Value {
-        canonical: val,
-        unit: Arc::clone(first_unit),
-    })
+    quantile_with_scale(args, 100.0)
 }
 
 /// iqr(data...) -> Q3 - Q1
 fn iqr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let q3 = calc_quantile(args, 0.75);
-    let q1 = calc_quantile(args, 0.25);
-
-    Ok(Value {
-        canonical: q3 - q1,
-        unit: Arc::clone(first_unit),
-    })
+    let values = sorted_canonicals(args);
+    let iqr = quantile_sorted(&values, 0.75) - quantile_sorted(&values, 0.25);
+    Ok(spread_value(iqr, first_unit))
 }
 
 /// `corr(x_range`, `y_range`) or corr(x1..xN, y1..yN)
@@ -354,23 +325,15 @@ fn corr_fn(args: &[Value]) -> Result<Value, AbacusError> {
 }
 
 fn cov_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let (x_data, y_data, n) = parse_paired_data(args)?;
-    let (cov, unit) = compute_covariance(x_data, y_data, n, 1.0);
-    Ok(Value {
-        canonical: cov,
-        unit,
-    })
+    let (x_data, y_data, _) = parse_paired_data(args)?;
+    let (cov, unit) = compute_covariance(x_data, y_data, 1.0);
+    Ok(Value::from_canonical(cov, unit))
 }
 
 fn cov_p_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let (x_data, y_data, n) = parse_paired_data(args)?;
-    check_compatible_units(x_data)?;
-    check_compatible_units(y_data)?;
-    let (cov, unit) = compute_covariance(x_data, y_data, n, 0.0);
-    Ok(Value {
-        canonical: cov,
-        unit,
-    })
+    let (x_data, y_data, _) = parse_paired_data(args)?;
+    let (cov, unit) = compute_covariance(x_data, y_data, 0.0);
+    Ok(Value::from_canonical(cov, unit))
 }
 
 fn geomean_fn(args: &[Value]) -> Result<Value, AbacusError> {
@@ -383,12 +346,7 @@ fn geomean_fn(args: &[Value]) -> Result<Value, AbacusError> {
         }
         log_sum += v.canonical.ln();
     }
-    let gm = (log_sum / n).exp();
-
-    Ok(Value {
-        canonical: gm,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value((log_sum / n).exp(), first_unit))
 }
 
 fn harmean_fn(args: &[Value]) -> Result<Value, AbacusError> {
@@ -401,108 +359,73 @@ fn harmean_fn(args: &[Value]) -> Result<Value, AbacusError> {
         }
         inv_sum += 1.0 / v.canonical;
     }
-    let hm = n / inv_sum;
-
-    Ok(Value {
-        canonical: hm,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(n / inv_sum, first_unit))
 }
 
+/// Returns `(n, Σ((x - mean)/s)^power)` with `s` the sample standard deviation.
+fn standardized_moment_sum(args: &[Value], power: i32) -> Result<(f64, f64), AbacusError> {
+    check_compatible_units(args)?;
+    let n = args.len() as f64;
+    let mean = compute_mean(args);
+    let s = compute_variance(args, 1.0).sqrt();
+    if s.is_nan() || s <= 0.0 {
+        return Err(AbacusError::EvaluationError(
+            "skewness and kurtosis are undefined for constant data".to_string(),
+        ));
+    }
+    let sum = args
+        .iter()
+        .map(|v| ((v.canonical - mean) / s).powi(power))
+        .sum();
+    Ok((n, sum))
+}
+
+/// skew(data...) — sample skewness `n / ((n-1)(n-2)) · Σ((x - x̄)/s)³` (Excel `SKEW`).
 fn skew_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let _first_unit = check_compatible_units(args)?;
-    let n = args.len() as f64;
-    if n < 3.0 {
+    if args.len() < 3 {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
-
-    let mean = args.iter().map(|v| v.canonical).sum::<f64>() / n;
-    let mut m2 = 0.0;
-    let mut m3 = 0.0;
-
-    for v in args {
-        let diff = v.canonical - mean;
-        m2 += diff * diff;
-        m3 += diff * diff * diff;
-    }
-
-    let var = m2 / n;
-    if var == 0.0 {
-        return Ok(Value::dimensionless(0.0));
-    }
-    let skewness = (m3 / n) / var.powf(1.5);
-
-    Ok(Value::dimensionless(skewness))
+    let (n, m3) = standardized_moment_sum(args, 3)?;
+    Ok(Value::dimensionless(n / ((n - 1.0) * (n - 2.0)) * m3))
 }
 
+/// kurt(data...) — sample excess kurtosis (Excel `KURT`):
+/// `n(n+1) / ((n-1)(n-2)(n-3)) · Σ((x - x̄)/s)⁴ − 3(n-1)² / ((n-2)(n-3))`.
 fn kurt_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    let _first_unit = check_compatible_units(args)?;
-    let n = args.len() as f64;
-    if n < 4.0 {
+    if args.len() < 4 {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
-
-    let mean = args.iter().map(|v| v.canonical).sum::<f64>() / n;
-    let mut m2 = 0.0;
-    let mut m4 = 0.0;
-
-    for v in args {
-        let diff = v.canonical - mean;
-        m2 += diff * diff;
-        m4 += diff.powi(4);
-    }
-
-    let var = m2 / n;
-    if var == 0.0 {
-        return Ok(Value::dimensionless(0.0));
-    }
-    let excess_kurtosis = (m4 / n) / (var * var) - 3.0;
-
-    Ok(Value::dimensionless(excess_kurtosis))
+    let (n, m4) = standardized_moment_sum(args, 4)?;
+    let a = n * (n + 1.0) / ((n - 1.0) * (n - 2.0) * (n - 3.0));
+    let b = 3.0 * (n - 1.0) * (n - 1.0) / ((n - 2.0) * (n - 3.0));
+    Ok(Value::dimensionless(a * m4 - b))
 }
 
+/// mad(data...) — mean absolute deviation around the mean.
 fn mad_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
     let n = args.len() as f64;
-    let mean = args.iter().map(|v| v.canonical).sum::<f64>() / n;
+    let mean = compute_mean(args);
     let mad_val = args.iter().map(|v| (v.canonical - mean).abs()).sum::<f64>() / n;
-
-    Ok(Value {
-        canonical: mad_val,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(spread_value(mad_val, first_unit))
 }
 
 fn rms_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
     let n = args.len() as f64;
     let mean_sq = args.iter().map(|v| v.canonical * v.canonical).sum::<f64>() / n;
-    let rms_val = mean_sq.sqrt();
-
-    Ok(Value {
-        canonical: rms_val,
-        unit: Arc::clone(first_unit),
-    })
+    Ok(location_value(mean_sq.sqrt(), first_unit))
 }
 
+/// zscore(x, mean, std) — `std` must be positive.
 fn zscore_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    if args.len() != 3 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
     let x = &args[0];
     let mean = &args[1];
-    let std = &args[2];
-
-    if !x.unit.is_compatible_with(&mean.unit) || !x.unit.is_compatible_with(&std.unit) {
+    if !x.unit.is_compatible_with(&mean.unit) {
         return Err(AbacusError::IncompatibleDimensions);
     }
-
-    if std.canonical == 0.0 {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    let z = (x.canonical - mean.canonical) / std.canonical;
-    Ok(Value::dimensionless(z))
+    let std = positive_spread(&args[2], &x.unit)?;
+    Ok(Value::dimensionless((x.canonical - mean.canonical) / std))
 }
 
 pub fn register_stats() -> Vec<FunctionOp> {

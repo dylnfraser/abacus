@@ -1,53 +1,40 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        check_dimensionless, distributions::special::lgamma, operators::FunctionOp,
+        check_dimensionless,
+        distributions::special::{gamma_q, poisson_pmf_raw},
+        math_helpers::non_negative_integer,
+        operators::FunctionOp,
     },
 };
 
-fn poisson_pmf(lambda: f64, k: u64) -> f64 {
-    if lambda == 0.0 {
-        return if k == 0 { 1.0 } else { 0.0 };
+/// Validates `(lambda, k)`: finite rate λ ≥ 0 and integer k ≥ 0.
+fn parse_poisson_args(args: &[Value]) -> Result<(f64, f64), AbacusError> {
+    check_dimensionless(args)?;
+    let lambda = args[0].canonical;
+    if !(lambda >= 0.0 && lambda.is_finite()) {
+        return Err(AbacusError::IncompatibleFunctionArguments);
     }
-    let k_f = k as f64;
-    let log_pmf = k_f * lambda.ln() - lambda - lgamma(k_f + 1.0);
-    log_pmf.exp()
+    let k = non_negative_integer(args[1].canonical)? as f64;
+    Ok((lambda, k))
 }
 
 /// poissonpdf(lambda, k)
 fn poissonpdf_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-
-    let lambda = args[0].canonical;
-    let k_val = args[1].canonical;
-
-    if lambda < 0.0 || k_val < 0.0 || !lambda.is_finite() || !k_val.is_finite() {
-        return Err(AbacusError::IncompatibleFunctionArguments);
-    }
-
-    let k = k_val.round() as u64;
-    let pdf = poisson_pmf(lambda, k);
-    Ok(Value::dimensionless(pdf))
+    let (lambda, k) = parse_poisson_args(args)?;
+    Ok(Value::dimensionless(poisson_pmf_raw(k, lambda)))
 }
 
-/// poissoncdf(lambda, k)
+/// poissoncdf(lambda, k) = P(X ≤ k) = Q(k + 1, λ), evaluated via the regularized upper
+/// incomplete gamma function rather than by summing k + 1 terms.
 fn poissoncdf_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-
-    let lambda = args[0].canonical;
-    let k_val = args[1].canonical;
-
-    if lambda < 0.0 || k_val < 0.0 || !lambda.is_finite() || !k_val.is_finite() {
-        return Err(AbacusError::IncompatibleFunctionArguments);
+    let (lambda, k) = parse_poisson_args(args)?;
+    if lambda == 0.0 {
+        return Ok(Value::dimensionless(1.0));
     }
-
-    let k = k_val.round() as u64;
-    let mut cdf = 0.0;
-    for i in 0..=k {
-        cdf += poisson_pmf(lambda, i);
-    }
-
-    Ok(Value::dimensionless(cdf))
+    gamma_q(k + 1.0, lambda)
+        .map(Value::dimensionless)
+        .ok_or_else(|| AbacusError::EvaluationError("poissoncdf failed to converge".to_string()))
 }
 
 pub fn register_poisson() -> Vec<FunctionOp> {
