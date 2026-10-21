@@ -350,7 +350,7 @@ fn test_code_review_findings_cr_001_through_cr_006() {
 
     // CR-004: Unary sqrt unit simplification doesn't drop units in compound products
     let sqrt_res = abacus.eval("sqrt(4 m * s)").unwrap();
-    assert_eq!(sqrt_res.to_display(), "2 (m*s)^0.5");
+    assert_eq!(sqrt_res.to_display(), "2 m^0.5*s^0.5");
 
     // CR-005: Significant figure rounding when decade shifts
     let calc = Abacus::standard().with_significant_figures(2);

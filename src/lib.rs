@@ -67,9 +67,13 @@ pub struct Abacus {
     pub default_timezone: Option<TimeZone>,
     pub weekend: WeekendDays,
     pub max_recursion_depth: usize,
+    /// Largest accepted exponent. Change it with [`Abacus::with_max_exponent`] /
+    /// [`Abacus::set_max_exp`] so the unit registry's limit stays in sync.
     pub max_exponent: f64,
     pub implicit_multiplication: bool,
     pub number_scales: bool,
+    /// Whether currency units are enabled. Change it with [`Abacus::with_currencies`] /
+    /// [`Abacus::set_currencies`] so currency units are actually (un)registered.
     pub currencies: bool,
     pub live_rates: bool,
     pub currency_cache_path: Option<std::path::PathBuf>,
@@ -147,13 +151,26 @@ impl Abacus {
         abacus
     }
 
-    // Set the date format for this `Abacus` instance
+    /// Builder method to set the output date format.
+    #[must_use]
+    pub fn with_date_format(mut self, format: DateFormat) -> Self {
+        self.date_format = format;
+        self
+    }
+
+    /// In-place setter for the output date format.
+    pub fn set_date_fmt(&mut self, format: DateFormat) {
+        self.date_format = format;
+    }
+
+    /// Sets the date format for this `Abacus` instance.
     pub fn set_date_format(mut self, format: DateFormat) -> Self {
         self.date_format = format;
         self
     }
 
     /// Sets the significant figures for output rounding and formatting.
+    #[deprecated(since = "0.1.0", note = "use `with_significant_figures` (takes `usize`) or `set_sig_figs`")]
     #[must_use]
     pub fn set_significant_figures(mut self, sig_figs: Option<usize>) -> Self {
         self.significant_figures = sig_figs;
@@ -169,6 +186,7 @@ impl Abacus {
 
     /// Sets whether the evaluator should follow the minimum significant figures
     /// of the input expression's numeric literals.
+    #[deprecated(since = "0.1.0", note = "use `with_follow_significant_figures`")]
     #[must_use]
     pub fn set_follow_significant_figures(mut self, follow: bool) -> Self {
         self.follow_significant_figures = follow;
@@ -183,6 +201,7 @@ impl Abacus {
     }
 
     /// Sets whether automatic derived unit reduction (e.g. N*m -> J) is enabled.
+    #[deprecated(since = "0.1.0", note = "use `with_auto_derived_units`")]
     #[must_use]
     pub fn set_auto_derived_units(mut self, enabled: bool) -> Self {
         self.auto_derived_units = enabled;
@@ -212,6 +231,7 @@ impl Abacus {
     }
 
     /// Sets the angle mode for trigonometric functions (Radians, Degrees, Gradians).
+    #[deprecated(since = "0.1.0", note = "use `with_angle_mode`")]
     #[must_use]
     pub fn set_angle_mode(mut self, mode: AngleMode) -> Self {
         self.angle_mode = mode;
@@ -231,6 +251,7 @@ impl Abacus {
     }
 
     /// Sets whether strict dimension checking is enabled (disallows dimensionless promotion).
+    #[deprecated(since = "0.1.0", note = "use `with_strict_dimensions`")]
     #[must_use]
     pub fn set_strict_dimensions(mut self, strict: bool) -> Self {
         self.strict_dimensions = strict;
@@ -257,6 +278,7 @@ impl Abacus {
     }
 
     /// Sets the number of decimal places for rounding and formatting.
+    #[deprecated(since = "0.1.0", note = "use `with_decimal_places` (takes `usize`) or `set_dec_places`")]
     #[must_use]
     pub fn set_decimal_places(mut self, places: Option<usize>) -> Self {
         self.decimal_places = places;
@@ -276,6 +298,7 @@ impl Abacus {
     }
 
     /// Sets the default interval display style (Bracket [a, b] or Range a..b).
+    #[deprecated(since = "0.1.0", note = "use `with_interval_style` (takes `IntervalStyle`) or `set_int_style`")]
     #[must_use]
     pub fn set_interval_style(mut self, style: Option<IntervalStyle>) -> Self {
         self.default_interval_style = style;
@@ -295,6 +318,7 @@ impl Abacus {
     }
 
     /// Sets the numerical notation mode (Standard, Scientific, Engineering).
+    #[deprecated(since = "0.1.0", note = "use `with_notation`")]
     #[must_use]
     pub fn set_notation(mut self, notation: Notation) -> Self {
         self.notation = notation;
@@ -314,6 +338,7 @@ impl Abacus {
     }
 
     /// Sets the default timezone for unqualified date and time evaluations.
+    #[deprecated(since = "0.1.0", note = "use `with_default_timezone` (takes `TimeZone`) or `set_def_tz`")]
     #[must_use]
     pub fn set_default_timezone(mut self, tz: Option<TimeZone>) -> Self {
         self.default_timezone = tz;
@@ -333,6 +358,7 @@ impl Abacus {
     }
 
     /// Sets the weekend days definition for business day calculations.
+    #[deprecated(since = "0.1.0", note = "use `with_weekend`")]
     #[must_use]
     pub fn set_weekend(mut self, weekend: WeekendDays) -> Self {
         self.weekend = weekend;
@@ -352,6 +378,7 @@ impl Abacus {
     }
 
     /// Sets the maximum expression recursion depth limit.
+    #[deprecated(since = "0.1.0", note = "use `with_max_recursion_depth`")]
     #[must_use]
     pub fn set_max_recursion_depth(mut self, depth: usize) -> Self {
         self.max_recursion_depth = depth;
@@ -371,6 +398,7 @@ impl Abacus {
     }
 
     /// Sets the maximum exponent limit to prevent freezes or resource exhaustion.
+    #[deprecated(since = "0.1.0", note = "use `with_max_exponent`")]
     #[must_use]
     pub fn set_max_exponent(mut self, max: f64) -> Self {
         self.max_exponent = max;
@@ -393,6 +421,7 @@ impl Abacus {
     }
 
     /// Sets whether implicit multiplication (e.g. `2(3)`) is allowed.
+    #[deprecated(since = "0.1.0", note = "use `with_implicit_multiplication`")]
     #[must_use]
     pub fn set_implicit_multiplication(mut self, enabled: bool) -> Self {
         self.implicit_multiplication = enabled;
@@ -412,6 +441,7 @@ impl Abacus {
     }
 
     /// Sets whether natural number scale words (e.g. `million`, `billion`, `thousand`, `dozen`) are recognized as scale multipliers.
+    #[deprecated(since = "0.1.0", note = "use `with_number_scales`")]
     #[must_use]
     pub fn set_number_scales(mut self, enabled: bool) -> Self {
         self.number_scales = enabled;
@@ -458,19 +488,33 @@ impl Abacus {
         self
     }
 
-    /// Enables or disables live exchange rates fetched from Frankfurter API (https://api.frankfurter.dev/v1/latest?base=USD).
+    /// Enables or disables live exchange rates fetched from the Frankfurter API
+    /// (<https://api.frankfurter.dev/v1/latest?base=USD>).
+    ///
+    /// Fetch failures are ignored here (built-in fallback rates stay in effect); use
+    /// [`Abacus::try_set_live_rates`] to observe them.
     #[must_use]
     pub fn with_live_rates(mut self, enabled: bool) -> Self {
-        self.set_live_rates(enabled);
+        // Errors are intentionally ignored by this builder; see the doc comment.
+        let _ = self.try_set_live_rates(enabled);
         self
     }
 
-    /// Sets whether live exchange rates should be fetched.
-    pub fn set_live_rates(&mut self, enabled: bool) {
+    /// Sets whether live exchange rates should be used, fetching (or loading cached) rates
+    /// immediately when enabling. Returns the fetch error, if any; the flag is set regardless.
+    pub fn try_set_live_rates(&mut self, enabled: bool) -> Result<(), AbacusError> {
         self.live_rates = enabled;
         if enabled {
-            let _ = self.update_daily_rates();
+            self.update_daily_rates()
+        } else {
+            Ok(())
         }
+    }
+
+    /// Sets whether live exchange rates should be fetched, silently ignoring fetch errors.
+    #[deprecated(since = "0.1.0", note = "use `try_set_live_rates`, which reports fetch errors")]
+    pub fn set_live_rates(&mut self, enabled: bool) {
+        let _ = self.try_set_live_rates(enabled);
     }
 
     /// Updates currency rates according to daily cache policy:
@@ -494,7 +538,7 @@ impl Abacus {
         }
     }
 
-    /// Fetches live exchange rates from https://api.frankfurter.dev/v1/latest?base=USD,
+    /// Fetches live exchange rates from <https://api.frankfurter.dev/v1/latest?base=USD>,
     /// saves them to the configured cache file, and updates the unit registry.
     pub fn fetch_live_rates(&mut self) -> Result<(), AbacusError> {
         #[cfg(feature = "currencies")]
@@ -614,9 +658,9 @@ impl Abacus {
         name: impl Into<String>,
         expr: &str,
     ) -> Result<EvalResult, AbacusError> {
-        let val = self.eval(expr)?;
-        self.variables.insert(name.into(), val.clone());
-        Ok(val)
+        let raw = self.eval_unformatted(expr)?;
+        self.variables.insert(name.into(), raw.clone());
+        Ok(self.apply_output_settings(raw, expr))
     }
 
     /// Retrieve a reference to a defined variable.
@@ -725,18 +769,19 @@ impl Abacus {
                 && (ident.starts_with(|c: char| c.is_alphabetic() || c == '_'))
                 && ident.chars().all(|c| c.is_alphanumeric() || c == '_');
             if is_ident && !rhs.starts_with('=') {
-                let res = self.eval(rhs)?;
-                self.variables.insert(ident.to_string(), res.clone());
-                return Ok(res);
+                // Store the full-precision value; only the returned copy is rounded for display.
+                let raw = self.eval_unformatted(rhs)?;
+                self.variables.insert(ident.to_string(), raw.clone());
+                return Ok(self.apply_output_settings(raw, rhs));
             }
         }
         self.eval(expr)
     }
 
-    // Evaluate expressions, returning the result as an `EvalResult`
-    // Evaluated dates are automatically formatted
-    // Returns an error if the expression is invalid or cannot be evaluated.
-    pub fn eval(&self, expr: &str) -> Result<EvalResult, AbacusError> {
+    /// Evaluates an expression without applying output settings (decimal places, significant
+    /// figures, currency rounding, display overrides). Use this when the result feeds further
+    /// computation; [`Abacus::eval`] is this plus [`Abacus::apply_output_settings`].
+    pub fn eval_unformatted(&self, expr: &str) -> Result<EvalResult, AbacusError> {
         let config = EvalConfig::from(self);
         let mut res = crate::evaluation::parser::evaluate_with_variables(
             &self.tokens,
@@ -751,7 +796,23 @@ impl Abacus {
                 d.timezone = self.default_timezone.clone();
             }
         }
+        Ok(res)
+    }
 
+    /// Evaluates an expression and applies this instance's output settings: decimal places,
+    /// significant figures, default currency rounding, interval style and display overrides.
+    ///
+    /// The returned values are rounded; variables assigned via [`Abacus::eval_mut`] or
+    /// [`Abacus::set_variable_expr`] keep full precision.
+    pub fn eval(&self, expr: &str) -> Result<EvalResult, AbacusError> {
+        let res = self.eval_unformatted(expr)?;
+        Ok(self.apply_output_settings(res, expr))
+    }
+
+    /// Applies output rounding and display settings to a result evaluated from `expr`
+    /// (`expr` is only consulted when following input significant figures).
+    #[must_use]
+    pub fn apply_output_settings(&self, mut res: EvalResult, expr: &str) -> EvalResult {
         if let Some(style) = self.default_interval_style {
             res = res.with_interval_style(style);
         }
@@ -794,7 +855,7 @@ impl Abacus {
             res = res.with_display_override(&self.unit_display_overrides);
         }
 
-        Ok(res)
+        res
     }
 
     /// Formats an `EvalResult` according to this `Abacus` instance's configuration
@@ -874,10 +935,17 @@ impl Abacus {
     }
 }
 
+/// The process-wide standard `Abacus` instance used by [`eval`] and [`Abacus::shared`].
 pub static STANDARD_ABACUS: std::sync::LazyLock<Abacus> =
     std::sync::LazyLock::new(Abacus::standard);
-pub use STANDARD_ABACUS as STANDARD;
-pub use STANDARD_ABACUS as STANDARD_CALC;
+
+/// Alias of [`STANDARD_ABACUS`].
+#[deprecated(since = "0.1.0", note = "use `STANDARD_ABACUS` or `Abacus::shared()`")]
+pub static STANDARD: &std::sync::LazyLock<Abacus> = &STANDARD_ABACUS;
+
+/// Alias of [`STANDARD_ABACUS`].
+#[deprecated(since = "0.1.0", note = "use `STANDARD_ABACUS` or `Abacus::shared()`")]
+pub static STANDARD_CALC: &std::sync::LazyLock<Abacus> = &STANDARD_ABACUS;
 
 impl Default for Abacus {
     fn default() -> Self {

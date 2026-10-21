@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 fn negate(a: Value) -> Result<Value, AbacusError> {
     if a.unit.is_affine() {
-        return Err(AbacusError::AffineUnitOperation("negate"));
+        // `-10 °C` negates the displayed amount, not the absolute temperature.
+        return Ok(Value::new(-a.amount(), a.unit));
     }
     Ok(Value {
         canonical: -a.canonical,
@@ -22,54 +23,24 @@ fn sqrt(a: Value) -> Result<Value, AbacusError> {
     if a.canonical < 0.0 {
         return Err(AbacusError::IncompatibleDimensions);
     }
-
-    // Divide all dimensions by 2.0
-    let new_dims = a.unit.dimensions * 0.5;
-
-    let mut new_display = a.unit.display.clone();
-
-    let can_halve_counts = |list: &[String]| -> Option<Vec<String>> {
-        let mut counts = std::collections::HashMap::with_capacity(list.len());
-        let mut order = Vec::with_capacity(list.len());
-        for item in list {
-            let entry = counts.entry(item.as_str()).or_insert(0usize);
-            if *entry == 0 {
-                order.push(item.as_str());
-            }
-            *entry += 1;
-        }
-        if counts.values().all(|&c| c.is_multiple_of(2)) {
-            let mut halved = Vec::with_capacity(list.len() / 2);
-            for item in order {
-                let count = counts[item];
-                for _ in 0..(count / 2) {
-                    halved.push(item.to_string());
-                }
-            }
-            Some(halved)
-        } else {
-            None
-        }
-    };
-
-    if let (Some(num), Some(den)) = (
-        can_halve_counts(&new_display.numerator),
-        can_halve_counts(&new_display.denominator),
-    ) {
-        new_display.numerator = num;
-        new_display.denominator = den;
-    } else if !a.unit.is_dimensionless() {
-        let current = a.unit.display.render();
-        new_display.numerator.clear();
-        new_display.denominator.clear();
-        new_display.numerator.push(format!("({current})^0.5"));
+    if a.unit.is_plain_number() || a.unit.is_percent() {
+        return Ok(Value {
+            canonical: a.canonical.sqrt(),
+            unit: a.unit,
+        });
     }
+
+    let new_dims = a
+        .unit
+        .dimensions
+        .checked_mul_f64(0.5)
+        .ok_or(AbacusError::ExponentLimitExceeded)?;
 
     let new_unit = Arc::new(Unit {
         scalar: a.unit.scalar.sqrt(),
         offset: 0.0,
         dimensions: new_dims,
-        display: new_display,
+        display: a.unit.display.powf(0.5),
     });
 
     Ok(Value {

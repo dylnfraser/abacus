@@ -11,10 +11,11 @@ fn test_section2_interval_arithmetic_expanded() {
     let calc = Abacus::standard();
 
     // Flagship example: [9.8 m, 10.2 m] / [1.9 s, 2.1 s]
+    // Both quotients are inexact, so the bounds are rounded outward by one ulp.
     let speed = calc.eval("[9.8 m, 10.2 m] / [1.9 s, 2.1 s]").unwrap();
     assert_eq!(
         speed.to_display(),
-        "[4.666666666666667 m/s, 5.368421052631579 m/s]"
+        "[4.666666666666666 m/s, 5.36842105263158 m/s]"
     );
 
     // Scalar + Interval: 5 m + [1 m, 3 m] -> [6 m, 8 m]

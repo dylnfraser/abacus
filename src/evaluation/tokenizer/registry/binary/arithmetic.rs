@@ -1,51 +1,91 @@
 use crate::{AbacusError, Value, evaluation::tokenizer::registry::binary::operators::BinaryOp};
 
-fn add(a: Value, b: Value) -> Result<Value, AbacusError> {
+pub(crate) fn add(a: Value, b: Value) -> Result<Value, AbacusError> {
     a + b
 }
 
-fn sub(a: Value, b: Value) -> Result<Value, AbacusError> {
+pub(crate) fn sub(a: Value, b: Value) -> Result<Value, AbacusError> {
     a - b
 }
 
-fn mul(a: Value, b: Value) -> Result<Value, AbacusError> {
+pub(crate) fn mul(a: Value, b: Value) -> Result<Value, AbacusError> {
     a * b
 }
 
-fn div(a: Value, b: Value) -> Result<Value, AbacusError> {
+pub(crate) fn div(a: Value, b: Value) -> Result<Value, AbacusError> {
     a / b
 }
 
-fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
-    if a.unit.is_affine() || b.unit.is_affine() {
-        return Err(AbacusError::AffineUnitOperation("multiply"));
+pub(crate) fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
+    if b.unit.is_affine() || !b.unit.is_dimensionless() {
+        return Err(AbacusError::IncompatibleDimensions);
     }
+    if a.unit.is_affine() {
+        return Err(AbacusError::AffineUnitOperation("exponentiate"));
+    }
+    let exp = b.canonical;
+    let canonical = a.canonical.powf(exp);
 
-    if b.unit.is_dimensionless() {
-        let mut new_display = a.unit.display.clone();
-        if !a.unit.is_dimensionless() {
-            let current = a.unit.display.render();
-            new_display.numerator.clear();
-            new_display.denominator.clear();
-            new_display
-                .numerator
-                .push(format!("({})^{}", current, b.canonical));
-        }
-
-        let new_unit = std::sync::Arc::new(crate::units::unit::Unit {
-            scalar: a.unit.scalar.powf(b.canonical),
-            offset: 0.0, // exponents drop the offset for affine units, but we already errored out if affine
-            dimensions: a.unit.dimensions * b.canonical,
-            display: new_display,
+    // Percentages are plain ratios: (5%)^2 = 0.25%.
+    if a.unit.is_percent() || a.unit.is_plain_number() {
+        return Ok(Value {
+            canonical,
+            unit: a.unit,
         });
-
-        Ok(Value {
-            canonical: a.canonical.powf(b.canonical),
-            unit: new_unit,
-        })
-    } else {
-        Err(AbacusError::IncompatibleDimensions)
     }
+
+    let dimensions = a
+        .unit
+        .dimensions
+        .checked_mul_f64(exp)
+        .ok_or(AbacusError::ExponentLimitExceeded)?;
+    let new_unit = std::sync::Arc::new(crate::units::unit::Unit {
+        scalar: a.unit.scalar.powf(exp),
+        offset: 0.0,
+        dimensions,
+        display: a.unit.display.powf(exp),
+    });
+
+    Ok(Value {
+        canonical,
+        unit: new_unit,
+    })
+}
+
+/// Returns `true` if `op` divides its operands (`/`, `per`, or a custom alias of division).
+#[must_use]
+pub fn is_division(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, div as fn(Value, Value) -> Result<Value, AbacusError>)
+}
+
+/// Returns `true` if `op` is the built-in addition.
+#[must_use]
+pub fn is_addition(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, add as fn(Value, Value) -> Result<Value, AbacusError>)
+}
+
+/// Returns `true` if `op` is the built-in subtraction.
+#[must_use]
+pub fn is_subtraction(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, sub as fn(Value, Value) -> Result<Value, AbacusError>)
+}
+
+/// Returns `true` if `op` is the built-in multiplication.
+#[must_use]
+pub fn is_multiplication(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, mul as fn(Value, Value) -> Result<Value, AbacusError>)
+}
+
+/// Returns `true` if `op` is the built-in exponentiation.
+#[must_use]
+pub fn is_power(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, pow as fn(Value, Value) -> Result<Value, AbacusError>)
+}
+
+/// Returns `true` if `op` is the built-in remainder.
+#[must_use]
+pub fn is_remainder(op: &BinaryOp) -> bool {
+    std::ptr::fn_addr_eq(op.func, rem as fn(Value, Value) -> Result<Value, AbacusError>)
 }
 
 fn rem(a: Value, b: Value) -> Result<Value, AbacusError> {
@@ -108,6 +148,12 @@ fn less_than(a: Value, b: Value) -> Result<Value, AbacusError> {
         Ok(Value {
             canonical: b.canonical * factor,
             unit: std::sync::Arc::clone(&b.unit),
+        })
+    } else if b.unit.is_percent() {
+        let factor = 1.0 - b.canonical;
+        Ok(Value {
+            canonical: a.canonical * factor,
+            unit: std::sync::Arc::clone(&a.unit),
         })
     } else if a.unit.is_compatible_with(&b.unit) {
         Ok(Value {

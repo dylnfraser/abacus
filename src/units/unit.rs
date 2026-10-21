@@ -1,4 +1,5 @@
 use crate::units::dimensions::Dimensions;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -14,6 +15,66 @@ pub struct Unit {
 pub struct UnitExpr {
     pub numerator: Vec<String>,
     pub denominator: Vec<String>,
+}
+
+/// Integer exponents up to this magnitude are stored as repeated symbols (`m*m*m`),
+/// larger or fractional exponents as a single `base^exp` entry.
+const MAX_REPEATED_EXPONENT: f64 = 8.0;
+
+/// Parses a unit exponent: a plain number (`2`, `-1.5`, `0.5`) or a parenthesized
+/// rational (`(1/3)`, `(-2/7)`). Returns `None` for NaN, infinite or unparseable input.
+#[must_use]
+pub fn parse_exponent(s: &str) -> Option<f64> {
+    if s.is_empty() || s.len() > 32 {
+        return None;
+    }
+    let value = if let Some(inner) = s.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
+        if let Some((p, q)) = inner.split_once('/') {
+            let p: f64 = p.trim().parse().ok()?;
+            let q: f64 = q.trim().parse().ok()?;
+            if q == 0.0 {
+                return None;
+            }
+            p / q
+        } else {
+            inner.trim().parse().ok()?
+        }
+    } else {
+        s.parse().ok()?
+    };
+    value.is_finite().then_some(value)
+}
+
+/// Formats an exponent for display: integers plainly, short decimals as-is (`0.5`, `1.25`),
+/// and other small-denominator rationals as `(p/q)` (e.g. `(1/3)`).
+#[must_use]
+pub fn format_exponent(e: f64) -> String {
+    let rounded = e.round();
+    if (e - rounded).abs() < 1e-9 {
+        return format!("{rounded}");
+    }
+    let millis = e * 1000.0;
+    if (millis - millis.round()).abs() < 1e-9 {
+        return format!("{}", millis.round() / 1000.0);
+    }
+    for q in 2..=12_i32 {
+        let p = e * f64::from(q);
+        if (p - p.round()).abs() < 1e-9 {
+            return format!("({}/{q})", p.round());
+        }
+    }
+    format!("{e}")
+}
+
+/// Splits `base^exp` into its base symbol and exponent; plain symbols have exponent 1.
+fn split_power(sym: &str) -> (&str, f64) {
+    if let Some((base, exp)) = sym.rsplit_once('^')
+        && !base.is_empty()
+        && let Some(e) = parse_exponent(exp)
+    {
+        return (base, e);
+    }
+    (sym, 1.0)
 }
 
 impl UnitExpr {
@@ -34,11 +95,13 @@ impl UnitExpr {
 
     #[must_use]
     pub fn multiply(&self, rhs: &Self) -> Self {
-        let mut numerator = self.numerator.clone();
-        numerator.extend(rhs.numerator.iter().cloned());
+        let mut numerator = Vec::with_capacity(self.numerator.len() + rhs.numerator.len());
+        numerator.extend_from_slice(&self.numerator);
+        numerator.extend_from_slice(&rhs.numerator);
 
-        let mut denominator = self.denominator.clone();
-        denominator.extend(rhs.denominator.iter().cloned());
+        let mut denominator = Vec::with_capacity(self.denominator.len() + rhs.denominator.len());
+        denominator.extend_from_slice(&self.denominator);
+        denominator.extend_from_slice(&rhs.denominator);
 
         Self {
             numerator,
@@ -48,11 +111,13 @@ impl UnitExpr {
 
     #[must_use]
     pub fn divide(&self, rhs: &Self) -> Self {
-        let mut numerator = self.numerator.clone();
-        numerator.extend(rhs.denominator.iter().cloned());
+        let mut numerator = Vec::with_capacity(self.numerator.len() + rhs.denominator.len());
+        numerator.extend_from_slice(&self.numerator);
+        numerator.extend_from_slice(&rhs.denominator);
 
-        let mut denominator = self.denominator.clone();
-        denominator.extend(rhs.numerator.iter().cloned());
+        let mut denominator = Vec::with_capacity(self.denominator.len() + rhs.numerator.len());
+        denominator.extend_from_slice(&self.denominator);
+        denominator.extend_from_slice(&rhs.numerator);
 
         Self {
             numerator,
@@ -60,8 +125,89 @@ impl UnitExpr {
         }
     }
 
+    /// Returns `true` if this expression is exactly the single symbol `sym`.
+    #[must_use]
+    pub fn is_single(&self, sym: &str) -> bool {
+        self.denominator.is_empty() && self.numerator.len() == 1 && self.numerator[0] == sym
+    }
+
+    /// Returns `true` if this expression is a single plain unit symbol (no denominator,
+    /// no exponent), e.g. `atm` or `GHz` but not `m^2` or `m/s`.
+    #[must_use]
+    pub fn is_atomic(&self) -> bool {
+        self.denominator.is_empty()
+            && self.numerator.len() == 1
+            && !self.numerator[0].contains('^')
+    }
+
+    /// Collects `(base, exponent)` pairs in order of first appearance, with
+    /// numerator entries counted positively and denominator entries negatively.
+    fn exponents(&self) -> Vec<(&str, f64)> {
+        let mut out: Vec<(&str, f64)> = Vec::new();
+        let terms = self
+            .numerator
+            .iter()
+            .map(|s| (s, 1.0))
+            .chain(self.denominator.iter().map(|s| (s, -1.0)));
+        for (sym, sign) in terms {
+            let (base, e) = split_power(sym);
+            if let Some(entry) = out.iter_mut().find(|(b, _)| *b == base) {
+                entry.1 += sign * e;
+            } else {
+                out.push((base, sign * e));
+            }
+        }
+        out
+    }
+
+    fn from_exponents(exps: &[(&str, f64)]) -> Self {
+        let mut expr = Self::dimensionless();
+        for &(base, e) in exps {
+            if e.abs() < 1e-9 {
+                continue;
+            }
+            let target = if e > 0.0 {
+                &mut expr.numerator
+            } else {
+                &mut expr.denominator
+            };
+            let mag = e.abs();
+            if (mag - mag.round()).abs() < 1e-9 && mag <= MAX_REPEATED_EXPONENT {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                for _ in 0..(mag.round() as usize) {
+                    target.push(base.to_string());
+                }
+            } else {
+                target.push(format!("{base}^{}", format_exponent(mag)));
+            }
+        }
+        expr
+    }
+
+    /// Raises every unit in this expression to `exp`, e.g. `(m^2/s)^0.5` → `m/s^0.5`.
+    #[must_use]
+    pub fn powf(&self, exp: f64) -> Self {
+        let exps: Vec<(&str, f64)> = self
+            .exponents()
+            .into_iter()
+            .map(|(b, e)| (b, e * exp))
+            .collect();
+        Self::from_exponents(&exps)
+    }
+
+    /// Cancels identical symbols between numerator and denominator and merges
+    /// powers of the same base (`m^9*m` → `m^10`, `m^0.5*m^0.5` → `m`).
     #[must_use]
     pub fn simplified(mut self) -> Self {
+        if self
+            .numerator
+            .iter()
+            .chain(self.denominator.iter())
+            .any(|s| s.contains('^'))
+        {
+            return Self::from_exponents(&self.exponents());
+        }
+
         let mut numerator_index = 0;
 
         while numerator_index < self.numerator.len() {
@@ -92,12 +238,12 @@ impl UnitExpr {
 
     #[must_use]
     pub fn render_numerator(&self) -> String {
-        render_units(&self.numerator)
+        UnitList(&self.numerator).to_string()
     }
 
     #[must_use]
     pub fn render_denominator(&self) -> String {
-        render_units(&self.denominator)
+        UnitList(&self.denominator).to_string()
     }
 }
 
@@ -105,107 +251,61 @@ impl std::fmt::Display for UnitExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (self.numerator.is_empty(), self.denominator.is_empty()) {
             (true, true) => Ok(()),
-            (false, true) => write_units(f, &self.numerator),
-            (true, false) => {
-                write!(f, "1/")?;
-                write_units(f, &self.denominator)
+            (false, true) => write!(f, "{}", UnitList(&self.numerator)),
+            (true, false) => write!(f, "1/{}", UnitList(&self.denominator)),
+            (false, false) => write!(
+                f,
+                "{}/{}",
+                UnitList(&self.numerator),
+                UnitList(&self.denominator)
+            ),
+        }
+    }
+}
+
+/// Renders a list of unit symbols, collapsing repeats into exponents (`m*m` → `m^2`).
+struct UnitList<'a>(&'a [String]);
+
+impl std::fmt::Display for UnitList<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let units = self.0;
+        // Unit lists are short; a linear scan avoids allocating a HashMap per render.
+        for (i, unit) in units.iter().enumerate() {
+            if units[..i].contains(unit) {
+                continue;
             }
-            (false, false) => {
-                write_units(f, &self.numerator)?;
-                write!(f, "/")?;
-                write_units(f, &self.denominator)
+            if i > 0 {
+                write!(f, "*")?;
+            }
+            let count = units[i..].iter().filter(|u| *u == unit).count();
+            if count == 1 {
+                write!(f, "{unit}")?;
+            } else {
+                write!(f, "{unit}^{count}")?;
             }
         }
+        Ok(())
     }
 }
-
-fn write_units(f: &mut std::fmt::Formatter<'_>, units: &[String]) -> std::fmt::Result {
-    if units.is_empty() {
-        return Ok(());
-    }
-
-    let mut counts = std::collections::HashMap::with_capacity(units.len());
-    let mut order = Vec::with_capacity(units.len());
-
-    for unit in units {
-        let entry = counts.entry(unit.as_str()).or_insert(0usize);
-        if *entry == 0 {
-            order.push(unit.as_str());
-        }
-        *entry += 1;
-    }
-
-    for (i, unit) in order.into_iter().enumerate() {
-        if i > 0 {
-            write!(f, "*")?;
-        }
-        let count = counts[unit];
-        if count == 1 {
-            write!(f, "{unit}")?;
-        } else {
-            write!(f, "{unit}^{count}")?;
-        }
-    }
-    Ok(())
-}
-
-fn render_units(units: &[String]) -> String {
-    use std::fmt::Write;
-    let mut s = String::new();
-    if units.is_empty() {
-        return s;
-    }
-
-    let mut counts = std::collections::HashMap::with_capacity(units.len());
-    let mut order = Vec::with_capacity(units.len());
-
-    for unit in units {
-        let entry = counts.entry(unit.as_str()).or_insert(0usize);
-        if *entry == 0 {
-            order.push(unit.as_str());
-        }
-        *entry += 1;
-    }
-
-    for (i, unit) in order.into_iter().enumerate() {
-        if i > 0 {
-            let _ = write!(s, "*");
-        }
-        let count = counts[unit];
-        if count == 1 {
-            let _ = write!(s, "{unit}");
-        } else {
-            let _ = write!(s, "{unit}^{count}");
-        }
-    }
-    s
-}
-
-use std::sync::Arc;
 
 impl Unit {
+    /// Simplifies this unit's display: cancels same-dimension units between numerator and
+    /// denominator (`km/m` → dimensionless), relabels same-dimension units to the leading one
+    /// (`m*ft` → `m^2`), and merges powers. The scalar is recomputed from the final display
+    /// when every symbol is known, avoiding accumulated rounding noise.
     pub fn simplify_display_with(&self, lookup: impl Fn(&str) -> Option<Arc<Unit>>) -> Unit {
-        let un = self;
-        let mut scalar = un.scalar;
-        let mut display = un.display.clone().simplified();
-
-        if self
-            .display
-            .numerator
-            .iter()
-            .all(|unit| unit == "dimensionless")
-        {
-            display = UnitExpr::dimensionless();
-        }
+        let mut scalar = self.scalar;
+        let mut display = self.display.clone();
+        display.numerator.retain(|u| u != "dimensionless");
+        display.denominator.retain(|u| u != "dimensionless");
+        let mut display = display.simplified();
 
         let mut num_idx = 0;
         while num_idx < display.numerator.len() {
-            let num_sym = &display.numerator[num_idx];
-            if let Some(un1) = lookup(num_sym) {
-                let mut matched = false;
+            let mut matched = false;
+            if let Some(un1) = lookup(&display.numerator[num_idx]) {
                 for den_idx in 0..display.denominator.len() {
-                    let den_sym = &display.denominator[den_idx];
-                    if let Some(un2) = lookup(den_sym)
+                    if let Some(un2) = lookup(&display.denominator[den_idx])
                         && un1.dimensions == un2.dimensions
                     {
                         scalar *= un2.scalar / un1.scalar;
@@ -215,64 +315,22 @@ impl Unit {
                         break;
                     }
                 }
-                if !matched {
-                    num_idx += 1;
-                }
-            } else {
+            }
+            if !matched {
                 num_idx += 1;
             }
         }
 
-        // Consolidate same-dimension units within numerator to the leading unit
-        let mut i = 0;
-        while i < display.numerator.len() {
-            let target_sym = display.numerator[i].clone();
-            if let Some(target_un) = lookup(&target_sym)
-                && !target_un.dimensions.is_dimensionless()
-            {
-                let mut j = i + 1;
-                while j < display.numerator.len() {
-                    let other_sym = &display.numerator[j];
-                    if other_sym != &target_sym
-                        && let Some(other_un) = lookup(other_sym)
-                        && target_un.dimensions == other_un.dimensions
-                        && other_un.scalar != 0.0
-                        && other_un.scalar.is_finite()
-                        && target_un.scalar.is_finite()
-                    {
-                        scalar *= target_un.scalar / other_un.scalar;
-                        display.numerator[j] = target_sym.clone();
-                    }
-                    j += 1;
-                }
-            }
-            i += 1;
-        }
+        consolidate(&mut display.numerator, &lookup, &mut scalar, false);
+        consolidate(&mut display.denominator, &lookup, &mut scalar, true);
+        let display = display.simplified();
 
-        // Consolidate same-dimension units within denominator to the leading unit
-        let mut i = 0;
-        while i < display.denominator.len() {
-            let target_sym = display.denominator[i].clone();
-            if let Some(target_un) = lookup(&target_sym)
-                && !target_un.dimensions.is_dimensionless()
-            {
-                let mut j = i + 1;
-                while j < display.denominator.len() {
-                    let other_sym = &display.denominator[j];
-                    if other_sym != &target_sym
-                        && let Some(other_un) = lookup(other_sym)
-                        && target_un.dimensions == other_un.dimensions
-                        && other_un.scalar != 0.0
-                        && other_un.scalar.is_finite()
-                        && target_un.scalar.is_finite()
-                    {
-                        scalar /= target_un.scalar / other_un.scalar;
-                        display.denominator[j] = target_sym.clone();
-                    }
-                    j += 1;
-                }
-            }
-            i += 1;
+        if let Some(exact) = scalar_from_display(&display, &lookup)
+            && exact.is_finite()
+            && exact != 0.0
+            && relative_close(exact, scalar, 1e-9)
+        {
+            scalar = exact;
         }
 
         Unit {
@@ -316,6 +374,12 @@ impl Unit {
     #[must_use]
     pub fn is_dimensionless(&self) -> bool {
         self.dimensions == Dimensions::DIMENSIONLESS
+    }
+
+    /// Returns `true` for a plain dimensionless unit with no display (a bare number).
+    #[must_use]
+    pub fn is_plain_number(&self) -> bool {
+        self.is_dimensionless() && self.display.is_empty() && self.scalar == 1.0
     }
 
     #[must_use]
@@ -370,6 +434,62 @@ impl Unit {
     }
 }
 
+fn relative_close(a: f64, b: f64, tol: f64) -> bool {
+    (a - b).abs() <= tol * a.abs().max(b.abs())
+}
+
+/// Relabels units in `list` that share dimensions with an earlier unit to that unit,
+/// adjusting `scalar` accordingly.
+fn consolidate(
+    list: &mut [String],
+    lookup: &impl Fn(&str) -> Option<Arc<Unit>>,
+    scalar: &mut f64,
+    in_denominator: bool,
+) {
+    for i in 0..list.len() {
+        let Some(target_un) = lookup(&list[i]) else {
+            continue;
+        };
+        if target_un.dimensions.is_dimensionless() || !target_un.scalar.is_finite() {
+            continue;
+        }
+        for j in (i + 1)..list.len() {
+            if list[j] == list[i] {
+                continue;
+            }
+            if let Some(other_un) = lookup(&list[j])
+                && target_un.dimensions == other_un.dimensions
+                && other_un.scalar != 0.0
+                && other_un.scalar.is_finite()
+            {
+                let ratio = target_un.scalar / other_un.scalar;
+                if in_denominator {
+                    *scalar /= ratio;
+                } else {
+                    *scalar *= ratio;
+                }
+                let target = list[i].clone();
+                list[j] = target;
+            }
+        }
+    }
+}
+
+/// Computes a unit scalar directly from its display symbols, if all are known.
+fn scalar_from_display(
+    display: &UnitExpr,
+    lookup: &impl Fn(&str) -> Option<Arc<Unit>>,
+) -> Option<f64> {
+    let mut scalar = 1.0;
+    for sym in &display.numerator {
+        scalar *= lookup(sym)?.scalar;
+    }
+    for sym in &display.denominator {
+        scalar /= lookup(sym)?.scalar;
+    }
+    Some(scalar)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,5 +513,26 @@ mod tests {
         let inverse_seconds = UnitExpr::dimensionless().divide(&UnitExpr::single("s"));
 
         assert_eq!(inverse_seconds.render(), "1/s");
+    }
+
+    #[test]
+    fn powers_merge_and_simplify() {
+        let m2 = UnitExpr::single("m").multiply(&UnitExpr::single("m"));
+        assert_eq!(m2.powf(0.5).render(), "m");
+        assert_eq!(UnitExpr::single("m").powf(0.5).render(), "m^0.5");
+        assert_eq!(UnitExpr::single("m").powf(1.0 / 3.0).render(), "m^(1/3)");
+        let merged = UnitExpr::single("m^9").multiply(&UnitExpr::single("m"));
+        assert_eq!(merged.simplified().render(), "m^10");
+        let halves = UnitExpr::single("m^0.5").multiply(&UnitExpr::single("m^0.5"));
+        assert_eq!(halves.simplified().render(), "m");
+    }
+
+    #[test]
+    fn parses_exponents() {
+        assert_eq!(parse_exponent("2"), Some(2.0));
+        assert_eq!(parse_exponent("(1/4)"), Some(0.25));
+        assert_eq!(parse_exponent("NaN"), None);
+        assert_eq!(parse_exponent("inf"), None);
+        assert_eq!(parse_exponent("(1/0)"), None);
     }
 }
