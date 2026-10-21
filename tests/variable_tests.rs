@@ -139,7 +139,7 @@ fn test_eval_mut_assignment_syntax() {
 
     // Variable can be referenced in subsequent evals
     let area = calc.eval("pi * r^2").unwrap();
-    assert_eq!(area.to_display(), "78.53981633974483 (m)^2");
+    assert_eq!(area.to_display(), "78.53981633974483 m^2");
 
     // Multiple chained assignments
     calc.eval_mut("w = 10 m").unwrap();

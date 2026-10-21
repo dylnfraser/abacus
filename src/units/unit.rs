@@ -70,8 +70,8 @@ impl UnitExpr {
                 .iter()
                 .position(|unit| unit == &self.numerator[numerator_index])
             {
-                self.numerator.swap_remove(numerator_index);
-                self.denominator.swap_remove(denominator_index);
+                self.numerator.remove(numerator_index);
+                self.denominator.remove(denominator_index);
             } else {
                 numerator_index += 1;
             }
@@ -183,96 +183,110 @@ fn render_units(units: &[String]) -> String {
 
 use std::sync::Arc;
 
+/// Largest scale ratio between two units that may be merged for display. Beyond this,
+/// converting into the leading unit produces amounts that round to zero or show
+/// spurious precision (e.g. `au*cm`), so the units are left as written.
+const MAX_CONSOLIDATION_RATIO: f64 = 1e6;
+
+type UnitLookup = Option<Arc<Unit>>;
+
+/// Whether a unit has a fixed, well-defined conversion factor that makes it safe to
+/// fold into another unit of the same dimension purely for display.
+fn is_consolidatable(sym: &str, unit: &Unit) -> bool {
+    !unit.dimensions.is_dimensionless()
+        && unit.dimensions != crate::units::dimensions::Dimensions::CURRENCY
+        && unit.offset == 0.0
+        && unit.scalar.is_finite()
+        && unit.scalar > 0.0
+        && !crate::registry::units::temporal_units::is_business_day_symbol(sym)
+}
+
+/// Rewrites every unit in `symbols` that shares a dimension with an earlier unit into
+/// that earlier unit, returning the factor by which the combined scalar grows.
+fn consolidate_same_dimension(symbols: &mut [String], units: &mut [UnitLookup]) -> f64 {
+    let mut factor = 1.0;
+    for i in 0..symbols.len() {
+        let Some(target) = units[i].clone() else {
+            continue;
+        };
+        if !is_consolidatable(&symbols[i], &target) {
+            continue;
+        }
+        for j in (i + 1)..symbols.len() {
+            if symbols[j] == symbols[i] {
+                continue;
+            }
+            let Some(other) = &units[j] else {
+                continue;
+            };
+            if other.dimensions != target.dimensions || !is_consolidatable(&symbols[j], other) {
+                continue;
+            }
+            let ratio = target.scalar / other.scalar;
+            if !(1.0 / MAX_CONSOLIDATION_RATIO..=MAX_CONSOLIDATION_RATIO).contains(&ratio) {
+                continue;
+            }
+            factor *= ratio;
+            symbols[j] = symbols[i].clone();
+            units[j] = Some(Arc::clone(&target));
+        }
+    }
+    factor
+}
+
 impl Unit {
     pub fn simplify_display_with(&self, lookup: impl Fn(&str) -> Option<Arc<Unit>>) -> Unit {
-        let un = self;
-        let mut scalar = un.scalar;
-        let mut display = un.display.clone().simplified();
+        self.simplify_display_with_options(lookup, true)
+    }
 
-        if self
-            .display
-            .numerator
-            .iter()
-            .all(|unit| unit == "dimensionless")
-        {
-            display = UnitExpr::dimensionless();
-        }
+    /// Simplifies the display expression. When `consolidate` is false, units of the same
+    /// dimension are kept as written (used when the user explicitly requested a unit).
+    pub(crate) fn simplify_display_with_options(
+        &self,
+        lookup: impl Fn(&str) -> Option<Arc<Unit>>,
+        consolidate: bool,
+    ) -> Unit {
+        let mut scalar = self.scalar;
+        let mut display = self.display.clone().simplified();
+        display.numerator.retain(|unit| unit != "dimensionless");
+        display.denominator.retain(|unit| unit != "dimensionless");
 
+        let mut num_units: Vec<UnitLookup> =
+            display.numerator.iter().map(|sym| lookup(sym)).collect();
+        let mut den_units: Vec<UnitLookup> =
+            display.denominator.iter().map(|sym| lookup(sym)).collect();
+
+        // Cancel numerator/denominator pairs that share a dimension.
         let mut num_idx = 0;
         while num_idx < display.numerator.len() {
-            let num_sym = &display.numerator[num_idx];
-            if let Some(un1) = lookup(num_sym) {
-                let mut matched = false;
-                for den_idx in 0..display.denominator.len() {
-                    let den_sym = &display.denominator[den_idx];
-                    if let Some(un2) = lookup(den_sym)
-                        && un1.dimensions == un2.dimensions
-                    {
-                        scalar *= un2.scalar / un1.scalar;
-                        display.numerator.swap_remove(num_idx);
-                        display.denominator.swap_remove(den_idx);
-                        matched = true;
-                        break;
-                    }
-                }
-                if !matched {
-                    num_idx += 1;
-                }
+            let matched = num_units[num_idx].as_ref().and_then(|un1| {
+                den_units
+                    .iter()
+                    .position(|un2| {
+                        un2.as_ref().is_some_and(|un2| {
+                            un1.dimensions == un2.dimensions
+                                && un1.scalar.is_finite()
+                                && un1.scalar != 0.0
+                                && un2.scalar.is_finite()
+                        })
+                    })
+                    .map(|den_idx| (den_idx, un1.scalar))
+            });
+            if let Some((den_idx, num_scalar)) = matched {
+                let den_scalar = den_units[den_idx].as_ref().map_or(1.0, |u| u.scalar);
+                scalar *= den_scalar / num_scalar;
+                display.numerator.remove(num_idx);
+                num_units.remove(num_idx);
+                display.denominator.remove(den_idx);
+                den_units.remove(den_idx);
             } else {
                 num_idx += 1;
             }
         }
 
-        // Consolidate same-dimension units within numerator to the leading unit
-        let mut i = 0;
-        while i < display.numerator.len() {
-            let target_sym = display.numerator[i].clone();
-            if let Some(target_un) = lookup(&target_sym)
-                && !target_un.dimensions.is_dimensionless()
-            {
-                let mut j = i + 1;
-                while j < display.numerator.len() {
-                    let other_sym = &display.numerator[j];
-                    if other_sym != &target_sym
-                        && let Some(other_un) = lookup(other_sym)
-                        && target_un.dimensions == other_un.dimensions
-                        && other_un.scalar != 0.0
-                        && other_un.scalar.is_finite()
-                        && target_un.scalar.is_finite()
-                    {
-                        scalar *= target_un.scalar / other_un.scalar;
-                        display.numerator[j] = target_sym.clone();
-                    }
-                    j += 1;
-                }
-            }
-            i += 1;
-        }
-
-        // Consolidate same-dimension units within denominator to the leading unit
-        let mut i = 0;
-        while i < display.denominator.len() {
-            let target_sym = display.denominator[i].clone();
-            if let Some(target_un) = lookup(&target_sym)
-                && !target_un.dimensions.is_dimensionless()
-            {
-                let mut j = i + 1;
-                while j < display.denominator.len() {
-                    let other_sym = &display.denominator[j];
-                    if other_sym != &target_sym
-                        && let Some(other_un) = lookup(other_sym)
-                        && target_un.dimensions == other_un.dimensions
-                        && other_un.scalar != 0.0
-                        && other_un.scalar.is_finite()
-                        && target_un.scalar.is_finite()
-                    {
-                        scalar /= target_un.scalar / other_un.scalar;
-                        display.denominator[j] = target_sym.clone();
-                    }
-                    j += 1;
-                }
-            }
-            i += 1;
+        if consolidate {
+            scalar *= consolidate_same_dimension(&mut display.numerator, &mut num_units);
+            scalar /= consolidate_same_dimension(&mut display.denominator, &mut den_units);
         }
 
         Unit {

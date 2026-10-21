@@ -52,3 +52,11 @@ pub fn register_temporal_units(map: &mut HashMap<String, Arc<Unit>>) {
         map.insert(alias.to_string(), unit);
     }
 }
+
+/// Whether `symbol` is a business-day unit display symbol. These follow calendar rules
+/// rather than a fixed conversion, so they must not be merged with other time units.
+pub(crate) fn is_business_day_symbol(symbol: &str) -> bool {
+    BUSINESS_DAY_UNITS
+        .iter()
+        .any(|&(alias, display)| alias == symbol || display == symbol)
+}

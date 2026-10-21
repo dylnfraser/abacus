@@ -148,7 +148,7 @@ fn test_five_rules_of_significant_figures() {
     let res3 = calc.eval("3 * 4.52 g").unwrap();
     assert_eq!(res3.to_display(), "13.6 g");
 
-    // Exact mathematical powers: (4.52 m) ^ 2 -> 20.4 (m)^2 (3 sig figs, not 1)
+    // Exact mathematical powers: (4.52 m) ^ 2 -> 20.4 m^2 (3 sig figs, not 1)
     let res4 = calc.eval("(4.52 m) ^ 2").unwrap();
-    assert_eq!(res4.to_display(), "20.4 (m)^2");
+    assert_eq!(res4.to_display(), "20.4 m^2");
 }

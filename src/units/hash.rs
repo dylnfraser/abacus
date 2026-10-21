@@ -36,8 +36,16 @@ impl Hash {
         &mut self,
         registry: &crate::registry::unit_registry::UnitRegistry,
     ) {
+        self.simplify_unit_display_with_options(registry, true);
+    }
+
+    pub(crate) fn simplify_unit_display_with_options(
+        &mut self,
+        registry: &crate::registry::unit_registry::UnitRegistry,
+        consolidate: bool,
+    ) {
         for v in self.values.values_mut() {
-            v.simplify_unit_display(registry);
+            v.simplify_unit_display_with_options(registry, consolidate);
         }
     }
 

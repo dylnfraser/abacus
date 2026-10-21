@@ -124,15 +124,20 @@ impl EvalResult {
 
     /// Simplify unit display.
     pub fn simplify_unit_display(&mut self, registry: &UnitRegistry) {
+        self.simplify_unit_display_with_options(registry, true);
+    }
+
+    /// Simplify unit display, optionally keeping same-dimension units as written.
+    pub(crate) fn simplify_unit_display_with_options(
+        &mut self,
+        registry: &UnitRegistry,
+        consolidate: bool,
+    ) {
         match self {
-            EvalResult::Scalar(v) => v.simplify_unit_display(registry),
-            EvalResult::Interval(i) => i.simplify_unit_display(registry),
+            EvalResult::Scalar(v) => v.simplify_unit_display_with_options(registry, consolidate),
+            EvalResult::Interval(i) => i.simplify_unit_display_with_options(registry, consolidate),
             EvalResult::Date(_) => {}
-            EvalResult::Hash(h) => {
-                for v in h.values.values_mut() {
-                    v.simplify_unit_display(registry);
-                }
-            }
+            EvalResult::Hash(h) => h.simplify_unit_display_with_options(registry, consolidate),
         }
     }
 

@@ -24,12 +24,26 @@ fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
     if b.unit.is_dimensionless() {
         let mut new_display = a.unit.display.clone();
         if !a.unit.is_dimensionless() {
-            let current = a.unit.display.render();
-            new_display.numerator.clear();
-            new_display.denominator.clear();
-            new_display
-                .numerator
-                .push(format!("({})^{}", current, b.canonical));
+            let exp = b.canonical;
+            // Small integer powers repeat each symbol (`km^2` -> `km*km`) so the result
+            // simplifies the same way as the equivalent product; others stay opaque.
+            if exp == exp.trunc() && exp.abs() <= 8.0 {
+                let n = exp.abs() as usize;
+                let (num, den) = if exp >= 0.0 {
+                    (&a.unit.display.numerator, &a.unit.display.denominator)
+                } else {
+                    (&a.unit.display.denominator, &a.unit.display.numerator)
+                };
+                new_display.numerator = num.iter().cycle().take(num.len() * n).cloned().collect();
+                new_display.denominator = den.iter().cycle().take(den.len() * n).cloned().collect();
+            } else {
+                let current = a.unit.display.render();
+                new_display.numerator.clear();
+                new_display.denominator.clear();
+                new_display
+                    .numerator
+                    .push(format!("({})^{}", current, b.canonical));
+            }
         }
 
         let new_unit = std::sync::Arc::new(crate::units::unit::Unit {
