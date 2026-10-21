@@ -107,7 +107,7 @@ impl Abacus {
             notation: Notation::default(),
             default_timezone: None,
             weekend: WeekendDays::default(),
-            max_recursion_depth: 64,
+            max_recursion_depth: crate::evaluation::parser::MAX_RECURSION_DEPTH,
             max_exponent: 1_000.0,
             implicit_multiplication: true,
             number_scales: cfg!(feature = "number-scales"),
@@ -351,23 +351,27 @@ impl Abacus {
         self.weekend = weekend;
     }
 
-    /// Sets the maximum expression recursion depth limit.
+    /// Sets the maximum expression recursion depth limit, clamped to
+    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
     #[must_use]
     pub fn set_max_recursion_depth(mut self, depth: usize) -> Self {
-        self.max_recursion_depth = depth;
+        self.set_max_depth(depth);
         self
     }
 
-    /// Builder method to configure maximum recursion depth.
+    /// Builder method to configure maximum recursion depth, clamped to
+    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
     #[must_use]
     pub fn with_max_recursion_depth(mut self, depth: usize) -> Self {
-        self.max_recursion_depth = depth;
+        self.set_max_depth(depth);
         self
     }
 
-    /// In-place setter for maximum recursion depth.
+    /// In-place setter for maximum recursion depth, clamped to
+    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
     pub fn set_max_depth(&mut self, depth: usize) {
-        self.max_recursion_depth = depth;
+        self.max_recursion_depth =
+            depth.min(crate::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP);
     }
 
     /// Sets the maximum exponent limit to prevent freezes or resource exhaustion.
@@ -581,13 +585,14 @@ pub fn default_currency_cache_path() -> std::path::PathBuf {
 impl Abacus {
     // Tokenize an expression into a vector of `Token`s
     pub fn tokenize<'a>(&self, expr: &'a str) -> Result<Vec<Token<'a>>, AbacusError> {
-        crate::evaluation::tokenizer::tokenize_string_full(
+        crate::evaluation::tokenizer::lexer::tokenize_string_with_anchor(
             &self.tokens,
             &self.units,
             Some(&self.variables),
             expr,
             self.implicit_multiplication,
             self.number_scales,
+            self.anchor_date.as_ref(),
         )
     }
 

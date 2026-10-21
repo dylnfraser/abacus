@@ -1,12 +1,21 @@
-use crate::{AbacusError, UnitRegistry, Value, evaluation::tokenizer::tokens::Token};
+use crate::{
+    AbacusError, UnitRegistry, Value,
+    evaluation::tokenizer::{lexer::percent_is_modulo, tokens::Token},
+    units::eval_result::EvalResult,
+};
+use std::collections::HashMap;
 use std::iter::Peekable;
 use std::str::CharIndices;
 
+/// Parses a numeric literal starting at `start`, folding an unspaced unit suffix (`5km`) into a
+/// `Token::Val`. A suffix that names a variable in `variables` is left for the lexer so that
+/// variables shadow units identically in `2h` and `2 h`.
 pub(crate) fn parse_number_token<'a>(
     input_text: &'a str,
     start: usize,
     chars: &mut Peekable<CharIndices<'a>>,
     unit_registry: &UnitRegistry,
+    variables: Option<&HashMap<String, EvalResult>>,
     number_scales: bool,
 ) -> Result<Token<'a>, AbacusError> {
     let mut has_dot = false;
@@ -54,6 +63,12 @@ pub(crate) fn parse_number_token<'a>(
                 }
                 continue;
             }
+            // A dangling exponent marker (`1e`, `2E+`) is a malformed literal, not `1 * e`.
+            let after = exp_lookahead.peek().map(|&(_, c)| c);
+            if after.is_none_or(|c| !c.is_alphanumeric() && c != '_') {
+                let end = exp_lookahead.peek().map_or(input_text.len(), |&(idx, _)| idx);
+                return Err(AbacusError::InvalidNumber(input_text[start..end].to_string()));
+            }
             break;
         } else {
             break;
@@ -64,6 +79,21 @@ pub(crate) fn parse_number_token<'a>(
     let val = num_str
         .parse::<f64>()
         .map_err(|_| AbacusError::InvalidNumber(num_str.to_string()))?;
+    if !val.is_finite() {
+        return Err(AbacusError::InvalidNumber(num_str.to_string()));
+    }
+
+    // `%` directly after a number is the percent unit unless an operand follows (modulo).
+    if let Some(&(pct_idx, '%')) = chars.peek() {
+        if percent_is_modulo(&input_text[pct_idx + 1..]) {
+            return Ok(Token::Float(val));
+        }
+        if let Ok(unit) = unit_registry.unit("%") {
+            chars.next();
+            return Ok(Token::Val(Value::new(val, unit)));
+        }
+        return Ok(Token::Float(val));
+    }
 
     // Check if immediately followed by an unspaced unit identifier (e.g. 5km, 10m, 1s^-1)
     if let Some(&(unit_start, unit_c)) = chars.peek()
@@ -71,7 +101,6 @@ pub(crate) fn parse_number_token<'a>(
             || unit_c == '°'
             || unit_c == 'Å'
             || unit_c == 'Ω'
-            || unit_c == '%'
             || crate::evaluation::tokenizer::implicit::is_currency_symbol(unit_c))
     {
         let mut unit_end = unit_start;
@@ -82,7 +111,6 @@ pub(crate) fn parse_number_token<'a>(
                 || sym_c == '°'
                 || sym_c == 'Å'
                 || sym_c == 'Ω'
-                || sym_c == '%'
                 || crate::evaluation::tokenizer::implicit::is_currency_symbol(sym_c)
             {
                 unit_end = idx + sym_c.len_utf8();
@@ -109,6 +137,9 @@ pub(crate) fn parse_number_token<'a>(
             }
         }
         let unit_candidate = &input_text[unit_start..unit_end];
+        if variables.is_some_and(|v| v.contains_key(unit_candidate)) {
+            return Ok(Token::Float(val));
+        }
         if number_scales
             && let Some(scale) =
                 crate::evaluation::tokenizer::implicit::number_scale_factor(unit_candidate)

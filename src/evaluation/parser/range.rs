@@ -1,7 +1,10 @@
 use crate::{AbacusError, Value};
 use std::sync::Arc;
 
-/// A streaming sequence generator for arithmetic ranges (e.g. `1..10` or `1..5..2`).
+/// A lazy sequence generator for arithmetic ranges (e.g. `1..10` or `1..5..2`).
+///
+/// Function calls currently collect the values into their argument list, so the parser enforces
+/// [`RangeSeq::MAX_RANGE_ELEMENTS`] across all ranges of an evaluation, not just per range.
 pub struct RangeSeq {
     pub start: f64,
     pub step: f64,
@@ -10,7 +13,7 @@ pub struct RangeSeq {
 }
 
 impl RangeSeq {
-    /// Maximum number of values permitted in range step expansion.
+    /// Maximum number of values permitted in range step expansion (per evaluation).
     pub const MAX_RANGE_ELEMENTS: usize = 100_000;
 
     pub fn new(start: Value, end: Value, custom_step: Option<Value>) -> Result<Self, AbacusError> {
