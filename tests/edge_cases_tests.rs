@@ -240,9 +240,11 @@ fn test_niche_error_handling_and_boundary_conditions() {
 
 #[test]
 fn test_niche_relative_date_and_time_edge_cases() {
-    let abacus = Abacus::standard();
-    let today = abacus::Date::today();
-    let tomorrow = abacus::Date::tomorrow();
+    // Anchored on New Year's Eve so the midnight crossings also cross a month and year boundary.
+    let anchor = abacus::Date::new_full(2026, 12, 31, 9, 30, 0, 0);
+    let abacus = Abacus::standard().with_now(anchor.clone());
+    let today = anchor.start_of_day();
+    let tomorrow = today.add_days(1);
 
     // Crossing midnight backwards: 3 hours before tmr at 1am -> today at 22:00
     let d_cross_back = abacus.eval_date("3 hours before tmr at 1am").unwrap();

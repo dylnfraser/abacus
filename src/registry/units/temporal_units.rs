@@ -28,7 +28,35 @@ const TEMPORAL_UNITS: &[(&str, &str, f64)] = &[
     ("week", "wk", 7.0 * 24.0 * 60.0 * 60.0),
 ];
 
+/// Calendar durations. Added to or subtracted from a date they move by calendar months/years
+/// (clamping to the month's last day); converted to fixed units they use the average Gregorian
+/// lengths (year = 365.2425 d, month = year / 12).
+const CALENDAR_UNITS: &[(&[&str], &str, f64)] = &[
+    (
+        &["month", "months", "mo", "mos"],
+        "mo",
+        crate::units::date::SECONDS_PER_AVERAGE_MONTH,
+    ),
+    (
+        &["year", "years", "yr", "yrs"],
+        "yr",
+        crate::units::date::SECONDS_PER_AVERAGE_YEAR,
+    ),
+];
+
 pub fn register_temporal_units(map: &mut HashMap<String, Arc<Unit>>) {
+    for &(aliases, display, scalar) in CALENDAR_UNITS {
+        let unit = Arc::new(Unit {
+            scalar,
+            offset: 0.0,
+            dimensions: Dimensions::TIME,
+            display: UnitExpr::single(display),
+        });
+        for &alias in aliases {
+            map.insert(alias.to_string(), Arc::clone(&unit));
+        }
+    }
+
     for &(alias, display) in BUSINESS_DAY_UNITS {
         let bday_unit = Arc::new(Unit {
             scalar: 86400.0,

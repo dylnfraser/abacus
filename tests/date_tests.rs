@@ -135,10 +135,10 @@ fn test_date_difference() {
     assert_eq!(d2.days_between(&d1), -10);
     assert_eq!(d1.seconds_between(&d2), 10 * 86_400);
 
-    // Operator subtraction: d2 - d1 -> 10 days in seconds = 864,000 s
+    // Operator subtraction: d2 - d1 -> 10 days (864,000 s), shown in days
     let diff_val = &d2 - &d1;
     assert_eq!(diff_val.canonical, 864_000.0);
-    assert_eq!(diff_val.to_display(), "864000 s");
+    assert_eq!(diff_val.to_display(), "10 d");
 }
 
 #[test]

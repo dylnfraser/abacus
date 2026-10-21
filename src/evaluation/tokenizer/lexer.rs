@@ -1,7 +1,7 @@
 use crate::{
     AbacusError, UnitRegistry,
     evaluation::tokenizer::{
-        date_literal::try_parse_date_literal_with_anchor,
+        date_literal::{DateLexOptions, try_parse_date_literal_with_anchor},
         implicit::resolve_tokens,
         number::parse_number_token,
         registry::token_registry::{MatchedOpKind, TokenRegistry},
@@ -192,6 +192,57 @@ pub fn tokenize_string_with_anchor<'a>(
     number_scales: bool,
     anchor_date: Option<&crate::Date>,
 ) -> Result<Vec<Token<'a>>, AbacusError> {
+    tokenize_string_with_date_options(
+        token_registry,
+        unit_registry,
+        variables,
+        input_text,
+        implicit_multiplication,
+        number_scales,
+        anchor_date,
+        false,
+    )
+}
+
+/// Returns `true` if the digit run at the start of `s` may begin a date or time literal
+/// (`07-08-2026`, `15:30`, `3pm`, `3 PM`, `16th May`, `16 May 2010`).
+fn is_numeric_date_candidate(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    for (idx, &b) in bytes.iter().enumerate().take(20) {
+        if b == b'-' || b == b'/' || b == b':' || b.is_ascii_alphabetic() {
+            return true;
+        }
+        if b == b' ' || b == b'\t' {
+            let next = s[idx..].trim_start();
+            return crate::evaluation::tokenizer::date_literal::strip_word_prefix(next, "am")
+                .or_else(|| {
+                    crate::evaluation::tokenizer::date_literal::strip_word_prefix(next, "pm")
+                })
+                .is_some()
+                || crate::evaluation::tokenizer::date_literal::parse_month(next).is_some()
+                || crate::evaluation::tokenizer::date_literal::strip_word_prefix(next, "of")
+                    .is_some();
+        }
+        if matches!(b, b',' | b')' | b']' | b'+' | b'*') {
+            return false;
+        }
+    }
+    false
+}
+
+/// Tokenize an expression string with an optional anchor date, reading ambiguous `NN-NN-YYYY`
+/// dates month-first when `date_month_first` is set (day-first otherwise).
+#[allow(clippy::too_many_arguments)]
+pub fn tokenize_string_with_date_options<'a>(
+    token_registry: &TokenRegistry,
+    unit_registry: &UnitRegistry,
+    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
+    input_text: &'a str,
+    implicit_multiplication: bool,
+    number_scales: bool,
+    anchor_date: Option<&crate::Date>,
+    date_month_first: bool,
+) -> Result<Vec<Token<'a>>, AbacusError> {
     let mut tokens = Vec::new();
     let mut chars = input_text.char_indices().peekable();
     let ops_by_first_char = token_registry.operators_by_first_char();
@@ -202,37 +253,20 @@ pub fn tokenize_string_with_anchor<'a>(
             continue;
         }
 
-        // Date literals (e.g. today, tomorrow, yesterday, now, @2026-08-07@, 07-08-2026, 12:00, 1:00 PM)
+        // Date literals (e.g. today, tomorrow, yesterday, now, @2026-08-07@, 07-08-2026, 12:00, 1:00 PM, 3 PM, 16 May)
         let is_date_candidate = c == '@'
-            || (c.is_ascii_digit() && {
-                let rem_bytes = &input_text.as_bytes()[i..];
-                let mut has_sep = false;
-                let mut idx = 0;
-                while idx < rem_bytes.len() && idx < 20 {
-                    let b = rem_bytes[idx];
-                    if b == b'-' || b == b'/' || b == b':' || b.is_ascii_alphabetic() {
-                        has_sep = true;
-                        break;
-                    }
-                    if b == b' '
-                        || b == b'\t'
-                        || b == b','
-                        || b == b')'
-                        || b == b']'
-                        || b == b'+'
-                        || b == b'*'
-                    {
-                        break;
-                    }
-                    idx += 1;
-                }
-                has_sep
-            })
+            || (c.is_ascii_digit() && is_numeric_date_candidate(&input_text[i..]))
             || c.is_ascii_alphabetic();
 
         if is_date_candidate
-            && let Some((date, consumed_bytes)) =
-                try_parse_date_literal_with_anchor(&input_text[i..], anchor_date)
+            && let Some((date, consumed_bytes)) = try_parse_date_literal_with_anchor(
+                &input_text[i..],
+                DateLexOptions {
+                    anchor: anchor_date,
+                    month_first: date_month_first,
+                    after_quantity: matches!(tokens.last(), Some(Token::Float(_) | Token::Val(_))),
+                },
+            )?
         {
             tokens.push(Token::Date(date));
             let target_idx = i + consumed_bytes;
@@ -246,8 +280,10 @@ pub fn tokenize_string_with_anchor<'a>(
             continue;
         }
 
-        // Timezone offset literals (e.g. +02:00, -04:00, +05:30)
-        if c == '+' || c == '-' {
+        // Timezone offset literals (e.g. `... to +02:00`), only where a timezone can appear
+        if (c == '+' || c == '-')
+            && matches!(tokens.last(), Some(Token::Date(_) | Token::ConversionOp))
+        {
             let remaining = &input_text[i..];
             if let Some(word) = remaining.split_whitespace().next()
                 && word.contains(':')

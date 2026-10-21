@@ -1,11 +1,21 @@
 use abacus::{Abacus, Date};
 
+/// Fixed reference instant (Wednesday 2026-10-21 09:30, floating local time) so these tests never
+/// depend on the wall clock.
+fn anchor() -> Date {
+    Date::new_full(2026, 10, 21, 9, 30, 0, 0)
+}
+
+fn anchored_calc() -> Abacus {
+    Abacus::standard().with_now(anchor())
+}
+
 #[test]
 fn test_relative_date_keywords() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     let d_today = abacus.eval_date("today").unwrap();
-    let expected_today = Date::today();
+    let expected_today = anchor().start_of_day();
     assert_eq!(d_today.year, expected_today.year);
     assert_eq!(d_today.month, expected_today.month);
     assert_eq!(d_today.day, expected_today.day);
@@ -16,20 +26,20 @@ fn test_relative_date_keywords() {
     assert_eq!(d_tdy.day, expected_today.day);
 
     let d_tomorrow = abacus.eval_date("tomorrow").unwrap();
-    let expected_tomorrow = Date::tomorrow();
+    let expected_tomorrow = anchor().start_of_day().add_days(1);
     assert_eq!(d_tomorrow.day, expected_tomorrow.day);
 
     let d_tmr = abacus.eval_date("tmr").unwrap();
     assert_eq!(d_tmr.day, expected_tomorrow.day);
 
     let d_yesterday = abacus.eval_date("yesterday").unwrap();
-    let expected_yesterday = Date::yesterday();
+    let expected_yesterday = anchor().start_of_day().add_days(-1);
     assert_eq!(d_yesterday.day, expected_yesterday.day);
 }
 
 #[test]
 fn test_relative_date_with_at_time() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     let d1 = abacus.eval_date("today at 12:00").unwrap();
     assert_eq!(d1.time.hour, 12);
@@ -42,7 +52,7 @@ fn test_relative_date_with_at_time() {
 
 #[test]
 fn test_relative_time_interval_today_at_12_to_1() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     // today at 12:00 to 1:00 in hours -> 1 h (12:00 PM to 1:00 PM)
     let res = abacus.eval("today at 12:00 to 1:00 in hours").unwrap();
@@ -57,7 +67,7 @@ fn test_relative_time_interval_today_at_12_to_1() {
 
 #[test]
 fn test_relative_time_interval_defaults_to_hours() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     // today at 12:00 to 3:00 -> 3 h by default!
     let res = abacus.eval("today at 12:00 to 3:00").unwrap();
@@ -70,7 +80,7 @@ fn test_relative_time_interval_defaults_to_hours() {
 
 #[test]
 fn test_last_thursday_at_3pm() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     let d = abacus.eval_date("last thursday at 3pm").unwrap();
     assert_eq!(d.day_of_week(), abacus::DayOfWeek::Thursday);
@@ -78,14 +88,14 @@ fn test_last_thursday_at_3pm() {
     assert_eq!(d.time.minute, 0);
 
     // Verify it is in the past relative to today
-    let today = Date::today();
+    let today = anchor().start_of_day();
     assert!(d.to_epoch_days() <= today.to_epoch_days());
     assert!((today.to_epoch_days() - d.to_epoch_days()) <= 7);
 }
 
 #[test]
 fn test_relative_date_arithmetic_with_last_thursday() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     // Adding days to "last thursday at 3pm"
     let d_plus = abacus.eval_date("last thursday at 3pm + 2 days").unwrap();
@@ -109,8 +119,8 @@ fn test_relative_date_arithmetic_with_last_thursday() {
 
 #[test]
 fn test_relative_weekday_modifiers() {
-    let abacus = Abacus::standard();
-    let today = Date::today();
+    let abacus = anchored_calc();
+    let today = anchor().start_of_day();
 
     let d_next_mon = abacus.eval_date("next monday at 10am").unwrap();
     assert_eq!(d_next_mon.day_of_week(), abacus::DayOfWeek::Monday);
@@ -130,12 +140,12 @@ fn test_relative_weekday_modifiers() {
 
 #[test]
 fn test_standalone_time_literals() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     let d1 = abacus.eval_date("3pm").unwrap();
-    assert_eq!(d1.year, Date::today().year);
-    assert_eq!(d1.month, Date::today().month);
-    assert_eq!(d1.day, Date::today().day);
+    assert_eq!(d1.year, anchor().start_of_day().year);
+    assert_eq!(d1.month, anchor().start_of_day().month);
+    assert_eq!(d1.day, anchor().start_of_day().day);
     assert_eq!(d1.time.hour, 15);
 
     let d2 = abacus.eval_date("9:15 AM").unwrap();
@@ -145,8 +155,8 @@ fn test_standalone_time_literals() {
 
 #[test]
 fn test_relative_time_ago_before_after_in() {
-    let abacus = Abacus::standard();
-    let now = Date::now();
+    let abacus = anchored_calc();
+    let now = anchor();
 
     // 3 hours ago
     let d_ago = abacus.eval_date("3 hours ago").unwrap();
@@ -187,8 +197,8 @@ fn test_relative_time_ago_before_after_in() {
 
 #[test]
 fn test_more_relative_time_expressions() {
-    let abacus = Abacus::standard();
-    let now = Date::now();
+    let abacus = anchored_calc();
+    let now = anchor();
 
     // 5 minutes ago
     let d_5min = abacus.eval_date("5 minutes ago").unwrap();
@@ -234,7 +244,7 @@ fn test_more_relative_time_expressions() {
 
 #[test]
 fn test_relative_time_chained_arithmetic() {
-    let abacus = Abacus::standard();
+    let abacus = anchored_calc();
 
     // (3 hours before today at 5pm) + 30 min -> today at 14:30
     let d1 = abacus

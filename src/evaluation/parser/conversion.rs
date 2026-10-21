@@ -5,21 +5,25 @@ use crate::{
 };
 use std::sync::Arc;
 
-impl<'a> Parser<'a> {
-    pub(crate) fn hour_unit(&self) -> Arc<Unit> {
-        self.unit_registry
-            .unit("h")
-            .or_else(|_| self.unit_registry.unit("hour"))
-            .unwrap_or_else(|_| {
-                Arc::new(Unit {
-                    scalar: 3600.0,
-                    offset: 0.0,
-                    dimensions: crate::units::dimensions::Dimensions::TIME,
-                    display: UnitExpr::single("h"),
-                })
-            })
+/// Duration of the span `start to end`. When `end` is a bare time of day (e.g. `3:00`, `1am`) that
+/// would fall before `start` on the same date, the span rolls forward: if neither side used AM/PM
+/// and both read as 12-hour clock times (e.g. `12:00 to 3:00`), `end` moves 12 hours later;
+/// otherwise it moves to the next day (`11pm to 1am` = 2 h, `13:00 to 09:00` = 20 h).
+fn time_span(start: &crate::Date, mut end: crate::Date) -> Value {
+    use crate::units::date::{FLAG_EXPLICIT_MERIDIEM, FLAG_TIME_ONLY};
+    if end.flags & FLAG_TIME_ONLY != 0 && end < *start {
+        let explicit = (start.flags | end.flags) & FLAG_EXPLICIT_MERIDIEM != 0;
+        let half_day = end.add_hours(12);
+        end = if !explicit && start.time.hour <= 12 && end.time.hour < 12 && half_day >= *start {
+            half_day
+        } else {
+            end.add_days(1)
+        };
     }
+    &end - start
+}
 
+impl<'a> Parser<'a> {
     pub(crate) fn parse_conversion(&mut self, lhs: EvalResult) -> Result<EvalResult, AbacusError> {
         self.advance();
         self.has_explicit_conversion = true;
@@ -49,24 +53,36 @@ impl<'a> Parser<'a> {
         }
 
         if let EvalResult::Date(ref d1) = lhs {
+            // A bare hour after a date-time (`today at 12 to 1`) is a time on the same date.
+            let bare_hour = match (self.peek(), self.peek_next()) {
+                (
+                    Some(Token::Float(h)),
+                    None | Some(Token::ConversionOp | Token::CloseParen | Token::Comma),
+                ) if h.fract() == 0.0 && (0.0..=24.0).contains(h) => Some(*h as u32),
+                _ => None,
+            };
+            if let Some(hour) = bare_hour {
+                self.advance();
+                let mut d2 = d1.start_of_day();
+                d2.time = crate::units::date::Time::new(hour % 24, 0, 0, 0);
+                d2.flags = crate::units::date::FLAG_TIME_ONLY;
+                if hour == 24 {
+                    d2 = d2.add_days(1);
+                }
+                return Ok(EvalResult::Scalar(time_span(d1, d2)));
+            }
             match self.peek() {
                 Some(Token::Date(d2)) => {
                     let mut d2 = d2.clone();
                     self.advance();
-
-                    // Infer 12-hour clock rollover if d2.time < d1.time on same date (e.g. 12:00 to 1:00 -> 12:00 to 13:00)
-                    if d2.year == d1.year
-                        && d2.month == d1.month
-                        && d2.day == d1.day
-                        && d2.time.hour < d1.time.hour
-                        && d2.time.hour < 12
-                    {
-                        d2.time.hour += 12;
+                    if d2.timezone.is_none() {
+                        d2.timezone = if d2.flags & crate::units::date::FLAG_TIME_ONLY != 0 {
+                            d1.timezone.clone()
+                        } else {
+                            self.config.default_timezone.clone()
+                        };
                     }
-
-                    let unit_h = self.hour_unit();
-                    let diff_val = (&d2 - d1).convert_to(unit_h)?;
-                    return Ok(EvalResult::Scalar(diff_val));
+                    return Ok(EvalResult::Scalar(time_span(d1, d2)));
                 }
                 Some(Token::Unit(u)) => {
                     let sym = *u;
@@ -79,14 +95,15 @@ impl<'a> Parser<'a> {
             }
             let rhs_result = self.parse_expr(1)?;
             return match rhs_result {
-                EvalResult::Date(ref d2) => {
-                    let unit_h = self.hour_unit();
-                    let diff_val = (d2 - d1).convert_to(unit_h)?;
-                    Ok(EvalResult::Scalar(diff_val))
-                }
+                EvalResult::Date(ref d2) => Ok(EvalResult::Scalar(d2 - d1)),
                 other => {
                     let target_str = other.unit().display.render();
-                    let tz = crate::units::date::TimeZone::parse(&target_str)?;
+                    let tz = crate::units::date::TimeZone::parse(&target_str).map_err(|_| {
+                        AbacusError::EvaluationError(format!(
+                            "cannot convert a date to '{target_str}': expected a timezone or a \
+                             date (subtract dates to get a duration)"
+                        ))
+                    })?;
                     Ok(EvalResult::Date(d1.to_timezone(&tz)))
                 }
             };

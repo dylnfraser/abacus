@@ -746,7 +746,9 @@ impl Abacus {
             config,
         )?;
         if let EvalResult::Date(ref mut d) = res {
-            d.format = self.date_format;
+            if !d.has_explicit_format() {
+                d.format = self.date_format;
+            }
             if d.timezone.is_none() {
                 d.timezone = self.default_timezone.clone();
             }
