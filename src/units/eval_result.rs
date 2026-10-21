@@ -196,7 +196,9 @@ impl EvalResult {
     pub fn to_display_scientific(&self) -> String {
         match self {
             EvalResult::Scalar(v) => v.to_display_scientific(),
-            _ => self.to_display(),
+            EvalResult::Interval(i) => i.to_display_scientific(),
+            EvalResult::Hash(h) => h.to_display_scientific(),
+            EvalResult::Date(d) => d.to_string(),
         }
     }
 
@@ -205,7 +207,9 @@ impl EvalResult {
     pub fn to_display_engineering(&self) -> String {
         match self {
             EvalResult::Scalar(v) => v.to_display_engineering(),
-            _ => self.to_display(),
+            EvalResult::Interval(i) => i.to_display_engineering(),
+            EvalResult::Hash(h) => h.to_display_engineering(),
+            EvalResult::Date(d) => d.to_string(),
         }
     }
 
@@ -232,33 +236,35 @@ impl EvalResult {
         }
     }
 
+    /// The error returned when a scalar was required but this result is not one.
+    /// Intervals yield [`AbacusError::IntervalInFunction`]; hashes and dates yield
+    /// [`AbacusError::UnexpectedToken`].
+    fn not_scalar_error(&self) -> AbacusError {
+        match self {
+            EvalResult::Interval(_) => AbacusError::IntervalInFunction,
+            EvalResult::Hash(_) => {
+                AbacusError::UnexpectedToken("hash result where scalar expected".to_string())
+            }
+            EvalResult::Date(_) | EvalResult::Scalar(_) => {
+                AbacusError::UnexpectedToken("date result where scalar expected".to_string())
+            }
+        }
+    }
+
     /// Borrow the scalar Value, or error if this is not a scalar.
     pub fn as_scalar(&self) -> Result<&Value, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(v),
-            EvalResult::Interval(_) => Err(AbacusError::IntervalInFunction),
-            EvalResult::Hash(_) => Err(AbacusError::UnexpectedToken(
-                "hash result where scalar expected".to_string(),
-            )),
-            EvalResult::Date(_) => Err(AbacusError::UnexpectedToken(
-                "date result where scalar expected".to_string(),
-            )),
+            other => Err(other.not_scalar_error()),
         }
     }
 
-    /// Extract the scalar Value, or error if this is an Interval, Hash, or Date.
+    /// Extract the scalar Value, or error if this is an Interval, Hash, or Date
+    /// (same errors as [`EvalResult::as_scalar`]).
     pub fn into_scalar(self) -> Result<Value, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(v),
-            EvalResult::Interval(_) => Err(AbacusError::UnexpectedToken(
-                "interval result where scalar expected".to_string(),
-            )),
-            EvalResult::Hash(_) => Err(AbacusError::UnexpectedToken(
-                "hash result where scalar expected".to_string(),
-            )),
-            EvalResult::Date(_) => Err(AbacusError::UnexpectedToken(
-                "date result where scalar expected".to_string(),
-            )),
+            other => Err(other.not_scalar_error()),
         }
     }
 

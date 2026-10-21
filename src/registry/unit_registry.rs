@@ -1,36 +1,42 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, PoisonError, RwLock},
 };
 
 #[cfg(feature = "units")]
 use crate::registry::units::metric_units::register_metric_units;
 use crate::{
     error::AbacusError,
-    units::{unit::Unit, value::Value},
+    units::{
+        dimensions::{Dimensions, MAX_REPRESENTABLE_EXPONENT},
+        unit::{Unit, UnitExpr, format_exponent, parse_exponent},
+        value::Value,
+    },
 };
 
-const PRIORITY_DERIVED_SYMBOLS: [&str; 20] = [
-    "N", "J", "W", "Pa", "Hz", "V", "C", "F", "Ω", "S", "Wb", "T", "H", "A", "lx", "kat", "Bq",
-    "Gy", "Sv", "lm",
+/// Derived SI units that composite results are automatically reduced to, in priority order.
+///
+/// Units whose dimensions are ambiguous without tracking angles/steradians are deliberately
+/// excluded: `Gy`/`Sv` (= m²/s², also specific energy and velocity²), `Bq` (= 1/s, same as Hz),
+/// `lm` (= cd, since sr is dimensionless) and `lx` (= cd/m², also luminance).
+const PRIORITY_DERIVED_SYMBOLS: [&str; 15] = [
+    "N", "J", "W", "Pa", "Hz", "V", "C", "F", "Ω", "S", "Wb", "T", "H", "A", "kat",
 ];
+
+/// Maximum number of generated `base^exp` units kept in the lookup cache.
+const MAX_CACHED_EXPONENT_UNITS: usize = 4_096;
 
 #[derive(Debug)]
 pub struct UnitRegistry {
     units: HashMap<String, Arc<Unit>>,
     cache: RwLock<HashMap<String, Arc<Unit>>>,
-    priority_derived_units: Vec<(crate::units::dimensions::Dimensions, Arc<Unit>)>,
+    priority_derived_units: Vec<(Dimensions, Arc<Unit>)>,
     pub max_exponent: f64,
 }
 
 impl Default for UnitRegistry {
     fn default() -> Self {
-        Self {
-            units: HashMap::new(),
-            cache: RwLock::new(HashMap::new()),
-            priority_derived_units: Vec::new(),
-            max_exponent: 1_000.0,
-        }
+        Self::new()
     }
 }
 
@@ -64,11 +70,18 @@ impl UnitRegistry {
         }
     }
 
+    fn clear_cache(&self) {
+        self.cache
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+
+    /// Sets the largest exponent magnitude accepted in `base^exp` unit symbols.
+    /// Values beyond the representable range (≈ 77 471) are clamped to it.
     pub fn set_max_exponent(&mut self, max: f64) {
-        self.max_exponent = max;
-        if let Ok(mut guard) = self.cache.write() {
-            guard.clear();
-        }
+        self.max_exponent = max.min(MAX_REPRESENTABLE_EXPONENT);
+        self.clear_cache();
     }
 
     #[must_use]
@@ -92,10 +105,7 @@ impl UnitRegistry {
         self.units.contains_key(symbol) || self.parse_exponent_unit(symbol).is_ok()
     }
 
-    pub fn find_unit_by_dimensions(
-        &self,
-        dimensions: &crate::units::dimensions::Dimensions,
-    ) -> Option<Arc<Unit>> {
+    pub fn find_unit_by_dimensions(&self, dimensions: &Dimensions) -> Option<Arc<Unit>> {
         self.priority_derived_units
             .iter()
             .find(|(dims, _)| dims == dimensions)
@@ -109,66 +119,52 @@ impl UnitRegistry {
         self.parse_exponent_unit(symbol)
     }
 
+    /// Resolves `base^exp` symbols (`m^3`, `s^-1`, `m^(1/3)`), caching the result under a
+    /// normalized key so `m^1`, `m^1.0` and `m^01` share one entry.
     fn parse_exponent_unit(&self, symbol: &str) -> Result<Arc<Unit>, AbacusError> {
-        if let Ok(guard) = self.cache.read()
-            && let Some(cached) = guard.get(symbol)
+        let unknown = || AbacusError::UnknownUnit(symbol.to_string());
+        let (base_sym, exp_str) = symbol.rsplit_once('^').ok_or_else(unknown)?;
+        let base_unit = self.units.get(base_sym).ok_or_else(unknown)?;
+        let exp = parse_exponent(exp_str).ok_or_else(unknown)?;
+
+        if exp.abs() > self.max_exponent {
+            return Err(AbacusError::ExponentLimitExceeded);
+        }
+        if base_unit.is_affine() {
+            if exp == 1.0 {
+                return Ok(Arc::clone(base_unit));
+            }
+            return Err(AbacusError::AffineUnitOperation("exponentiate"));
+        }
+
+        let key = format!("{base_sym}^{}", format_exponent(exp));
+        if let Some(cached) = self
+            .cache
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&key)
         {
             return Ok(Arc::clone(cached));
         }
 
-        if let Some((base_sym, exp_str)) = symbol.rsplit_once('^')
-            && let Ok(exp) = exp_str.parse::<f64>()
-            && let Some(base_unit) = self.units.get(base_sym)
-        {
-            if exp.abs() > self.max_exponent {
-                return Err(AbacusError::ExponentLimitExceeded);
-            }
-            let scalar = base_unit.scalar.powf(exp);
-            let dimensions = base_unit.dimensions * exp;
+        let dimensions = base_unit
+            .dimensions
+            .checked_mul_f64(exp)
+            .ok_or(AbacusError::ExponentLimitExceeded)?;
+        let unit = Arc::new(Unit {
+            scalar: base_unit.scalar.powf(exp),
+            offset: 0.0,
+            dimensions,
+            display: UnitExpr::single(base_sym).powf(exp),
+        });
 
-            let is_integer = (exp - exp.round()).abs() < 1e-9;
-            let display = if is_integer && exp.abs() <= 8.0 {
-                let exp_int = exp.round() as i64;
-                if exp_int > 0 {
-                    crate::units::unit::UnitExpr {
-                        numerator: vec![base_sym.to_string(); exp_int as usize],
-                        denominator: Vec::new(),
-                    }
-                } else if exp_int < 0 {
-                    crate::units::unit::UnitExpr {
-                        numerator: Vec::new(),
-                        denominator: vec![base_sym.to_string(); (-exp_int) as usize],
-                    }
-                } else {
-                    crate::units::unit::UnitExpr::dimensionless()
-                }
-            } else if exp > 0.0 {
-                crate::units::unit::UnitExpr {
-                    numerator: vec![format!("{base_sym}^{exp_str}")],
-                    denominator: Vec::new(),
-                }
-            } else {
-                let pos_exp_str = exp_str.trim_start_matches('-');
-                crate::units::unit::UnitExpr {
-                    numerator: Vec::new(),
-                    denominator: vec![format!("{base_sym}^{pos_exp_str}")],
-                }
-            };
-
-            let unit = Arc::new(Unit {
-                scalar,
-                offset: 0.0,
-                dimensions,
-                display,
-            });
-
-            if let Ok(mut guard) = self.cache.write() {
-                guard.insert(symbol.to_string(), Arc::clone(&unit));
-            }
-
-            return Ok(unit);
+        let mut guard = self.cache.write().unwrap_or_else(PoisonError::into_inner);
+        if guard.len() >= MAX_CACHED_EXPONENT_UNITS {
+            guard.clear();
         }
-        Err(AbacusError::UnknownUnit(symbol.to_string()))
+        guard.insert(key, Arc::clone(&unit));
+
+        Ok(unit)
     }
 
     pub fn value(&self, amount: f64, symbol: &str) -> Result<Value, AbacusError> {
@@ -181,7 +177,7 @@ impl UnitRegistry {
             if let Some(pos) = self
                 .priority_derived_units
                 .iter()
-                .position(|(_, u)| u.display.render() == key)
+                .position(|(_, u)| u.display.is_single(&key))
             {
                 self.priority_derived_units[pos] = (unit.dimensions, Arc::clone(&unit));
             } else {
@@ -190,6 +186,7 @@ impl UnitRegistry {
             }
         }
         self.units.insert(key, unit);
+        self.clear_cache();
     }
 
     #[cfg(feature = "currencies")]
@@ -198,10 +195,7 @@ impl UnitRegistry {
             &mut self.units,
             rates,
         );
-        self.cache
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        self.clear_cache();
     }
 
     #[cfg(feature = "currencies")]
@@ -213,18 +207,24 @@ impl UnitRegistry {
 
     #[cfg(feature = "currencies")]
     pub fn set_currencies_enabled(&mut self, enabled: bool) {
-        if !enabled {
-            self.units
-                .retain(|_, u| u.dimensions != crate::units::dimensions::Dimensions::CURRENCY);
-            self.priority_derived_units
-                .retain(|(dims, _)| *dims != crate::units::dimensions::Dimensions::CURRENCY);
-        } else {
+        if enabled {
             crate::registry::units::currency_units::register_currency_units(&mut self.units);
+        } else {
+            self.units
+                .retain(|_, u| u.dimensions != Dimensions::CURRENCY);
+            self.priority_derived_units
+                .retain(|(dims, _)| *dims != Dimensions::CURRENCY);
         }
+        self.clear_cache();
+    }
+
+    /// Number of generated exponent units currently cached (exposed for diagnostics).
+    #[must_use]
+    pub fn cached_exponent_units(&self) -> usize {
         self.cache
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
     }
 }
 

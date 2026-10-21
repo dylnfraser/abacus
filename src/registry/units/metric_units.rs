@@ -338,7 +338,9 @@ mod tests {
         let lhs = Value::new(10.0, Arc::clone(units.get("°C").unwrap()));
         let rhs = Value::new(5.0, Arc::clone(units.get("°C").unwrap()));
 
-        assert!((lhs - rhs).is_err());
+        // Adding two absolute temperatures is meaningless; their difference is a delta in K.
+        assert!((&lhs + &rhs).is_err());
+        assert_eq!((lhs - rhs).unwrap().to_display(), "5 K");
     }
 
     #[test]

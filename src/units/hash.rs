@@ -18,8 +18,9 @@ impl Hash {
         }
     }
 
+    /// Builds a `Hash` from an existing map (also available via `From<HashMap<String, Value>>`).
     #[must_use]
-    pub fn from(values: HashMap<String, Value>) -> Self {
+    pub fn from_map(values: HashMap<String, Value>) -> Self {
         Self { values }
     }
 
@@ -59,13 +60,7 @@ impl Hash {
     /// Formats all entries in the hash formatted to `sig_figs` significant figures.
     #[must_use]
     pub fn to_display_with_sig_figs(&self, sig_figs: usize) -> String {
-        let mut entries: Vec<_> = self.values.iter().collect();
-        entries.sort_by_key(|&(k, _)| k);
-        let formatted: Vec<String> = entries
-            .into_iter()
-            .map(|(k, v)| format!("{}: {}", k, v.to_display_with_sig_figs(sig_figs)))
-            .collect();
-        format!("{{ {} }}", formatted.join(", "))
+        self.render_with(|v| v.to_display_with_sig_figs(sig_figs))
     }
 
     /// Returns a new `Hash` with all numeric values rounded to `decimals` decimal places.
@@ -91,13 +86,35 @@ impl Hash {
     /// Formats all entries in the hash formatted to `decimals` decimal places.
     #[must_use]
     pub fn to_display_with_decimals(&self, decimals: usize) -> String {
+        self.render_with(|v| v.to_display_with_decimals(decimals))
+    }
+
+    /// Formats all entries in scientific notation.
+    #[must_use]
+    pub fn to_display_scientific(&self) -> String {
+        self.render_with(Value::to_display_scientific)
+    }
+
+    /// Formats all entries in engineering notation.
+    #[must_use]
+    pub fn to_display_engineering(&self) -> String {
+        self.render_with(Value::to_display_engineering)
+    }
+
+    fn render_with(&self, f: impl Fn(&Value) -> String) -> String {
         let mut entries: Vec<_> = self.values.iter().collect();
         entries.sort_by_key(|&(k, _)| k);
         let formatted: Vec<String> = entries
             .into_iter()
-            .map(|(k, v)| format!("{}: {}", k, v.to_display_with_decimals(decimals)))
+            .map(|(k, v)| format!("{k}: {}", f(v)))
             .collect();
         format!("{{ {} }}", formatted.join(", "))
+    }
+}
+
+impl From<HashMap<String, Value>> for Hash {
+    fn from(values: HashMap<String, Value>) -> Self {
+        Self { values }
     }
 }
 

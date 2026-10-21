@@ -1,4 +1,6 @@
 use crate::registry::UnitRegistry;
+use crate::units::dimensions::Dimensions;
+use crate::units::unit::UnitExpr;
 use crate::{error::AbacusError, units::unit::Unit};
 
 use std::{
@@ -8,6 +10,14 @@ use std::{
 };
 
 /// A dimensional quantity consisting of a canonical SI scalar and an associated physical unit.
+///
+/// # Affine units (°C, °F)
+///
+/// Affine temperatures follow these rules:
+/// - `-10 °C`, `2 * 10 °C`, `20 °C / 2` scale the displayed amount (`-10 °C`, `20 °C`, `10 °C`).
+/// - `°C - °C` yields a temperature *difference* in kelvin (`°F - °F` in degrees Rankine).
+/// - `°C ± K` (or `°C ± n`) shifts the temperature by a difference and stays in `°C`.
+/// - `°C + °C`, `°C * m`, and powers of affine units are errors.
 ///
 /// # Examples
 ///
@@ -26,17 +36,32 @@ pub struct Value {
     pub unit: Arc<Unit>,
 }
 
+/// Values are equal when their dimensions match and their canonical magnitudes agree to a
+/// symmetric relative tolerance of `1e-12` (equal infinities compare equal; NaN never does).
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
+        let (a, b) = (self.canonical, other.canonical);
         self.unit.dimensions == other.unit.dimensions
-            && (self.canonical - other.canonical).abs() <= 1e-12 * self.canonical.abs().max(1.0)
+            && (a == b || (a - b).abs() <= 1e-12 * a.abs().max(b.abs()))
     }
 }
 
+/// Shared dimensionless unit; equivalent to [`Unit::dimensionless_arc`].
 pub static DIMENSIONLESS_UNIT: std::sync::LazyLock<Arc<Unit>> =
     std::sync::LazyLock::new(Unit::dimensionless_arc);
 
-#[allow(dead_code)]
+/// Results of addition/subtraction smaller than this (relative to the operands) are
+/// floating-point cancellation noise and are snapped to zero (`0.1 + 0.2 - 0.3` → `0`).
+const CANCELLATION_EPSILON: f64 = 4.0 * f64::EPSILON;
+
+fn snap_cancellation(result: f64, a: f64, b: f64) -> f64 {
+    if result != 0.0 && result.abs() <= CANCELLATION_EPSILON * a.abs().max(b.abs()) {
+        0.0
+    } else {
+        result
+    }
+}
+
 impl Value {
     #[must_use]
     pub fn new(value: f64, unit: Arc<Unit>) -> Self {
@@ -51,7 +76,7 @@ impl Value {
     pub fn dimensionless(val: f64) -> Self {
         Self {
             canonical: val,
-            unit: Arc::clone(&DIMENSIONLESS_UNIT),
+            unit: Unit::dimensionless_arc(),
         }
     }
 
@@ -88,12 +113,27 @@ impl Value {
         self.convert_to(registry.unit(symbol)?)
     }
 
+    #[deprecated(since = "0.1.0", note = "use `Value::to`")]
     pub fn as_unit(&self, registry: &UnitRegistry, symbol: &str) -> Result<Self, AbacusError> {
         self.to(registry, symbol)
     }
 
+    /// Reduces a composite unit to a matching derived SI unit (`kg*m/s^2` → `N`).
+    ///
+    /// Units the user wrote as a single symbol (`1 atm`, `3 GHz`) are left alone, as are
+    /// composites containing dimensionless angle-like units (`rad/s` stays `rad/s`, not `Hz`).
     pub fn to_derived(&self, registry: &UnitRegistry) -> Result<Self, AbacusError> {
-        if self.unit.is_dimensionless() {
+        if self.unit.is_dimensionless() || self.unit.display.is_atomic() || self.unit.is_affine() {
+            return Ok(self.clone());
+        }
+        let has_dimensionless_symbol = self
+            .unit
+            .display
+            .numerator
+            .iter()
+            .chain(self.unit.display.denominator.iter())
+            .any(|sym| registry.get(sym).is_some_and(|u| u.is_dimensionless()));
+        if has_dimensionless_symbol {
             return Ok(self.clone());
         }
         if let Some(derived_unit) = registry.find_unit_by_dimensions(&self.unit.dimensions) {
@@ -120,12 +160,14 @@ impl Value {
         let unit = self
             .unit
             .simplify_display_with(|sym| unit_registry.get(sym));
-        self.unit = Arc::new(unit);
+        if unit != *self.unit {
+            self.unit = Arc::new(unit);
+        }
     }
 
     #[must_use]
     pub fn to_human_display(&self) -> String {
-        if self.unit.dimensions == crate::units::dimensions::Dimensions::TIME {
+        if self.unit.dimensions == Dimensions::TIME {
             format_human_duration(self.canonical)
         } else {
             self.to_display()
@@ -153,14 +195,22 @@ impl Value {
     }
 
     /// Returns a new `Value` with the displayed quantity rounded to `decimals` decimal places.
+    ///
+    /// Values too large for the requested precision to matter (or that would overflow when
+    /// scaled) are returned unchanged.
     #[must_use]
     pub fn round_to_decimals(&self, decimals: usize) -> Self {
-        if decimals >= 308 {
+        let amt = self.amount();
+        let Ok(exp) = i32::try_from(decimals) else {
+            return self.clone();
+        };
+        let scale = 10.0f64.powi(exp);
+        let scaled = amt * scale;
+        // Beyond 2^53 every f64 is already an integer, so rounding is a no-op.
+        if !scale.is_finite() || !scaled.is_finite() || scaled.abs() >= 9_007_199_254_740_992.0 {
             return self.clone();
         }
-        let amt = self.amount();
-        let scale = 10.0f64.powi(decimals as i32);
-        let rounded_amt = (amt * scale).round() / scale;
+        let rounded_amt = scaled.round() / scale;
         let new_canonical = rounded_amt * self.unit.scalar + self.unit.offset;
         Self {
             canonical: new_canonical,
@@ -199,20 +249,16 @@ impl Value {
         &self,
         overrides: &std::collections::HashMap<String, String>,
     ) -> Self {
-        if overrides.is_empty() {
+        if overrides.is_empty() || self.unit.display.is_empty() {
             return self.clone();
         }
         let current_unit_str = self.unit.display.render();
-        let normalized = current_unit_str.replace(' ', "");
-        if let Some(replacement) = overrides
-            .get(&current_unit_str)
-            .or_else(|| overrides.get(&normalized))
-        {
+        if let Some(replacement) = overrides.get(&current_unit_str) {
             let mut new_unit = (*self.unit).clone();
-            new_unit.display = crate::units::unit::UnitExpr::single(replacement);
+            new_unit.display = UnitExpr::single(replacement);
             Self {
                 canonical: self.canonical,
-                unit: std::sync::Arc::new(new_unit),
+                unit: Arc::new(new_unit),
             }
         } else {
             self.clone()
@@ -263,6 +309,31 @@ pub fn format_with_unit(amount: &str, unit: &str) -> String {
     }
 }
 
+/// Formats a number for display.
+///
+/// Values within `1e-12` (relative) of an integer print as that integer; magnitudes below
+/// `1e-6` or at/above `1e21` use scientific notation (`1.6e-19`, `1e300`); everything else
+/// uses the shortest round-trip decimal representation.
+#[must_use]
+pub fn format_number(v: f64) -> String {
+    if !v.is_finite() {
+        return v.to_string();
+    }
+    if v == 0.0 {
+        return "0".to_string();
+    }
+    let a = v.abs();
+    if !(1e-6..1e21).contains(&a) {
+        return format!("{v:e}");
+    }
+    let r = v.round();
+    if (v - r).abs() <= 1e-12 * a {
+        format!("{r}")
+    } else {
+        v.to_string()
+    }
+}
+
 /// Formats a number in engineering notation where exponents are multiples of 3.
 #[must_use]
 pub fn format_engineering(val: f64) -> String {
@@ -270,6 +341,7 @@ pub fn format_engineering(val: f64) -> String {
         return val.to_string();
     }
     let abs_val = val.abs();
+    #[allow(clippy::cast_possible_truncation)]
     let exp = abs_val.log10().floor() as i32;
     let eng_exp = if exp >= 0 {
         (exp / 3) * 3
@@ -296,7 +368,11 @@ pub fn round_f64_sig_figs(val: f64, sig_figs: usize) -> f64 {
     if !scale.is_finite() || scale == 0.0 {
         return val;
     }
-    (val * scale).round() / scale
+    let scaled = val * scale;
+    if !scaled.is_finite() {
+        return val;
+    }
+    scaled.round() / scale
 }
 
 /// Formats a floating-point number to a specified number of significant figures,
@@ -321,33 +397,33 @@ pub fn format_f64_sig_figs(val: f64, sig_figs: usize) -> String {
         return "0".to_string();
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     let magnitude = rounded.abs().log10().floor() as i32;
-    let sig_figs_i32 = sig_figs as i32;
+    let sig_figs_i32 = i32::try_from(sig_figs).unwrap_or(i32::MAX);
 
     if magnitude >= sig_figs_i32 - 1 {
         if rounded.abs() >= 1e15 {
             format!("{:.precision$e}", rounded, precision = sig_figs - 1)
         } else {
-            format!("{:.0}", rounded)
+            format!("{rounded:.0}")
         }
     } else {
+        #[allow(clippy::cast_sign_loss)]
         let decimals = (sig_figs_i32 - 1 - magnitude) as usize;
         if rounded.abs() < 1e-4 {
             format!("{:.precision$e}", rounded, precision = sig_figs - 1)
         } else {
-            format!("{:.decimals$}", rounded, decimals = decimals)
+            format!("{rounded:.decimals$}")
         }
     }
 }
 
+/// Formats a duration in seconds as `"1 day, 2 hours, 3 minutes"`.
+///
+/// Years are counted as 365 days. Non-finite inputs render as `"NaN seconds"`,
+/// `"inf seconds"` or `"-inf seconds"`.
 #[must_use]
 pub fn format_human_duration(seconds_f64: f64) -> String {
-    let is_negative = seconds_f64 < 0.0;
-    let mut total = seconds_f64.abs().round() as i64;
-    if total == 0 {
-        return "0 seconds".to_string();
-    }
-
     const DURATION_UNITS: &[(&str, i64)] = &[
         ("year", 31_536_000),
         ("day", 86_400),
@@ -355,6 +431,16 @@ pub fn format_human_duration(seconds_f64: f64) -> String {
         ("minute", 60),
         ("second", 1),
     ];
+
+    if !seconds_f64.is_finite() {
+        return format!("{seconds_f64} seconds");
+    }
+    let is_negative = seconds_f64 < 0.0;
+    #[allow(clippy::cast_possible_truncation)]
+    let mut total = seconds_f64.abs().round() as i64;
+    if total == 0 {
+        return "0 seconds".to_string();
+    }
 
     let mut parts = Vec::new();
     for &(name, divisor) in DURATION_UNITS {
@@ -379,22 +465,35 @@ pub fn format_human_duration(seconds_f64: f64) -> String {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = self.amount();
-        let nearest_integer = value.round();
-        let is_integer =
-            value.is_finite() && (value - nearest_integer).abs() <= 1e-12 * value.abs().max(1.0);
-        let display_value = if is_integer { nearest_integer } else { value };
-
         let unit_str = self.unit.display.render();
+        let is_integer = value.is_finite() && (value - value.round()).abs() <= 1e-12 * value.abs();
         let val_str = if !is_integer
-            && self.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY
+            && value.is_finite()
+            && value.abs() < 1e21
+            && self.unit.dimensions == Dimensions::CURRENCY
         {
             let dec = currency_decimal_places(&unit_str);
-            format!("{display_value:.dec$}")
+            format!("{value:.dec$}")
         } else {
-            display_value.to_string()
+            format_number(value)
         };
-        write!(f, "{}", format_with_unit(&val_str, &unit_str))
+        f.write_str(&format_with_unit(&val_str, &unit_str))
     }
+}
+
+/// A temperature-difference unit matching the degree size of `affine` (K for °C, °R for °F).
+fn temperature_delta_unit(affine: &Unit) -> Arc<Unit> {
+    let (scalar, display) = if (affine.scalar - 5.0 / 9.0).abs() < 1e-12 {
+        (affine.scalar, "°R")
+    } else {
+        (1.0, "K")
+    };
+    Arc::new(Unit {
+        dimensions: affine.dimensions,
+        scalar,
+        offset: 0.0,
+        display: UnitExpr::single(display),
+    })
 }
 
 impl Value {
@@ -420,13 +519,34 @@ impl Value {
             return Err(AbacusError::IncompatibleDimensions);
         }
 
-        let unit = if self.unit.display.render() == "+%" && rhs.unit.display.render() == "%" {
+        let unit = if self.unit.display.is_single("+%") && rhs.unit.display.is_single("%") {
             Arc::clone(&rhs.unit)
         } else {
             Arc::clone(&self.unit)
         };
 
         Ok((self.canonical, rhs.canonical, unit))
+    }
+
+    /// Shifts an affine temperature by `delta` (a temperature difference or a bare number of
+    /// degrees), keeping the affine unit.
+    fn shift_affine(affine: &Value, delta: &Value, sign: f64) -> Result<Value, AbacusError> {
+        let shift = if delta.unit.dimensions == affine.unit.dimensions {
+            delta.canonical
+        } else if delta.unit.is_dimensionless() && !delta.unit.is_percent() {
+            delta.canonical * affine.unit.scalar
+        } else {
+            return Err(AbacusError::IncompatibleDimensions);
+        };
+        Ok(Value {
+            canonical: affine.canonical + sign * shift,
+            unit: Arc::clone(&affine.unit),
+        })
+    }
+
+    /// Scales the displayed amount of an affine value by a dimensionless factor.
+    fn scale_affine(affine: &Value, factor: f64) -> Value {
+        Value::new(affine.amount() * factor, Arc::clone(&affine.unit))
     }
 }
 
@@ -435,8 +555,11 @@ impl Add<&Value> for &Value {
     type Output = Result<Value, AbacusError>;
 
     fn add(self, rhs: &Value) -> Self::Output {
-        if self.unit.is_affine() || rhs.unit.is_affine() {
-            return Err(AbacusError::AffineUnitOperation("add"));
+        match (self.unit.is_affine(), rhs.unit.is_affine()) {
+            (true, true) => return Err(AbacusError::AffineUnitOperation("add")),
+            (true, false) => return Value::shift_affine(self, rhs, 1.0),
+            (false, true) => return Value::shift_affine(rhs, self, 1.0),
+            (false, false) => {}
         }
 
         if rhs.unit.is_percent() && !self.unit.is_percent() {
@@ -454,7 +577,7 @@ impl Add<&Value> for &Value {
 
         let (lhs_can, rhs_can, unit) = self.resolve_additive_operands(rhs)?;
         Ok(Value {
-            canonical: lhs_can + rhs_can,
+            canonical: snap_cancellation(lhs_can + rhs_can, lhs_can, rhs_can),
             unit,
         })
     }
@@ -465,8 +588,24 @@ impl Sub<&Value> for &Value {
     type Output = Result<Value, AbacusError>;
 
     fn sub(self, rhs: &Value) -> Self::Output {
-        if self.unit.is_affine() || rhs.unit.is_affine() {
-            return Err(AbacusError::AffineUnitOperation("subtract"));
+        match (self.unit.is_affine(), rhs.unit.is_affine()) {
+            (true, true) => {
+                if !self.unit.is_compatible_with(&rhs.unit) {
+                    return Err(AbacusError::IncompatibleDimensions);
+                }
+                let unit = temperature_delta_unit(&self.unit);
+                return Ok(Value {
+                    canonical: snap_cancellation(
+                        self.canonical - rhs.canonical,
+                        self.canonical,
+                        rhs.canonical,
+                    ),
+                    unit,
+                });
+            }
+            (true, false) => return Value::shift_affine(self, rhs, -1.0),
+            (false, true) => return Err(AbacusError::AffineUnitOperation("subtract")),
+            (false, false) => {}
         }
 
         if rhs.unit.is_percent() && !self.unit.is_percent() {
@@ -475,10 +614,24 @@ impl Sub<&Value> for &Value {
                 unit: Arc::clone(&self.unit),
             });
         }
+        if self.unit.is_percent() && !rhs.unit.is_percent() {
+            // `10% - 3` is plain arithmetic (0.1 - 3), mirroring `10% + 3` which yields a plain number.
+            if !rhs.unit.is_dimensionless() {
+                return Err(AbacusError::IncompatibleDimensions);
+            }
+            return Ok(Value {
+                canonical: snap_cancellation(
+                    self.canonical - rhs.canonical,
+                    self.canonical,
+                    rhs.canonical,
+                ),
+                unit: Arc::clone(&rhs.unit),
+            });
+        }
 
         let (lhs_can, rhs_can, unit) = self.resolve_additive_operands(rhs)?;
         Ok(Value {
-            canonical: lhs_can - rhs_can,
+            canonical: snap_cancellation(lhs_can - rhs_can, lhs_can, rhs_can),
             unit,
         })
     }
@@ -489,27 +642,62 @@ impl Mul<&Value> for &Value {
     type Output = Result<Value, AbacusError>;
 
     fn mul(self, rhs: &Value) -> Self::Output {
-        if self.unit.is_affine() || rhs.unit.is_affine() {
-            return Err(AbacusError::AffineUnitOperation("multiply"));
+        match (self.unit.is_affine(), rhs.unit.is_affine()) {
+            (true, false) if rhs.unit.is_dimensionless() => {
+                return Ok(Value::scale_affine(self, rhs.canonical));
+            }
+            (false, true) if self.unit.is_dimensionless() => {
+                return Ok(Value::scale_affine(rhs, self.canonical));
+            }
+            (false, false) => {}
+            _ => return Err(AbacusError::AffineUnitOperation("multiply")),
         }
 
-        if self.unit.is_percent() && !rhs.unit.is_percent() {
-            return Ok(Value {
-                canonical: self.canonical * rhs.canonical,
-                unit: Arc::clone(&rhs.unit),
-            });
+        match (self.unit.is_percent(), rhs.unit.is_percent()) {
+            (true, true) => {
+                return Ok(Value {
+                    canonical: self.canonical * rhs.canonical,
+                    unit: Arc::clone(&self.unit),
+                });
+            }
+            (true, false) => {
+                return Ok(Value {
+                    canonical: self.canonical * rhs.canonical,
+                    unit: Arc::clone(&rhs.unit),
+                });
+            }
+            (false, true) => {
+                return Ok(Value {
+                    canonical: self.canonical * rhs.canonical,
+                    unit: Arc::clone(&self.unit),
+                });
+            }
+            (false, false) => {}
         }
-        if rhs.unit.is_percent() && !self.unit.is_percent() {
+
+        // Multiplying by a bare number keeps the other operand's unit without allocating.
+        if rhs.unit.is_plain_number() {
             return Ok(Value {
                 canonical: self.canonical * rhs.canonical,
                 unit: Arc::clone(&self.unit),
             });
         }
+        if self.unit.is_plain_number() {
+            return Ok(Value {
+                canonical: self.canonical * rhs.canonical,
+                unit: Arc::clone(&rhs.unit),
+            });
+        }
 
+        let dimensions = self
+            .unit
+            .dimensions
+            .checked_add(rhs.unit.dimensions)
+            .ok_or(AbacusError::ExponentLimitExceeded)?;
         let unit = Unit {
             scalar: self.unit.scalar * rhs.unit.scalar,
             offset: 0.0,
-            dimensions: self.unit.dimensions + rhs.unit.dimensions,
+            dimensions,
             display: self.unit.display.multiply(&rhs.unit.display),
         };
 
@@ -525,8 +713,12 @@ impl Div<&Value> for &Value {
     type Output = Result<Value, AbacusError>;
 
     fn div(self, rhs: &Value) -> Self::Output {
-        if self.unit.is_affine() || rhs.unit.is_affine() {
-            return Err(AbacusError::AffineUnitOperation("divide"));
+        match (self.unit.is_affine(), rhs.unit.is_affine()) {
+            (true, false) if rhs.unit.is_dimensionless() => {
+                return Ok(Value::scale_affine(self, 1.0 / rhs.canonical));
+            }
+            (false, false) => {}
+            _ => return Err(AbacusError::AffineUnitOperation("divide")),
         }
 
         if rhs.unit.is_percent() && !self.unit.is_percent() {
@@ -535,18 +727,43 @@ impl Div<&Value> for &Value {
                 unit: Arc::clone(&self.unit),
             });
         }
-        if self.unit.is_percent() && !rhs.unit.is_percent() {
+        if self.unit.is_percent() && !rhs.unit.is_percent() && rhs.unit.is_dimensionless() {
             return Ok(Value {
                 canonical: self.canonical / rhs.canonical,
                 unit: Arc::clone(&self.unit),
             });
         }
 
+        if rhs.unit.is_plain_number() {
+            return Ok(Value {
+                canonical: self.canonical / rhs.canonical,
+                unit: Arc::clone(&self.unit),
+            });
+        }
+
+        // A percentage divided by a dimensional quantity is a plain ratio per that unit
+        // (`50% / 2 s` = 0.25 1/s), so drop the percent display.
+        let lhs_display = if self.unit.is_percent() {
+            UnitExpr::dimensionless()
+        } else {
+            self.unit.display.clone()
+        };
+        let lhs_scalar = if self.unit.is_percent() {
+            1.0
+        } else {
+            self.unit.scalar
+        };
+
+        let dimensions = self
+            .unit
+            .dimensions
+            .checked_sub(rhs.unit.dimensions)
+            .ok_or(AbacusError::ExponentLimitExceeded)?;
         let unit = Unit {
-            scalar: self.unit.scalar / rhs.unit.scalar,
+            scalar: lhs_scalar / rhs.unit.scalar,
             offset: 0.0,
-            dimensions: self.unit.dimensions - rhs.unit.dimensions,
-            display: self.unit.display.divide(&rhs.unit.display),
+            dimensions,
+            display: lhs_display.divide(&rhs.unit.display),
         };
 
         Ok(Value {
