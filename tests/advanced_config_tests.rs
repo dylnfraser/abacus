@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, AngleMode, IntervalStyle, Notation, TimeZone, WeekendDays};
 
+#[cfg(feature = "units")]
 #[test]
 fn test_angle_mode_degrees() {
     let calc = Abacus::standard().with_angle_mode(AngleMode::Degrees);
@@ -28,6 +42,7 @@ fn test_angle_mode_degrees() {
     assert!((sin_explicit.into_scalar().unwrap().canonical - 1.0).abs() < 1e-10);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_angle_mode_gradians() {
     let calc = Abacus::standard().with_angle_mode(AngleMode::Gradians);
@@ -54,6 +69,7 @@ fn test_angle_mode_radians_default() {
     assert!(asin_1.to_display().contains("rad"));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_strict_dimension_checking() {
     let loose = Abacus::standard();
@@ -96,6 +112,7 @@ fn test_strict_dimension_checking() {
     assert_eq!(pct.to_display(), "110 m");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_decimal_places_configuration() {
     let calc = Abacus::standard().with_decimal_places(2);
@@ -114,6 +131,7 @@ fn test_decimal_places_configuration() {
     assert_eq!(calc.format_result(&res_five), "5.00");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_style_configuration() {
     let default_calc = Abacus::standard();
@@ -144,6 +162,7 @@ fn test_notation_modes() {
     assert!(calc_sci.format_result(&res_sci).contains("1.2e6"));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_default_timezone_configuration() {
     let est = TimeZone::parse("EST").unwrap();
@@ -160,6 +179,7 @@ fn test_default_timezone_configuration() {
     assert_eq!(res_utc.to_display(), "August 7, 2026 05:00:00 UTC");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_custom_weekend_workweek_configuration() {
     let calc = Abacus::standard().with_weekend(WeekendDays::FridaySaturday);
@@ -249,6 +269,7 @@ fn test_in_place_mutator_methods() {
     assert!(!calc.implicit_multiplication);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_max_exponent_configuration() {
     // Default max exponent is 1000.0

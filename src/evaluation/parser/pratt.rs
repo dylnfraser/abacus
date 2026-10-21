@@ -302,9 +302,9 @@ impl<'a> Parser<'a> {
 
                 // If op_name is "after" and lhs is NOT a time duration, check for conversational percentage (e.g. "$50 after 15% tax")
                 if op_name == "after"
-                    && lhs
-                        .as_scalar()
-                        .is_ok_and(|v| v.unit.dimensions != crate::units::dimensions::Dimensions::TIME)
+                    && lhs.as_scalar().is_ok_and(|v| {
+                        v.unit.dimensions != crate::units::dimensions::Dimensions::TIME
+                    })
                 {
                     let val = lhs.into_scalar()?;
                     self.advance();
@@ -394,15 +394,15 @@ impl<'a> Parser<'a> {
 
                 match op_name {
                     "ago" => {
-                        lhs = EvalResult::Date(self.get_now().apply_time_value_with(
-                            &val, -1, weekend,
-                        )?);
+                        lhs = EvalResult::Date(
+                            self.get_now().apply_time_value_with(&val, -1, weekend)?,
+                        );
                         continue;
                     }
                     "from_now" => {
-                        lhs = EvalResult::Date(self.get_now().apply_time_value_with(
-                            &val, 1, weekend,
-                        )?);
+                        lhs = EvalResult::Date(
+                            self.get_now().apply_time_value_with(&val, 1, weekend)?,
+                        );
                         continue;
                     }
                     "before" => {

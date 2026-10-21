@@ -22,12 +22,14 @@ use std::{
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "units")] {
 /// use abacus::Abacus;
 ///
 /// let abacus = Abacus::standard();
 /// let length = abacus.units.value(5.0, "km").unwrap();
 /// assert_eq!(length.to_display(), "5 km");
 /// assert_eq!(length.canonical, 5000.0);
+/// # }
 /// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -313,9 +315,25 @@ pub fn format_with_unit(amount: &str, unit: &str) -> String {
 ///
 /// Values within `1e-12` (relative) of an integer print as that integer; magnitudes below
 /// `1e-6` or at/above `1e21` use scientific notation (`1.6e-19`, `1e300`); everything else
-/// uses the shortest round-trip decimal representation.
+/// uses the shortest round-trip decimal representation, except that float noise in the last
+/// bits is hidden: when the shortest representation needs 16+ significant digits and a
+/// rendering of at most 12 significant digits is within 2 ulps of the value, the shorter one is
+/// printed (`2.2679618500000003` → `2.26796185`, `0.1 + 0.2` → `0.3`). Genuine 16–17 digit
+/// values such as `27.77777777777778` or `78.53981633974483` are unaffected.
 #[must_use]
 pub fn format_number(v: f64) -> String {
+    format_number_with(v, true)
+}
+
+/// Like [`format_number`], but always prints the exact shortest round-trip representation
+/// (no float-noise suppression). Used for interval bounds, where outward rounding by one ulp
+/// is meaningful and must stay visible.
+#[must_use]
+pub fn format_number_exact(v: f64) -> String {
+    format_number_with(v, false)
+}
+
+fn format_number_with(v: f64, denoise: bool) -> String {
     if !v.is_finite() {
         return v.to_string();
     }
@@ -323,6 +341,7 @@ pub fn format_number(v: f64) -> String {
         return "0".to_string();
     }
     let a = v.abs();
+    let v = if denoise { denoised(v) } else { v };
     if !(1e-6..1e21).contains(&a) {
         return format!("{v:e}");
     }
@@ -332,6 +351,39 @@ pub fn format_number(v: f64) -> String {
     } else {
         v.to_string()
     }
+}
+
+/// Hides float noise: when `v`'s shortest round-trip form needs 16+ significant digits but a
+/// rendering with at most [`NOISE_MAX_DIGITS`] digits is within 2 ulps of `v`, returns the float
+/// nearest that short rendering; otherwise `v` itself.
+///
+/// The digit cap is what separates noise from real precision: a genuinely 16–17 digit value
+/// (like `pi * 25`) almost never sits within 2 ulps of a 12-digit decimal, while accumulated
+/// rounding error on a short decimal (`0.1 + 0.2`, `5 lb in kg`) always does.
+fn denoised(v: f64) -> f64 {
+    let sci = format!("{v:e}");
+    let mantissa = sci.split('e').next().unwrap_or("");
+    let sig_digits = mantissa.bytes().filter(u8::is_ascii_digit).count();
+    if sig_digits < 16 {
+        return v;
+    }
+    for precision in 0..NOISE_MAX_DIGITS {
+        let Ok(shorter) = format!("{v:.precision$e}").parse::<f64>() else {
+            return v;
+        };
+        if shorter.is_finite() && shorter.signum() == v.signum() && ulp_distance(shorter, v) <= 2 {
+            return shorter;
+        }
+    }
+    v
+}
+
+/// Maximum significant digits of a "clean" decimal that float noise is snapped back to.
+const NOISE_MAX_DIGITS: usize = 12;
+
+/// Number of representable doubles between two finite values of the same sign.
+fn ulp_distance(a: f64, b: f64) -> u64 {
+    a.abs().to_bits().abs_diff(b.abs().to_bits())
 }
 
 /// Formats a number in engineering notation where exponents are multiples of 3.
@@ -464,6 +516,21 @@ pub fn format_human_duration(seconds_f64: f64) -> String {
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_with(f, true)
+    }
+}
+
+/// Displays a [`Value`] with its exact shortest round-trip number (see [`format_number_exact`]).
+pub(crate) struct ExactDisplay<'a>(pub &'a Value);
+
+impl fmt::Display for ExactDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt_with(f, false)
+    }
+}
+
+impl Value {
+    fn fmt_with(&self, f: &mut fmt::Formatter<'_>, denoise: bool) -> fmt::Result {
         let value = self.amount();
         let unit_str = self.unit.display.render();
         let is_integer = value.is_finite() && (value - value.round()).abs() <= 1e-12 * value.abs();
@@ -475,7 +542,7 @@ impl fmt::Display for Value {
             let dec = currency_decimal_places(&unit_str);
             format!("{value:.dec$}")
         } else {
-            format_number(value)
+            format_number_with(value, denoise)
         };
         f.write_str(&format_with_unit(&val_str, &unit_str))
     }
@@ -904,6 +971,7 @@ mod tests {
         assert_eq!(format!("{a}"), "5 km");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn automatically_converts_to_matching_derived_units() {
         let registry = UnitRegistry::standard();
@@ -923,6 +991,7 @@ mod tests {
         assert_eq!(work_derived.to_display(), "98 J");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn converts_dimensionless_values_to_target_units() {
         let registry = UnitRegistry::standard();

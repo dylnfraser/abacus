@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, EvalResult, Hash, Value};
 
 fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
@@ -14,6 +27,7 @@ fn eval_hash(expr: &str) -> Result<Hash, AbacusError> {
 
 // ── 1. ZTest ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_section4_hypothesis_testing_expanded() {
     let calc = Abacus::standard();
@@ -41,6 +55,7 @@ fn test_section4_hypothesis_testing_expanded() {
     assert!((chi2_p.canonical - 0.067_889_154_861_829_02).abs() < 1e-14);
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_z_test_summary_stats() {
     // ZTest(mu0: 100 m, xbar: 105 m, sigma: 15 m, n: 50)
@@ -65,6 +80,7 @@ fn test_z_test_summary_stats() {
     assert!((z_prop.canonical - 2.357_022_603_955_158).abs() < 1e-12);
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_z_test_data_list() {
     // ZTestData(mu0: 10 m, sigma: 2 m, data: 12 m, 14 m, 10 m, 16 m)
@@ -78,6 +94,7 @@ fn test_z_test_data_list() {
 
 // ── 2. TTest ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_t_test_summary_stats() {
     // TTest(mu0: 100 m, xbar: 105 m, s: 15 m, n: 25)
@@ -100,6 +117,7 @@ fn test_t_test_summary_stats() {
     );
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_t_test_data_list() {
     // TTestData(mu0: 10 m, data: 12 m, 14 m, 10 m, 16 m)
@@ -112,6 +130,7 @@ fn test_t_test_data_list() {
 
 // ── 3. 1-PropZTest ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_1_prop_z_test() {
     // 1-PropZTest(p0: 0.5, x: 45, n: 100)
@@ -130,6 +149,7 @@ fn test_1_prop_z_test() {
 
 // ── 4. 2-SampZTest ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_2_samp_z_test() {
     // 2-SampZTest(sigma1: 15 m, sigma2: 10 m, xbar1: 100 m, n1: 50, xbar2: 90 m, n2: 50)
@@ -144,6 +164,7 @@ fn test_2_samp_z_test() {
 
 // ── 5. 2-SampTTest ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_2_samp_t_test() {
     // 2-SampTTest(xbar1: 100 m, s1: 15 m, n1: 25, xbar2: 90 m, s2: 10 m, n2: 30)
@@ -168,6 +189,7 @@ fn test_2_samp_t_test() {
 
 // ── 6. 2-PropZTest ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_2_prop_z_test() {
     // 2-PropZTest(x1: 45, n1: 100, x2: 30, n2: 100)
@@ -182,6 +204,7 @@ fn test_2_prop_z_test() {
 
 // ── 7. Chi2Test ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_chi2_test() {
     // Chi2Test(obs1: 15, obs2: 25, exp1: 10, exp2: 30) — observed counts first, then expected

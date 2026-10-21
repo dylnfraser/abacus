@@ -709,7 +709,9 @@ pub fn default_currency_cache_path() -> PathBuf {
         return PathBuf::from(dir).join("currency_rates.json");
     }
     if let Some(xdg) = non_empty("XDG_CACHE_HOME") {
-        return PathBuf::from(xdg).join("abacus").join("currency_rates.json");
+        return PathBuf::from(xdg)
+            .join("abacus")
+            .join("currency_rates.json");
     }
     if let Some(home) = non_empty("HOME") {
         return PathBuf::from(home)
@@ -718,7 +720,9 @@ pub fn default_currency_cache_path() -> PathBuf {
             .join("currency_rates.json");
     }
     if let Some(local) = non_empty("LOCALAPPDATA") {
-        return PathBuf::from(local).join("abacus").join("currency_rates.json");
+        return PathBuf::from(local)
+            .join("abacus")
+            .join("currency_rates.json");
     }
     if let Some(profile) = non_empty("USERPROFILE") {
         return PathBuf::from(profile)
@@ -864,8 +868,9 @@ pub fn save_rates_to_cache(json_str: &str, cache_path: &Path) -> Result<(), Abac
         .map_or(0, |d| d.as_nanos());
     let tmp_path = parent.join(format!(".{file_name}.{}.{nanos}.tmp", std::process::id()));
 
-    let write_err =
-        |e: std::io::Error| AbacusError::EvaluationError(format!("failed to write currency cache: {e}"));
+    let write_err = |e: std::io::Error| {
+        AbacusError::EvaluationError(format!("failed to write currency cache: {e}"))
+    };
 
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -912,7 +917,8 @@ pub fn get_or_update_daily_rates(cache_path: &Path) -> Result<HashMap<String, f6
 
     #[cfg(feature = "live-rates")]
     {
-        fetch_and_cache_rates(cache_path).or_else(|err| load_rates_from_cache(cache_path).map_err(|_| err))
+        fetch_and_cache_rates(cache_path)
+            .or_else(|err| load_rates_from_cache(cache_path).map_err(|_| err))
     }
     #[cfg(not(feature = "live-rates"))]
     {
@@ -928,7 +934,8 @@ pub fn get_or_update_daily_rates(cache_path: &Path) -> Result<HashMap<String, f6
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = r#"{"amount":1.0,"base":"USD","date":"2026-10-20","rates":{"EUR":0.89166,"JPY":158.13}}"#;
+    const SAMPLE: &str =
+        r#"{"amount":1.0,"base":"USD","date":"2026-10-20","rates":{"EUR":0.89166,"JPY":158.13}}"#;
 
     #[test]
     fn parses_valid_response() {

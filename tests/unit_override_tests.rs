@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, IntervalStyle};
 
+#[cfg(feature = "units")]
 #[test]
 fn test_single_unit_display_override_mph() {
     let calc = Abacus::standard().with_unit_display_override("mi/h", "mph");
@@ -17,6 +31,7 @@ fn test_single_unit_display_override_mph() {
     assert_eq!(speed3.to_display(), "60 mph");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_single_unit_display_override_kmph() {
     let calc = Abacus::standard().with_unit_display_override("km/h", "kmph");
@@ -31,6 +46,7 @@ fn test_single_unit_display_override_kmph() {
     assert_eq!(speed3.to_display(), "100 kmph");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_common_speed_overrides() {
     let calc = Abacus::standard().with_common_speed_overrides();
@@ -42,6 +58,7 @@ fn test_common_speed_overrides() {
     assert_eq!(calc.eval("100 km / 1 h").unwrap().to_display(), "100 kmph");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_unit_display_override() {
     let calc = Abacus::standard()
@@ -59,6 +76,7 @@ fn test_interval_unit_display_override() {
     assert_eq!(inv_range.to_display(), "50 mph..70 mph");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_hash_regression_unit_display_override() {
     let calc = Abacus::standard().with_common_speed_overrides();
@@ -74,6 +92,7 @@ fn test_hash_regression_unit_display_override() {
     assert_eq!(slope.to_display(), "60 mph");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales", feature = "currencies"))]
 #[test]
 fn test_currency_rate_display_override() {
     let calc = Abacus::standard().with_unit_display_override("$/d", "$/day");
@@ -85,6 +104,7 @@ fn test_currency_rate_display_override() {
     assert_eq!(total.to_display(), "$3000");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_dimensional_preservation_with_override() {
     let mut calc = Abacus::standard().with_common_speed_overrides();
@@ -103,6 +123,7 @@ fn test_dimensional_preservation_with_override() {
     assert_eq!(ms.to_display(), "26.8224 m/s");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_conversion_target_with_override() {
     let calc = Abacus::standard()
@@ -113,6 +134,7 @@ fn test_conversion_target_with_override() {
     assert_eq!(speed_km.to_display(), "96.56 kmph");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_override_management_lifecycle() {
     let mut calc = Abacus::standard();
@@ -136,6 +158,7 @@ fn test_override_management_lifecycle() {
     assert_eq!(calc.eval("100 km/h").unwrap().to_display(), "100 km/h");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_mph_and_kmph_registered_as_units() {
     let calc = Abacus::standard();

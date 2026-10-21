@@ -1,11 +1,28 @@
 //! Regression tests for parser/lexer findings from the codebase audit.
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 
-use abacus::{Abacus, AbacusError, BinaryOp, Date, Token, TokenRegistry, UnitRegistry, Value, eval};
+use abacus::{
+    Abacus, AbacusError, BinaryOp, Date, Token, TokenRegistry, UnitRegistry, Value, eval,
+};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn display(expr: &str) -> String {
-    eval(expr).unwrap_or_else(|e| panic!("{expr}: {e:?}")).to_display()
+    eval(expr)
+        .unwrap_or_else(|e| panic!("{expr}: {e:?}"))
+        .to_display()
 }
 
 fn add_ten(lhs: Value, rhs: Value) -> Result<Value, AbacusError> {
@@ -72,11 +89,15 @@ fn registry_key_overrides_operator_alias() {
 fn binary_minus_wins_equal_length_tie_deterministically() {
     let calc = Abacus::standard();
     let toks = calc.tokenize("3-2").unwrap();
-    assert_eq!(toks, vec![Token::Float(3.0), Token::BinaryOp("-"), Token::Float(2.0)]);
+    assert_eq!(
+        toks,
+        vec![Token::Float(3.0), Token::BinaryOp("-"), Token::Float(2.0)]
+    );
 }
 
 // ── Indefinite articles vs ampere ──
 
+#[cfg(feature = "units")]
 #[test]
 fn ampere_is_never_swallowed_as_one() {
     assert_eq!(display("10 V / A"), "10 Ω");
@@ -85,6 +106,7 @@ fn ampere_is_never_swallowed_as_one() {
     assert_eq!(display("2 * A"), "2 A");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales", feature = "currencies"))]
 #[test]
 fn articles_still_mean_one_or_per() {
     assert_eq!(display("A million dollars"), "$1000000");
@@ -96,13 +118,19 @@ fn articles_still_mean_one_or_per() {
 
 // ── Conversions: rate x duration only with an explicit duration ──
 
+#[cfg(feature = "units")]
 #[test]
 fn conversion_to_bare_time_unit_is_not_accumulation() {
     for expr in ["5 m/s in s", "1 kHz in ms", "10 Hz in min"] {
-        assert_eq!(eval(expr), Err(AbacusError::IncompatibleDimensions), "{expr}");
+        assert_eq!(
+            eval(expr),
+            Err(AbacusError::IncompatibleDimensions),
+            "{expr}"
+        );
     }
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn rate_accumulation_over_explicit_duration() {
     assert_eq!(display("5 usd per second in 20 days"), "$8640000");
@@ -149,6 +177,7 @@ fn deep_nesting_never_overflows_a_small_thread_stack() {
     handle.join().expect("parser overflowed a 2 MiB stack");
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn range_element_limit_is_total_not_per_range() {
     let expr = format!("sum({}1)", "1..99999,".repeat(100));
@@ -158,6 +187,7 @@ fn range_element_limit_is_total_not_per_range() {
 
 // ── Juxtaposed numbers and compound measurements ──
 
+#[cfg(feature = "units")]
 #[test]
 fn adjacent_bare_numbers_are_errors() {
     for expr in ["1 000", "2 3", "1.2.3", "5 m 3", "2 3 m", "1/2 3/4"] {
@@ -168,6 +198,7 @@ fn adjacent_bare_numbers_are_errors() {
     }
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn compound_measurements_are_summed() {
     assert_eq!(display("5 ft 3 in"), "5.25 ft");
@@ -198,9 +229,12 @@ fn increment_binds_like_unary_minus() {
 
 // ── Variables vs units ──
 
+#[cfg(feature = "units")]
 #[test]
 fn variables_shadow_units_regardless_of_spacing() {
-    let calc = Abacus::standard().with_variable("h", 3.0).with_variable("x", 4.0);
+    let calc = Abacus::standard()
+        .with_variable("h", 3.0)
+        .with_variable("x", 4.0);
     assert_eq!(calc.eval("2h").unwrap().to_display(), "6");
     assert_eq!(calc.eval("2 h").unwrap().to_display(), "6");
     // Conversion targets always name units.
@@ -210,6 +244,7 @@ fn variables_shadow_units_regardless_of_spacing() {
 
 // ── Percent vs modulo ──
 
+#[cfg(feature = "units")]
 #[test]
 fn percent_and_modulo_ignore_whitespace() {
     for expr in ["10%3", "10 %3", "10% 3", "10 % 3", "10%(3)"] {
@@ -222,20 +257,31 @@ fn percent_and_modulo_ignore_whitespace() {
 
 // ── sqrt of negatives ──
 
+#[cfg(feature = "units")]
 #[test]
 fn sqrt_of_negative_is_an_error_on_every_path() {
     for expr in ["sqrt(-9)", "sqrt -9", "sqrt(-9 m^2)"] {
-        assert!(matches!(eval(expr), Err(AbacusError::EvaluationError(_))), "{expr}");
+        assert!(
+            matches!(eval(expr), Err(AbacusError::EvaluationError(_))),
+            "{expr}"
+        );
     }
 }
 
 // ── Ranges ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn range_endpoints_in_functions_require_parentheses_for_loose_operators() {
     assert_eq!(display("1..2*3"), "3..6");
-    assert!(matches!(eval("max(1..2*3)"), Err(AbacusError::UnexpectedToken(_))));
-    assert!(matches!(eval("max(1+2..3)"), Err(AbacusError::UnexpectedToken(_))));
+    assert!(matches!(
+        eval("max(1..2*3)"),
+        Err(AbacusError::UnexpectedToken(_))
+    ));
+    assert!(matches!(
+        eval("max(1+2..3)"),
+        Err(AbacusError::UnexpectedToken(_))
+    ));
     assert_eq!(display("max(1..(2*3))"), "6");
     assert_eq!(display("sum(-5..5)"), "0");
     assert_eq!(display("max(1..2^3)"), "8");
@@ -269,7 +315,10 @@ fn overflowing_and_truncated_literals_are_errors() {
 
 #[test]
 fn timezone_offsets_only_follow_dates() {
-    assert!(!matches!(eval("10 -1:30"), Err(AbacusError::UnknownUnit(_))));
+    assert!(!matches!(
+        eval("10 -1:30"),
+        Err(AbacusError::UnknownUnit(_))
+    ));
     assert_eq!(
         display("2026-08-07 10:00:00 -04:00 to +02:00"),
         "August 7, 2026 16:00:00 +02:00"
@@ -278,13 +327,17 @@ fn timezone_offsets_only_follow_dates() {
 
 // ── Miscellaneous quirks ──
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn trailing_conversion_keyword_and_stray_tokens_are_errors() {
     assert_eq!(eval("5 in in"), Err(AbacusError::UnexpectedEnd));
     assert_eq!(display("5 in"), "5 in");
     assert_eq!(display("5 in to cm"), "12.7 cm");
     assert!(matches!(eval("$5 $"), Err(AbacusError::UnexpectedToken(_))));
-    assert!(matches!(eval("5 off"), Err(AbacusError::UnexpectedToken(_))));
+    assert!(matches!(
+        eval("5 off"),
+        Err(AbacusError::UnexpectedToken(_))
+    ));
     assert_eq!(display("$100 - 20% off"), "$80");
 }
 

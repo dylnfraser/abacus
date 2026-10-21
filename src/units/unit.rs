@@ -135,9 +135,7 @@ impl UnitExpr {
     /// no exponent), e.g. `atm` or `GHz` but not `m^2` or `m/s`.
     #[must_use]
     pub fn is_atomic(&self) -> bool {
-        self.denominator.is_empty()
-            && self.numerator.len() == 1
-            && !self.numerator[0].contains('^')
+        self.denominator.is_empty() && self.numerator.len() == 1 && !self.numerator[0].contains('^')
     }
 
     /// Collects `(base, exponent)` pairs in order of first appearance, with

@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, EvalResult};
 
 fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
@@ -6,6 +19,7 @@ fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
 
 // ── Basic interval construction ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_section2_interval_arithmetic_expanded() {
     let calc = Abacus::standard();
@@ -37,6 +51,7 @@ fn test_section2_interval_arithmetic_expanded() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_basic_interval_construction() {
     // Verifies [lo, hi] syntax produces an interval with correct endpoints
@@ -44,6 +59,7 @@ fn test_basic_interval_construction() {
     assert_eq!(result.to_display(), "[1 m, 5 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_auto_normalizes_order() {
     // Verifies that [hi, lo] is auto-normalized to [lo, hi]
@@ -60,6 +76,7 @@ fn test_dimensionless_interval() {
 
 // ── Interval + Interval arithmetic ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_addition() {
     // [1 m, 3 m] + [2 m, 4 m] = [3 m, 7 m]
@@ -67,6 +84,7 @@ fn test_interval_addition() {
     assert_eq!(result.to_display(), "[3 m, 7 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_subtraction() {
     // [5 m, 10 m] - [1 m, 3 m] = [2 m, 9 m] (min: 5-3=2, max: 10-1=9)
@@ -81,6 +99,7 @@ fn test_interval_multiplication() {
     assert_eq!(result.to_display(), "[8, 15]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_division_the_flagship_example() {
     // The headline feature: [9.8 m, 10.2 m] / [1.9 s, 2.1 s]
@@ -120,6 +139,7 @@ fn test_interval_division_the_flagship_example() {
 
 // ── Scalar + Interval mixed arithmetic ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_scalar_plus_interval() {
     // 5 m + [1 m, 3 m] = [6 m, 8 m]
@@ -127,6 +147,7 @@ fn test_scalar_plus_interval() {
     assert_eq!(result.to_display(), "[6 m, 8 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_plus_scalar() {
     // [1 m, 3 m] + 5 m = [6 m, 8 m]
@@ -134,6 +155,7 @@ fn test_interval_plus_scalar() {
     assert_eq!(result.to_display(), "[6 m, 8 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_times_scalar() {
     // [2 m, 4 m] * 3 = [6 m, 12 m]
@@ -141,6 +163,7 @@ fn test_interval_times_scalar() {
     assert_eq!(result.to_display(), "[6 m, 12 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_scalar_times_interval() {
     // 3 * [2 m, 4 m] = [6 m, 12 m]
@@ -150,6 +173,7 @@ fn test_scalar_times_interval() {
 
 // ── Interval with unit conversion ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_unit_conversion() {
     // [1 km, 2 km] to m = [1000 m, 2000 m]
@@ -157,6 +181,7 @@ fn test_interval_unit_conversion() {
     assert_eq!(result.to_display(), "[1000 m, 2000 m]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_unit_conversion_mixed_units() {
     // [500 m, 2 km] to m = [500 m, 2000 m]
@@ -200,6 +225,7 @@ fn test_negative_interval() {
 
 // ── Derived unit reduction with intervals ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_derived_unit_reduction() {
     // Force × distance → Joules: [10 N, 20 N] * [2 m, 5 m] = [20 J, 100 J]
@@ -209,6 +235,7 @@ fn test_interval_derived_unit_reduction() {
 
 // ── Unary operators on intervals ──
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unary_negation_on_interval() {
     // -[2 m, 5 m] = [-5 m, -2 m]
@@ -218,6 +245,7 @@ fn test_unary_negation_on_interval() {
 
 // ── Error cases ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_interval_in_function_errors() {
     // Intervals cannot be passed as function arguments
@@ -227,6 +255,7 @@ fn test_interval_in_function_errors() {
     ));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_incompatible_interval_dimensions_error() {
     // [1 m, 5 s] should error — incompatible dimensions
@@ -248,6 +277,7 @@ fn test_interval_missing_comma_error() {
     assert!(eval("[1 3]").is_err());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_range_syntax_intervals() {
     // 1..10 + 5 = 6..15
@@ -290,6 +320,7 @@ fn test_range_syntax_intervals() {
     assert_eq!(res.to_display(), "6 m..15 m");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_interval_division_zero_crossing_singularity() {
     // [1 m, 2 m] / [-1 s, 1 s] = [-inf m/s, inf m/s]

@@ -1,6 +1,20 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Dimensions, Unit, UnitRegistry, Value};
 use std::sync::Arc;
 
+#[cfg(feature = "units")]
 #[test]
 fn test_value_creation_and_display() {
     // Tests manual construction of Value structs from numerical amounts and Unit Arcs
@@ -21,6 +35,7 @@ fn test_dimensionless_value() {
     assert!(val.unit.dimensions.is_dimensionless());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_value_addition_subtraction() {
     // Tests direct Value arithmetic (+ and -) across compatible unit scales (e.g. km and m)
@@ -40,6 +55,7 @@ fn test_value_addition_subtraction() {
     assert_eq!(diff.to_display(), "1.5 km");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_value_multiplication_division() {
     // Tests Value division across different physical dimensions (Length / Time -> Speed in km/h)
@@ -55,6 +71,7 @@ fn test_value_multiplication_division() {
     assert_eq!(speed.unit.dimensions, Dimensions::LENGTH - Dimensions::TIME);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_value_unit_conversion() {
     // Tests programmatic unit conversion via value.convert_to(target_unit)

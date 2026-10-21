@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, Date};
 
+#[cfg(all(feature = "units", feature = "number-scales", feature = "currencies"))]
 #[test]
 fn test_event_calculations_with_financial_rates_and_scales() {
     let anchor = Date::new(2026, 9, 1);
@@ -39,6 +53,7 @@ fn test_event_calculations_with_financial_rates_and_scales() {
     assert_eq!(res4.to_display(), "$2320");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales", feature = "currencies"))]
 #[test]
 fn test_conversational_percentages_with_number_scales() {
     let calc = Abacus::standard();
@@ -77,6 +92,7 @@ fn test_conversational_percentages_with_number_scales() {
     assert_eq!(res7.to_display(), "+100%");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_ordinal_weekdays_edge_cases_and_leap_years() {
     let calc = Abacus::standard();
@@ -146,6 +162,7 @@ fn test_ordinal_weekdays_edge_cases_and_leap_years() {
     assert_eq!(res_eoy.to_display(), "121 d");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_until_and_till_edge_cases() {
     let anchor = Date::new(2026, 9, 1);
@@ -187,6 +204,7 @@ fn test_until_and_till_edge_cases() {
     assert_eq!(res_mins.to_display(), "165600 min");
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn test_speed_overrides_and_rate_chains() {
     let calc = Abacus::standard();

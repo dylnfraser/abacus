@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, EvalResult};
 
 fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
@@ -10,6 +23,7 @@ fn eval_scalar(expr: &str) -> Result<abacus::Value, AbacusError> {
 
 // ── TInterval (TI-84 Option 8) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_section3_confidence_intervals_expanded() {
     let calc = Abacus::standard();
@@ -41,6 +55,7 @@ fn test_section3_confidence_intervals_expanded() {
     assert!(samp2_int.to_display().contains("m"));
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_t_interval_sample_data() {
     // Tests TInterval with sample data: TInterval(10 m, 12 m, 11 m, 14 m)
@@ -70,6 +85,7 @@ fn test_ti84_t_interval_sample_data() {
     }
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_t_interval_summary_stats() {
     // Tests TIntervalStats with summary statistics: TIntervalStats(100 m, 15 m, 25)
@@ -101,6 +117,7 @@ fn test_ti84_t_interval_summary_stats() {
 
 // ── ZInterval (TI-84 Option 7) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_z_interval_summary_stats() {
     // Tests ZInterval with summary statistics: ZInterval(100 m, 15 m, 100)
@@ -125,6 +142,7 @@ fn test_ti84_z_interval_summary_stats() {
 
 // ── 1-PropZInt (TI-84 Option A) ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_ti84_1_prop_z_int() {
     // Tests 1-PropZInt(45, 100) and 1_PropZInt(45, 100)
@@ -152,6 +170,7 @@ fn test_ti84_1_prop_z_int() {
 
 // ── 2-SampTInt (TI-84 Option 0) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_2_samp_t_int() {
     // Tests 2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)
@@ -184,6 +203,7 @@ fn test_ti84_2_samp_t_int() {
 
 // ── 2-SampZInt (TI-84 Option 9) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_2_samp_z_int() {
     // Tests 2-SampZInt(100 m, 15 m, 50, 90 m, 10 m, 50)
@@ -209,6 +229,7 @@ fn test_ti84_2_samp_z_int() {
 
 // ── 2-PropZInt (TI-84 Option B) ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn test_ti84_2_prop_z_int() {
     // Tests 2-PropZInt(45, 100, 30, 100)
@@ -234,6 +255,7 @@ fn test_ti84_2_prop_z_int() {
 
 // ── Margin of Error (moe, tmoe, zmoe) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_moe_scalar_margin_of_error() {
     let moe_val = eval_scalar("moe(10 m, 12 m, 11 m, 14 m)").unwrap();
@@ -251,6 +273,7 @@ fn test_moe_scalar_margin_of_error() {
 
 // ── Interval arithmetic with TI-84 Confidence Intervals ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_interval_with_arithmetic() {
     // TInterval(10 m, 12 m, 11 m, 14 m) * 2

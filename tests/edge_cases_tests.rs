@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, eval};
 
+#[cfg(feature = "units")]
 #[test]
 fn test_fractional_exponent_dimensions() {
     // Square root of m^4 / s^2 is m^2/s
@@ -15,6 +29,7 @@ fn test_fractional_exponent_dimensions() {
     assert_eq!(res3.canonical, 0.5);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_mixed_prefix_and_unit_conversion_chains() {
     // Mixed metric prefix addition: km + m + cm -> m
@@ -32,6 +47,7 @@ fn test_mixed_prefix_and_unit_conversion_chains() {
     assert_eq!(res4.canonical, 1024.0);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_affine_temperature_conversions_and_protections() {
     // Valid conversions
@@ -50,6 +66,7 @@ fn test_affine_temperature_conversions_and_protections() {
     ));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unusual_niche_and_humorous_units() {
     // Smoot
@@ -65,6 +82,7 @@ fn test_unusual_niche_and_humorous_units() {
     assert_eq!(pica.to_display(), "12 point");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_cgs_and_astronomical_physics_conversions() {
     // Astronomical: pc to ly
@@ -81,6 +99,7 @@ fn test_cgs_and_astronomical_physics_conversions() {
     assert_eq!(bar.to_display(), "100000 Pa");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_complex_implicit_multiplication() {
     // 2(3 + 4)(5 + 6) = 2 * 7 * 11 = 154
@@ -96,6 +115,7 @@ fn test_complex_implicit_multiplication() {
     assert_eq!(eval("((2 + 3) * (4 + 5))^2").unwrap().to_display(), "2025");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_statistical_dispersion_and_multi_unit_ranges() {
     // Mean of mixed compatible units: 1 m, 100 cm, 2000 mm -> 4/3 m = 1.3333333333333333 m
@@ -122,6 +142,7 @@ fn test_statistical_dispersion_and_multi_unit_ranges() {
     assert!((corr_neg - (-1.0)).abs() < 1e-6);
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_custom_range_step_expansion_edge_cases() {
     // Step expansion with units: 0 m .. 10 m .. 2.5 m -> sum = 0 + 2.5 + 5 + 7.5 + 10 = 25 m
@@ -134,6 +155,7 @@ fn test_custom_range_step_expansion_edge_cases() {
     assert_eq!(eval("sum(10 .. 0 .. -2)").unwrap().to_display(), "30");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_advanced_trigonometric_angle_units() {
     assert_eq!(eval("sin(90 deg)").unwrap().to_display(), "1");
@@ -145,6 +167,7 @@ fn test_advanced_trigonometric_angle_units() {
     assert_eq!(atan_res.to_display(), "45 deg");
 }
 
+#[cfg(feature = "financial")]
 #[test]
 fn test_financial_npv_irr_and_tvm() {
     // Net Present Value (NPV): rate = 10%, CFs = [-1000, 300, 400, 500] -> -19.124434
@@ -169,6 +192,7 @@ fn test_financial_npv_irr_and_tvm() {
     assert!((fv_val - 28866.83).abs() < 1e-1);
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn test_statistical_distributions_and_inverse_cdfs() {
     // Normal CDF round-trip with inverse
@@ -211,6 +235,7 @@ fn test_chained_unary_incrementers_and_factorials() {
     assert_eq!(eval("5!").unwrap().to_display(), "120");
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn test_niche_error_handling_and_boundary_conditions() {
     // Empty input
@@ -238,6 +263,7 @@ fn test_niche_error_handling_and_boundary_conditions() {
     ));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_niche_relative_date_and_time_edge_cases() {
     // Anchored on New Year's Eve so the midnight crossings also cross a month and year boundary.
@@ -279,6 +305,7 @@ fn test_niche_relative_date_and_time_edge_cases() {
     assert_eq!(dow_tmr, tomorrow.day_of_week() as u32 as f64);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_niche_unparenthesized_function_chaining() {
     let abacus = Abacus::standard();
@@ -302,6 +329,7 @@ fn test_niche_unparenthesized_function_chaining() {
     assert_eq!(abacus.eval("abs -10 N * 2 m").unwrap().to_display(), "20 J");
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn test_numerical_stability_edge_cases() {
     let abacus = Abacus::standard();
@@ -328,6 +356,7 @@ fn test_numerical_stability_edge_cases() {
     assert!(abacus.eval("irr(100, 200, 300)").is_err());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_code_review_findings_cr_001_through_cr_006() {
     let abacus = Abacus::standard();
@@ -366,6 +395,7 @@ fn test_code_review_findings_cr_001_through_cr_006() {
     assert!(abacus.eval("clamp(5, 0, 0/0)").is_err());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_code_review_findings_cr_007_through_cr_009() {
     let abacus = Abacus::standard();

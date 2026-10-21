@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#![cfg(feature = "serde")]
 #[test]
 fn test_serde_trait_implementations() {
     fn assert_serde<T: serde::Serialize + serde::de::DeserializeOwned>() {}

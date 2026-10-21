@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::error::AbacusError;
 use crate::registry::UnitRegistry;
 use crate::units::unit::Unit;
-use crate::units::value::Value;
+use crate::units::value::{ExactDisplay, Value};
 
 use crate::evaluation::tokenizer::registry::binary::arithmetic;
 use crate::evaluation::tokenizer::registry::binary::operators::BinaryOp;
@@ -29,6 +29,7 @@ pub enum IntervalStyle {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "units")] {
 /// use abacus::eval;
 ///
 /// let res = eval("[1 m, 2 m] + 50 cm").unwrap();
@@ -36,6 +37,7 @@ pub enum IntervalStyle {
 ///
 /// let range = eval("1..10 + 5").unwrap();
 /// assert_eq!(range.to_display(), "6..15");
+/// # }
 /// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -365,7 +367,11 @@ impl Interval {
 
         let spans_zero = a < 0.0 && b > 0.0;
         if spans_zero {
-            let exps = if other.is_degenerate() { vec![c] } else { vec![c, d] };
+            let exps = if other.is_degenerate() {
+                vec![c]
+            } else {
+                vec![c, d]
+            };
             // Negative odd or fractional exponents of values near zero diverge in both directions.
             let diverges_both_ways = (!other.is_degenerate() && c < 0.0)
                 || exps
@@ -601,8 +607,16 @@ impl Interval {
 impl std::fmt::Display for Interval {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.style {
-            IntervalStyle::Bracket => write!(f, "[{}, {}]", self.lo, self.hi),
-            IntervalStyle::Range => write!(f, "{}..{}", self.lo, self.hi),
+            // Bounds print exactly so one-ulp outward rounding stays visible.
+            IntervalStyle::Bracket => write!(
+                f,
+                "[{}, {}]",
+                ExactDisplay(&self.lo),
+                ExactDisplay(&self.hi)
+            ),
+            IntervalStyle::Range => {
+                write!(f, "{}..{}", ExactDisplay(&self.lo), ExactDisplay(&self.hi))
+            }
         }
     }
 }

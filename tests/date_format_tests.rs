@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, DateFormat};
 
 #[test]
@@ -29,6 +42,7 @@ fn test_configurable_date_format() {
     assert_eq!(d3.format_with_style(abacus_eu.date_format), "07-08-2026");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_date_to_date_time_between_conversion() {
     let abacus = Abacus::standard();

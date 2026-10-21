@@ -1,6 +1,20 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{AbacusError, UnitRegistry};
 use std::sync::Arc;
 
+#[cfg(feature = "units")]
 #[test]
 fn test_standard_unit_registry_lookups() {
     // Verifies that the standard UnitRegistry contains base metric, imperial, and derived units
@@ -26,6 +40,7 @@ fn test_standard_unit_registry_lookups() {
     ));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unit_lookup_returns_arc() {
     // Verifies memory efficiency: repeated unit lookups return shared Arc pointers
@@ -49,6 +64,7 @@ fn test_unknown_unit_lookup_fails() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_custom_unit_insertion() {
     // Tests registering new custom units into a fresh or existing UnitRegistry
@@ -63,6 +79,7 @@ fn test_custom_unit_insertion() {
     assert_eq!(retrieved.display.render(), "m");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_exponent_units_resolution() {
     // Tests dynamic on-the-fly parsing and caching of exponent units (e.g. m^2, m^3)

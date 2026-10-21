@@ -1,3 +1,4 @@
+#![cfg(feature = "date")]
 use abacus::Abacus;
 
 #[test]

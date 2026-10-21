@@ -1,5 +1,18 @@
 //! Regression tests for the date/time audit fixes. Every test uses a fixed anchor (or explicit
 //! timezones) so results never depend on the wall clock or the machine's local zone.
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 
 use abacus::{Abacus, AbacusError, Date, DateFormat, DayOfWeek, TimeZone};
 use std::str::FromStr;
@@ -33,6 +46,7 @@ fn is_invalid_date<T: std::fmt::Debug>(r: Result<T, AbacusError>) -> bool {
 }
 
 // Finding 1: month/year durations
+#[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn month_and_year_are_calendar_durations() {
     let c = calc();
@@ -65,6 +79,7 @@ fn month_and_year_are_calendar_durations() {
 }
 
 // Findings 2-4: now/today, default timezone conversion
+#[cfg(feature = "units")]
 #[test]
 fn now_is_the_instant_and_today_is_midnight() {
     let c = calc();
@@ -76,6 +91,7 @@ fn now_is_the_instant_and_today_is_midnight() {
     assert_eq!(ymd_hm(&date(&c, "yesterday")), (2026, 10, 20, 0, 0));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn default_timezone_converts_the_reference_instant() {
     let utc_anchor = Date::new_full(2026, 10, 21, 15, 0, 0, 0).with_timezone(TimeZone::utc());
@@ -157,6 +173,7 @@ fn dates_compare_by_instant() {
     assert!(earlier < later);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn holiday_on_the_day_is_this_year() {
     let c = Abacus::standard().with_now(Date::new_full(2026, 12, 25, 9, 30, 0, 0));
@@ -226,6 +243,7 @@ fn spaced_meridiem_times() {
 }
 
 // Finding 14: offsets
+#[cfg(feature = "units")]
 #[test]
 fn timezone_offsets_are_validated() {
     assert_eq!(TimeZone::parse("+0530").unwrap().offset_minutes, 330);
@@ -277,6 +295,7 @@ fn from_str_rejects_trailing_garbage_and_bad_times() {
 }
 
 // Finding 17: no silent truncation/saturation
+#[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn date_arguments_and_shifts_are_validated() {
     let c = calc();
@@ -314,6 +333,7 @@ fn date_differences_use_sensible_units() {
 }
 
 // Finding 19: workdays() counts (start, end]
+#[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn workdays_counts_end_but_not_start() {
     let c = calc();
@@ -370,6 +390,7 @@ fn default_and_negative_year_display() {
     assert_eq!(Date::new(-44, 3, 15).to_string(), "March 15, -0044");
 }
 
+#[cfg(feature = "date")]
 #[test]
 fn format_functions_are_not_overridden() {
     let c = calc();

@@ -1,8 +1,22 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{
     Abacus, AbacusError, BinaryOp, EvalResult, FunctionOp, FunctionTarget, Hash, Token, UnaryOp,
     Value,
 };
 
+#[cfg(feature = "units")]
 #[test]
 fn test_tokenize_method() {
     // Verifies calling calc.tokenize(expr) directly on an Abacus instance
@@ -19,6 +33,7 @@ fn test_tokenize_method() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_register_custom_function() {
     // Tests extending an Abacus calculator instance with a user-defined function ('dbl')
@@ -39,6 +54,7 @@ fn test_register_custom_function() {
     assert_eq!(calc.eval("dbl(10 m)").unwrap().to_display(), "20 m");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_register_custom_hash_function_with_dynamic_dot_property() {
     // Tests registering a custom function that returns a Hash and accessing arbitrary dynamic keys via dot property

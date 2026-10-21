@@ -54,9 +54,7 @@ pub fn evaluate_with_variables(
 ) -> Result<EvalResult, AbacusError> {
     let mut config = config;
     // Resolve the reference "now" once per evaluation (and only if a date/time literal is possible).
-    if config.anchor_date.is_some()
-        || input.bytes().any(|b| b.is_ascii_alphabetic() || b == b':')
-    {
+    if config.anchor_date.is_some() || input.bytes().any(|b| b.is_ascii_alphabetic() || b == b':') {
         config.anchor_date = Some(crate::Date::reference_now(
             config.anchor_date.as_ref(),
             config.default_timezone.as_ref(),

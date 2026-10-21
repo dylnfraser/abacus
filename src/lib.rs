@@ -131,11 +131,13 @@ impl Abacus {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "units")] {
     /// use abacus::Abacus;
     ///
     /// let abacus = Abacus::standard();
     /// let val = abacus.eval_scalar("2 * 5 m").unwrap();
     /// assert_eq!(val.to_display(), "10 m");
+    /// # }
     /// ```
     #[must_use]
     pub fn standard() -> Self {
@@ -163,7 +165,10 @@ impl Abacus {
     }
 
     /// Sets the significant figures for output rounding and formatting.
-    #[deprecated(since = "0.1.0", note = "use `with_significant_figures` (takes `usize`) or `set_sig_figs`")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `with_significant_figures` (takes `usize`) or `set_sig_figs`"
+    )]
     #[must_use]
     pub fn set_significant_figures(mut self, sig_figs: Option<usize>) -> Self {
         self.significant_figures = sig_figs;
@@ -271,7 +276,10 @@ impl Abacus {
     }
 
     /// Sets the number of decimal places for rounding and formatting.
-    #[deprecated(since = "0.1.0", note = "use `with_decimal_places` (takes `usize`) or `set_dec_places`")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `with_decimal_places` (takes `usize`) or `set_dec_places`"
+    )]
     #[must_use]
     pub fn set_decimal_places(mut self, places: Option<usize>) -> Self {
         self.decimal_places = places;
@@ -291,7 +299,10 @@ impl Abacus {
     }
 
     /// Sets the default interval display style (Bracket [a, b] or Range a..b).
-    #[deprecated(since = "0.1.0", note = "use `with_interval_style` (takes `IntervalStyle`) or `set_int_style`")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `with_interval_style` (takes `IntervalStyle`) or `set_int_style`"
+    )]
     #[must_use]
     pub fn set_interval_style(mut self, style: Option<IntervalStyle>) -> Self {
         self.default_interval_style = style;
@@ -331,7 +342,10 @@ impl Abacus {
     }
 
     /// Sets the default timezone for unqualified date and time evaluations.
-    #[deprecated(since = "0.1.0", note = "use `with_default_timezone` (takes `TimeZone`) or `set_def_tz`")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `with_default_timezone` (takes `TimeZone`) or `set_def_tz`"
+    )]
     #[must_use]
     pub fn set_default_timezone(mut self, tz: Option<TimeZone>) -> Self {
         self.default_timezone = tz;
@@ -509,7 +523,10 @@ impl Abacus {
     }
 
     /// Sets whether live exchange rates should be fetched, silently ignoring fetch errors.
-    #[deprecated(since = "0.1.0", note = "use `try_set_live_rates`, which reports fetch errors")]
+    #[deprecated(
+        since = "0.1.0",
+        note = "use `try_set_live_rates`, which reports fetch errors"
+    )]
     pub fn set_live_rates(&mut self, enabled: bool) {
         let _ = self.try_set_live_rates(enabled);
     }
@@ -958,6 +975,7 @@ impl Default for Abacus {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "units")] {
 /// use abacus::eval;
 ///
 /// let res = eval("10 N * 5 m").unwrap();
@@ -965,6 +983,7 @@ impl Default for Abacus {
 ///
 /// let converted = eval("1 km in m").unwrap();
 /// assert_eq!(converted.to_display(), "1000 m");
+/// # }
 /// ```
 pub fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
     STANDARD_ABACUS.eval(expr)
@@ -986,6 +1005,7 @@ mod tests {
         Ok(Value::new(amount, unit(symbol)?))
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn looks_up_units_by_symbol() {
         assert_eq!(unit("km").unwrap().display.render(), "km");
@@ -993,6 +1013,7 @@ mod tests {
         assert_eq!(unit("h").unwrap().display.render(), "h");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn looks_up_units_by_name() {
         assert_eq!(unit("hour").unwrap().display.render(), "h");
@@ -1014,6 +1035,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn global_units_is_initialized_once() {
         let first = global_units() as *const _;
@@ -1023,6 +1045,7 @@ mod tests {
         assert!(!global_units().is_empty());
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn global_units_contains_expected_metric_units() {
         let units = global_units();
@@ -1033,6 +1056,7 @@ mod tests {
         assert!(units.contains("hour"));
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn repeated_unit_lookups_return_equivalent_units() {
         let first = unit("km").unwrap();
@@ -1042,6 +1066,7 @@ mod tests {
         assert_eq!(first.dimensions, second.dimensions);
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn repeated_unit_lookups_share_the_same_unit() {
         let first = unit("km").unwrap();
@@ -1050,6 +1075,7 @@ mod tests {
         assert!(std::sync::Arc::ptr_eq(&first, &second));
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn constructs_values_from_amount_and_unit_symbol() {
         let distance = value(5.0, "km").unwrap();
@@ -1059,6 +1085,7 @@ mod tests {
         assert_eq!(distance.unit.dimensions, Dimensions::LENGTH);
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn constructs_zero_values() {
         let distance = value(0.0, "km").unwrap();
@@ -1066,6 +1093,7 @@ mod tests {
         assert_eq!(distance.to_display(), "0 km");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn constructs_negative_values() {
         let distance = value(-5.0, "km").unwrap();
@@ -1081,6 +1109,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn divides_values_with_different_dimensions() {
         let distance = value(5.0, "km").unwrap();
@@ -1091,6 +1120,7 @@ mod tests {
         assert_eq!(speed.unit.dimensions, Dimensions::LENGTH - Dimensions::TIME);
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn division_preserves_fractional_amounts() {
         let distance = value(10.0, "km").unwrap();
@@ -1100,6 +1130,7 @@ mod tests {
         assert_eq!(speed.to_display(), "2.5 km/h");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn division_by_zero_returns_infinity() {
         let distance = value(5.0, "km").unwrap();
@@ -1108,6 +1139,7 @@ mod tests {
         assert_eq!((distance / zero).unwrap().canonical, f64::INFINITY);
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn division_by_negative_value_is_supported() {
         let distance = value(5.0, "km").unwrap();
@@ -1117,6 +1149,7 @@ mod tests {
         assert_eq!(speed.to_display(), "-2.5 km/h");
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn division_with_unknown_left_unit_fails() {
         let invalid = value(5.0, "wat");
@@ -1126,6 +1159,7 @@ mod tests {
         assert!(invalid.and_then(|distance| distance / duration).is_err());
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn division_with_unknown_right_unit_fails() {
         let distance = value(5.0, "km").unwrap();
@@ -1135,13 +1169,26 @@ mod tests {
         assert!(invalid.and_then(|duration| distance / duration).is_err());
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn consolidates_mixed_units_of_same_dimension() {
-        assert_eq!(crate::eval("2342km * m^2").unwrap().to_display(), "0.002342 km^3");
-        assert_eq!(crate::eval("2342km * m").unwrap().to_display(), "2.342 km^2");
-        assert_eq!(crate::eval("1 m^2 * 2342km").unwrap().to_display(), "2342000 m^3");
+        assert_eq!(
+            crate::eval("2342km * m^2").unwrap().to_display(),
+            "0.002342 km^3"
+        );
+        assert_eq!(
+            crate::eval("2342km * m").unwrap().to_display(),
+            "2.342 km^2"
+        );
+        assert_eq!(
+            crate::eval("1 m^2 * 2342km").unwrap().to_display(),
+            "2342000 m^3"
+        );
         assert_eq!(crate::eval("5 m * 2 km").unwrap().to_display(), "10000 m^2");
-        assert_eq!(crate::eval("10 km * 5 m").unwrap().to_display(), "0.05 km^2");
+        assert_eq!(
+            crate::eval("10 km * 5 m").unwrap().to_display(),
+            "0.05 km^2"
+        );
         assert_eq!(crate::eval("2 ft * 6 in").unwrap().to_display(), "1 ft^2");
         assert_eq!(crate::eval("5 h * 30 min").unwrap().to_display(), "2.5 h^2");
     }

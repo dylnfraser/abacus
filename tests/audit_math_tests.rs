@@ -3,6 +3,19 @@
 //! Reference values come from mpmath (40-digit precision) unless stated otherwise. Values
 //! are checked through `canonical` rather than the display string so they are independent
 //! of output formatting.
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 
 use abacus::{Abacus, AbacusError, EvalResult};
 use std::time::{Duration, Instant};
@@ -58,6 +71,7 @@ fn display(expr: &str) -> String {
 
 // ── Finding 1: erfinv/invnorm accuracy ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn invnorm_is_accurate_to_full_precision() {
     assert_rel("invnorm(0.975)", 1.959_963_984_540_054, 1e-15);
@@ -68,6 +82,7 @@ fn invnorm_is_accurate_to_full_precision() {
     assert_rel("invnorm(1e-300)", -37.047_096_299_361_2, 1e-14);
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn z_based_intervals_use_the_exact_critical_value() {
     let (lo, hi) = interval("ZInterval(0, 1, 100)");
@@ -78,6 +93,7 @@ fn z_based_intervals_use_the_exact_critical_value() {
 
 // ── Findings 2 & 3: unambiguous TTest / ZTest / TInterval forms ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn t_test_data_form_is_never_read_as_summary_stats() {
     // Data {1, 2, 3} tested against μ₀ = 0: t = 2√3, p = 0.0741799 (mpmath).
@@ -88,6 +104,7 @@ fn t_test_data_form_is_never_read_as_summary_stats() {
     assert_rel("TTest(0, 1, 2, 3).t", 3f64.sqrt() / 2.0, 1e-14);
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn z_test_has_separate_stats_and_data_forms() {
     assert_rel("ZTestStats(0, 6, 1, 1).z", 6.0, 1e-15);
@@ -98,6 +115,7 @@ fn z_test_has_separate_stats_and_data_forms() {
     assert_err("ZTest(0, 1, 6, 6, 7)");
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn t_interval_data_form_keeps_all_points() {
     // TInterval(1, 2, 3): mean 2, s = 1, t*(0.975, 2) = 4.302652729911275
@@ -108,6 +126,7 @@ fn t_interval_data_form_keeps_all_points() {
     assert_eq!((lo, hi), (lo2, hi2));
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn trailing_fraction_is_data_not_confidence_level() {
     // All three points are data; 95% confidence.
@@ -136,6 +155,7 @@ fn trailing_fraction_is_data_not_confidence_level() {
 
 // ── Findings 4, 12: incomplete gamma/beta convergence and robust inverses ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn chi_square_cdf_is_accurate_for_huge_df() {
     assert_rel("chisqcdf(1e6, 1e6)", 0.500_188_063_196_605_5, 1e-13);
@@ -147,6 +167,7 @@ fn chi_square_cdf_is_accurate_for_huge_df() {
     assert!((p - 0.5).abs() < 1e-7 && p > 0.5);
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn inverse_distributions_converge_in_the_tails() {
     assert_rel("invchisq(0.5, 1e6)", 999_999.333_333_412_4, 1e-14);
@@ -159,6 +180,7 @@ fn inverse_distributions_converge_in_the_tails() {
     assert_err("invt(1e-300, 0.1)");
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn student_t_cdf_is_accurate_for_large_df() {
     assert_rel("tcdf(1e5, 1.5)", 0.933_191_220_238_584_7, 1e-14);
@@ -167,6 +189,7 @@ fn student_t_cdf_is_accurate_for_large_df() {
 
 // ── Finding 5: erf / normcdf tails ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn normal_cdf_keeps_relative_precision_in_the_tails() {
     assert_eq!(scalar("normcdf(0)"), 0.5);
@@ -176,6 +199,7 @@ fn normal_cdf_keeps_relative_precision_in_the_tails() {
     assert_rel("normcdf(-20)", 2.753_624_118_606_233_7e-89, 1e-12);
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn two_sided_p_values_do_not_cancel_to_zero() {
     // z = 9 → p = 2·Φ(−9) = 2.257e-19, which `2·(1 − Φ(9))` would round to 0.
@@ -188,6 +212,7 @@ fn two_sided_p_values_do_not_cancel_to_zero() {
 
 // ── Finding 6: affine temperatures in statistics ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn spreads_of_temperatures_are_kelvin_differences() {
     assert_eq!(display("std(10 degC, 20 degC)"), "7.0710678118654755 K");
@@ -198,6 +223,7 @@ fn spreads_of_temperatures_are_kelvin_differences() {
     assert_err("sum(10 degC, 20 degC)");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn locations_of_temperatures_stay_temperatures() {
     assert_eq!(display("mean(10 degC, 20 degC)"), "15 °C");
@@ -205,6 +231,7 @@ fn locations_of_temperatures_stay_temperatures() {
     assert_eq!(display("max(10 degC, 20 degC)"), "20 °C");
 }
 
+#[cfg(all(feature = "units", feature = "stats", feature = "distributions"))]
 #[test]
 fn distribution_parameters_treat_sigma_as_a_difference() {
     // σ = 2 °C means 2 K, not 275.15 K.
@@ -226,6 +253,7 @@ fn distribution_parameters_treat_sigma_as_a_difference() {
     assert_rel("zscore(12 degC, 10 degC, 2 degC)", 1.0, 1e-15);
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn sample_sizes_must_be_dimensionless_integers() {
     assert_err("TTest(15 degC, 10 degC, 20 degC, 30 degC)");
@@ -239,6 +267,7 @@ fn sample_sizes_must_be_dimensionless_integers() {
 
 // ── Finding 7: unit-aware floored modulo ──
 
+#[cfg(feature = "units")]
 #[test]
 fn modulo_uses_canonical_units_and_floored_sign() {
     assert_rel("mod(1 m, 30 cm)", 0.1, 1e-12);
@@ -251,6 +280,7 @@ fn modulo_uses_canonical_units_and_floored_sign() {
 
 // ── Finding 8: predict argument order ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn prediction_argument_order_is_fixed_per_name() {
     assert_eq!(scalar("predict(4, 1, 2, 3, 2, 4, 6)"), 8.0);
@@ -260,6 +290,7 @@ fn prediction_argument_order_is_fixed_per_name() {
 
 // ── Findings 9 & 10: discrete distributions in log space, no O(k) loops ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn discrete_distributions_do_not_overflow() {
     assert_rel("binompdf(2000, .5, 1000)", 0.017_839_011_145_854_32, 1e-13);
@@ -284,6 +315,7 @@ fn discrete_distributions_do_not_overflow() {
     assert_eq!(scalar("binompdf(3e9, .5, 1)"), 0.0);
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn huge_cdf_arguments_return_quickly() {
     let start = Instant::now();
@@ -311,6 +343,7 @@ fn lcm_overflow_is_an_error_not_a_panic() {
 
 // ── Finding 13: irr ──
 
+#[cfg(feature = "financial")]
 #[test]
 fn irr_uses_relative_tolerance_and_reports_failure() {
     assert_rel("irr(-1e-11, 2e-11)", 1.0, 1e-12);
@@ -325,6 +358,7 @@ fn irr_uses_relative_tolerance_and_reports_failure() {
 
 // ── Finding 14: 1-PropZInt is the TI-84 Wald interval ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn one_prop_z_int_matches_ti84() {
     let (lo, hi) = interval("1-PropZInt(40, 100)");
@@ -345,6 +379,7 @@ fn degenerate_standard_errors_are_errors() {
 
 // ── Finding 16: skewness / kurtosis definitions ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn skew_and_kurt_match_excel() {
     assert_rel("skew(1, 2, 3, 10)", 1.763_632_614_803_888, 1e-13);
@@ -355,6 +390,7 @@ fn skew_and_kurt_match_excel() {
 
 // ── Finding 17: F and χ² densities at zero ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn densities_at_zero() {
     assert_eq!(scalar("fpdf(2, 5, 0)"), 1.0);
@@ -367,6 +403,7 @@ fn densities_at_zero() {
 
 // ── Finding 19: non-integer inputs and consistent limits ──
 
+#[cfg(feature = "distributions")]
 #[test]
 fn integer_arguments_are_validated_not_rounded() {
     for expr in [
@@ -410,6 +447,7 @@ fn combinatorics_limits_are_consistent() {
 
 // ── Finding 20: trig domains and exact values ──
 
+#[cfg(feature = "units")]
 #[test]
 fn trig_domain_errors_and_exact_quadrants() {
     assert_err("asin(2)");
@@ -436,6 +474,7 @@ fn inverse_hyperbolics_are_plain_numbers() {
 
 // ── Finding 21: regression consistency ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn regression_r_is_undefined_for_constant_y() {
     assert_err("corr(1, 2, 3, 5, 5, 5)");
@@ -448,6 +487,7 @@ fn regression_r_is_undefined_for_constant_y() {
     assert_eq!(h.get("slope").unwrap().canonical, 0.0);
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn regression_reports_slope_standard_error() {
     // y = 2, 4, 5, 9 on x = 1..4: s = 0.9486832980505138, SE(b) = s/√5, SE(a) = s·√(1/4 + 6.25/5)
@@ -460,6 +500,7 @@ fn regression_reports_slope_standard_error() {
 
 // ── Finding 22: Chi2Test argument layout ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn chi2_test_takes_observed_then_expected() {
     // observed (15, 25), expected (10, 30)
@@ -474,6 +515,7 @@ fn chi2_test_takes_observed_then_expected() {
 
 // ── Nits ──
 
+#[cfg(feature = "stats")]
 #[test]
 fn mode_handles_ties_and_no_mode() {
     assert_eq!(scalar("mode(1, 1, 2, 2)"), 1.0);
@@ -486,6 +528,7 @@ fn mode_handles_ties_and_no_mode() {
     ));
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn zscore_rejects_non_positive_sigma() {
     assert_err("zscore(5, 3, -2)");
@@ -493,6 +536,7 @@ fn zscore_rejects_non_positive_sigma() {
     assert_eq!(scalar("zscore(5, 3, 2)"), 1.0);
 }
 
+#[cfg(feature = "distributions")]
 #[test]
 fn exponential_distribution_keeps_precision_for_tiny_arguments() {
     assert_rel("expcdf(1e-20, 1)", 1e-20, 1e-15);

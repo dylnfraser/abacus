@@ -55,37 +55,55 @@ pub(crate) fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
 /// Returns `true` if `op` divides its operands (`/`, `per`, or a custom alias of division).
 #[must_use]
 pub fn is_division(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, div as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        div as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 /// Returns `true` if `op` is the built-in addition.
 #[must_use]
 pub fn is_addition(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, add as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        add as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 /// Returns `true` if `op` is the built-in subtraction.
 #[must_use]
 pub fn is_subtraction(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, sub as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        sub as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 /// Returns `true` if `op` is the built-in multiplication.
 #[must_use]
 pub fn is_multiplication(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, mul as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        mul as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 /// Returns `true` if `op` is the built-in exponentiation.
 #[must_use]
 pub fn is_power(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, pow as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        pow as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 /// Returns `true` if `op` is the built-in remainder.
 #[must_use]
 pub fn is_remainder(op: &BinaryOp) -> bool {
-    std::ptr::fn_addr_eq(op.func, rem as fn(Value, Value) -> Result<Value, AbacusError>)
+    std::ptr::fn_addr_eq(
+        op.func,
+        rem as fn(Value, Value) -> Result<Value, AbacusError>,
+    )
 }
 
 fn rem(a: Value, b: Value) -> Result<Value, AbacusError> {

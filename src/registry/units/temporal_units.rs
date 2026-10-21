@@ -44,7 +44,27 @@ const CALENDAR_UNITS: &[(&[&str], &str, f64)] = &[
     ),
 ];
 
+/// Informal abbreviations: `(alias, display, seconds)`.
+const INFORMAL_ALIASES: &[(&str, &str, f64)] = &[
+    ("hr", "h", 3600.0),
+    ("hrs", "h", 3600.0),
+    ("sec", "s", 1.0),
+    ("secs", "s", 1.0),
+];
+
 pub fn register_temporal_units(map: &mut HashMap<String, Arc<Unit>>) {
+    for &(alias, display, scalar) in INFORMAL_ALIASES {
+        map.insert(
+            alias.to_string(),
+            Arc::new(Unit {
+                scalar,
+                offset: 0.0,
+                dimensions: Dimensions::TIME,
+                display: UnitExpr::single(display),
+            }),
+        );
+    }
+
     for &(aliases, display, scalar) in CALENDAR_UNITS {
         let unit = Arc::new(Unit {
             scalar,

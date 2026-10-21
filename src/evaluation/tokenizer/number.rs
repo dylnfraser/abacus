@@ -66,8 +66,12 @@ pub(crate) fn parse_number_token<'a>(
             // A dangling exponent marker (`1e`, `2E+`) is a malformed literal, not `1 * e`.
             let after = exp_lookahead.peek().map(|&(_, c)| c);
             if after.is_none_or(|c| !c.is_alphanumeric() && c != '_') {
-                let end = exp_lookahead.peek().map_or(input_text.len(), |&(idx, _)| idx);
-                return Err(AbacusError::InvalidNumber(input_text[start..end].to_string()));
+                let end = exp_lookahead
+                    .peek()
+                    .map_or(input_text.len(), |&(idx, _)| idx);
+                return Err(AbacusError::InvalidNumber(
+                    input_text[start..end].to_string(),
+                ));
             }
             break;
         } else {

@@ -163,7 +163,10 @@ mod tests {
         assert!((units.get("keV").unwrap().scalar - 1.602_176_634e-13).abs() < 1e-25);
         assert_eq!(units.get("atm").unwrap().scalar, 1.013_25e8);
         assert_eq!(units.get("mmHg").unwrap().scalar, 133_322.387_415);
-        assert_eq!(units.get("torr").unwrap().scalar, 101_325.0 * 1000.0 / 760.0);
+        assert_eq!(
+            units.get("torr").unwrap().scalar,
+            101_325.0 * 1000.0 / 760.0
+        );
         assert_eq!(units.get("Da").unwrap().scalar, 1.660_539_068_92e-24);
     }
 }

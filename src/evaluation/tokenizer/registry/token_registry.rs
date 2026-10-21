@@ -193,7 +193,9 @@ impl TokenRegistry {
             );
         for (pattern, kind) in entries {
             if let Some(c) = pattern.chars().next() {
-                map.entry(c).or_default().push((pattern.as_str().into(), kind));
+                map.entry(c)
+                    .or_default()
+                    .push((pattern.as_str().into(), kind));
             }
         }
         for candidates in map.values_mut() {

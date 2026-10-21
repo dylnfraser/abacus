@@ -134,7 +134,10 @@ impl<'a> Parser<'a> {
         target.iter().enumerate().any(|(i, tok)| {
             matches!(tok, Token::Val(_))
                 || (matches!(tok, Token::Float(_))
-                    && !matches!(i.checked_sub(1).map(|p| &target[p]), Some(Token::BinaryOp("^"))))
+                    && !matches!(
+                        i.checked_sub(1).map(|p| &target[p]),
+                        Some(Token::BinaryOp("^"))
+                    ))
         })
     }
 

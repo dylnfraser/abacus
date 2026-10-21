@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, Date, Time, TimeZone};
 use std::str::FromStr;
 
@@ -49,6 +62,7 @@ fn test_timezone_parsing() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_timezone_conversions_expression() {
     let abacus = Abacus::standard();

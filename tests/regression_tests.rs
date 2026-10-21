@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, EvalResult, Hash, Value};
 
 fn eval(expr: &str) -> Result<EvalResult, AbacusError> {
@@ -14,6 +27,7 @@ fn eval_hash(expr: &str) -> Result<Hash, AbacusError> {
 
 // ── Linear Regression Hash Output (linreg, LinReg) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_section5_linear_regression_expanded() {
     let calc = Abacus::standard();
@@ -37,6 +51,7 @@ fn test_section5_linear_regression_expanded() {
     assert_eq!(pred.to_display(), "50 m");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_hash_output() {
     // linreg returns a Hash containing slope, intercept, r2, r, se, mean_x, mean_y
@@ -63,6 +78,7 @@ fn test_linear_regression_hash_output() {
 
 // ── Natural Language Dot Property Access (.intercept, .slope, .r2, etc.) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_dot_property_access_on_hash() {
     // Direct dot property access
@@ -98,6 +114,7 @@ fn test_dot_property_access_on_hash() {
 
 // ── Linear Regression Slope (linreg_slope) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_slope_with_units() {
     let slope = eval_scalar("linreg_slope(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)").unwrap();
@@ -107,6 +124,7 @@ fn test_linear_regression_slope_with_units() {
 
 // ── Linear Regression Intercept (linreg_intercept) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_intercept_with_units() {
     let intercept =
@@ -117,6 +135,7 @@ fn test_linear_regression_intercept_with_units() {
 
 // ── Coefficient of Determination R^2 (linreg_r2, r2) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_r2_and_r() {
     let r2_val = eval_scalar("linreg_r2(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)").unwrap();
@@ -133,6 +152,7 @@ fn test_linear_regression_r2_and_r() {
 
 // ── Prediction (linreg_predict, predict) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_prediction() {
     let pred = eval_scalar("predict(10 s, 1 s, 2 s, 3 s, 4 s, 7 m, 12 m, 17 m, 22 m)").unwrap();
@@ -145,6 +165,7 @@ fn test_linear_regression_prediction() {
 
 // ── Standard Error of Estimate (linreg_se) ──
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_linear_regression_standard_error() {
     let se = eval_scalar("linreg_se(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)").unwrap();

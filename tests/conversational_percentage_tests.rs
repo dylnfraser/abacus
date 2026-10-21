@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::eval;
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn test_discounts_and_reductions() {
     // "20% off $120" -> $96
@@ -23,6 +37,7 @@ fn test_discounts_and_reductions() {
     assert_eq!(res5.to_display(), "$160");
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn test_additions_taxes_and_tips() {
     // "$85 + 18% tip" -> $100.30
@@ -54,6 +69,7 @@ fn test_additions_taxes_and_tips() {
     assert_eq!(res7.to_display(), "$120");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_proportional_percentage_and_out_of() {
     // "40 as a % of 200" -> 20%
@@ -77,6 +93,7 @@ fn test_proportional_percentage_and_out_of() {
     assert_eq!(res5.to_display(), "60%");
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn test_relative_percentage_differences() {
     // "% change from 50 to 75" -> +50%
@@ -96,6 +113,7 @@ fn test_relative_percentage_differences() {
     assert_eq!(res4.to_display(), "+50%");
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn test_relative_scaling_more_and_less_than() {
     // "30% more than 50 kg" -> 65 kg
@@ -119,6 +137,7 @@ fn test_relative_scaling_more_and_less_than() {
     assert_eq!(res5.to_display(), "$120");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_adding_and_subtracting_percentages() {
     // "50% + 50%" -> 100%

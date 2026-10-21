@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, Date, eval};
 
+#[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn test_section6_date_functionality_expanded() {
     let calc = Abacus::standard();
@@ -81,6 +95,7 @@ fn test_delimited_at_date_literals() {
     assert_eq!(d2, Date::new_with_hms(2026, 8, 7, 10, 54, 49));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_date_addition_arithmetic() {
     let abacus = Abacus::standard();
@@ -95,6 +110,7 @@ fn test_date_addition_arithmetic() {
     assert_eq!(d3, Date::new_with_hms(2026, 8, 8, 1, 0, 0));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_date_subtraction_arithmetic() {
     let abacus = Abacus::standard();
@@ -133,6 +149,7 @@ fn test_date_property_access() {
     );
 }
 
+#[cfg(feature = "date")]
 #[test]
 fn test_date_function_operator() {
     let abacus = Abacus::standard();
@@ -144,6 +161,7 @@ fn test_date_function_operator() {
     assert_eq!(d2, Date::new_with_hms(2026, 8, 7, 10, 54, 49));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_mm_dd_yyyy_and_slash_eval_expressions() {
     let calc = Abacus::standard();

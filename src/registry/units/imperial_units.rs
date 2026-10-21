@@ -102,7 +102,14 @@ const IMPERIAL_UNITS: &[UnitDefinition] = &[
     },
     // Short (US) ton: 2000 lb. This is what plain `ton` means.
     UnitDefinition {
-        keys: &["ton", "tons", "short ton", "short tons", "short_ton", "short_tons"],
+        keys: &[
+            "ton",
+            "tons",
+            "short ton",
+            "short tons",
+            "short_ton",
+            "short_tons",
+        ],
         display: "ton",
         scalar: 907_184.74,
         offset: 0.0,
@@ -175,7 +182,12 @@ const IMPERIAL_UNITS: &[UnitDefinition] = &[
         dimensions: Dimensions::VOLUME,
     },
     UnitDefinition {
-        keys: &["imp_gallon", "imp_gal", "imperial gallon", "imperial gallons"],
+        keys: &[
+            "imp_gallon",
+            "imp_gal",
+            "imperial gallon",
+            "imperial gallons",
+        ],
         display: "imp_gal",
         scalar: 0.004_546_09,
         offset: 0.0,

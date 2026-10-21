@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::eval;
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_basic_number_scales() {
     assert_eq!(eval("3 million").unwrap().to_display(), "3000000");
@@ -12,6 +26,7 @@ fn test_basic_number_scales() {
     assert_eq!(eval("3 myriad").unwrap().to_display(), "30000");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_plural_number_scales() {
     assert_eq!(eval("3 millions").unwrap().to_display(), "3000000");
@@ -20,6 +35,7 @@ fn test_plural_number_scales() {
     assert_eq!(eval("4 dozens").unwrap().to_display(), "48");
 }
 
+#[cfg(feature = "number-scales")]
 #[test]
 fn test_unspaced_number_scales() {
     assert_eq!(eval("3million").unwrap().to_display(), "3000000");
@@ -28,6 +44,7 @@ fn test_unspaced_number_scales() {
     assert_eq!(eval("2dozen").unwrap().to_display(), "24");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_number_scale_arithmetic() {
     // Addition
@@ -52,6 +69,7 @@ fn test_number_scale_arithmetic() {
     );
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_number_scales_with_physical_units() {
     // 3 million km
@@ -70,6 +88,7 @@ fn test_number_scales_with_physical_units() {
     assert_eq!(unspaced_dist.to_display(), "3000000 km");
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_conversions_to_and_from_scales() {
     // 3 million in thousand
@@ -102,6 +121,7 @@ fn test_conversions_to_and_from_scales() {
     );
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_standalone_scale_words() {
     // Standalone million evaluates to unit million (canonical 1,000,000)
@@ -120,6 +140,7 @@ fn test_standalone_scale_words() {
     assert!((inv_million.into_scalar().unwrap().canonical - 1e-6).abs() < 1e-12);
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_higher_order_scales() {
     assert_eq!(
@@ -135,6 +156,7 @@ fn test_higher_order_scales() {
     assert_eq!(googol.into_scalar().unwrap().canonical, 1e100);
 }
 
+#[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_number_scales_config_option() {
     use abacus::Abacus;

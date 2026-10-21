@@ -212,8 +212,8 @@ fn resolve_indefinite_article<'a>(
     }
     let rest = rest_after.trim_start();
     let next_word = leading_word(rest);
-    let next_is_scale = crate::evaluation::tokenizer::implicit::number_scale_factor(next_word)
-        .is_some();
+    let next_is_scale =
+        crate::evaluation::tokenizer::implicit::number_scale_factor(next_word).is_some();
     if is_cap_a {
         return next_is_scale.then_some(Token::Float(1.0));
     }
@@ -870,12 +870,9 @@ pub fn tokenize_string_with_date_options<'a>(
                 tokens.push(Token::Unit(sym));
             } else if is_standard_constant(sym) || variables.is_some_and(|v| v.contains_key(sym)) {
                 tokens.push(Token::Ident(sym));
-            } else if let Some(tok) = resolve_indefinite_article(
-                sym,
-                &input_text[end..],
-                tokens.last(),
-                unit_registry,
-            ) {
+            } else if let Some(tok) =
+                resolve_indefinite_article(sym, &input_text[end..], tokens.last(), unit_registry)
+            {
                 tokens.push(tok);
             } else if unit_registry.contains(sym) {
                 tokens.push(Token::Unit(sym));
@@ -908,6 +905,7 @@ mod tests {
         count_significant_figures, min_significant_figures_in_expr,
     };
 
+    #[cfg(feature = "units")]
     #[test]
     fn tokenizes_spaced_and_unspaced_expressions() {
         let token_reg = TokenRegistry::standard();
@@ -926,6 +924,7 @@ mod tests {
         assert_eq!(tokens2[2], Token::Unit("m^3"));
     }
 
+    #[cfg(feature = "units")]
     #[test]
     fn tokenizes_parens_and_unary_operators() {
         let token_reg = TokenRegistry::standard();
@@ -939,6 +938,7 @@ mod tests {
         assert_eq!(tokens[3], Token::CloseParen);
     }
 
+    #[cfg(feature = "stats")]
     #[test]
     fn tokenizes_functions_and_commas() {
         let token_reg = TokenRegistry::standard();
@@ -954,6 +954,7 @@ mod tests {
         assert_eq!(tokens[7], Token::CloseParen);
     }
 
+    #[cfg(all(feature = "units", feature = "stats"))]
     #[test]
     fn executes_registered_functions() {
         let token_reg = TokenRegistry::standard();

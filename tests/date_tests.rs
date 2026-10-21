@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::units::date::{
     Date, DayOfWeek, Time, date_to_epoch_days, days_in_month, epoch_days_to_date, is_leap_year,
     is_valid_date,
@@ -141,6 +154,7 @@ fn test_date_difference() {
     assert_eq!(diff_val.to_display(), "10 d");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_date_and_value_arithmetic() {
     let reg = UnitRegistry::standard();

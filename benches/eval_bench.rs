@@ -1,4 +1,4 @@
-use abacus::{Abacus, eval};
+use abacus::{Abacus, Date, eval};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 fn bench_tokenizer(c: &mut Criterion) {
@@ -45,10 +45,17 @@ fn bench_complex_expressions(c: &mut Criterion) {
             black_box(res);
         })
     });
+    // Anchored so the measured work doesn't depend on the wall clock.
+    let anchored = Abacus::standard().with_now(
+        "2026-10-21 09:30:00"
+            .parse::<Date>()
+            .expect("valid anchor date"),
+    );
     group.bench_function("relative_date", |b| {
         b.iter(|| {
-            let res =
-                eval(black_box("last thursday at 3pm + 2 weeks")).expect("evaluation succeeds");
+            let res = anchored
+                .eval(black_box("last thursday at 3pm + 2 weeks"))
+                .expect("evaluation succeeds");
             black_box(res);
         })
     });

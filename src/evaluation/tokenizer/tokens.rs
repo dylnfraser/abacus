@@ -24,7 +24,7 @@ pub enum Token<'a> {
     OpenBracket,
     CloseBracket,
     Comma,
-    Range,               // `..` for range expressions inside functions, e.g. mean(1..10)
+    Range,                // `..` for range expressions inside functions, e.g. mean(1..10)
     DotProperty(&'a str), // `.intercept`, `.slope`, `.r2` etc.
 
     Val(Value), // final value

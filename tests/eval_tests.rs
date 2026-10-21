@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, AbacusError, eval};
 
 #[test]
@@ -13,6 +26,7 @@ fn test_basic_arithmetic() {
     assert_eq!(calc.eval("10 % 3").unwrap().to_display(), "1");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_top_level_eval_convenience_function() {
     // Tests top-level exported helper function abacus::eval(...)
@@ -20,6 +34,7 @@ fn test_top_level_eval_convenience_function() {
     assert_eq!(eval("10 / 2").unwrap().to_display(), "5");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_section1_physical_unit_arithmetic_expanded() {
     let calc = Abacus::standard();
@@ -41,6 +56,7 @@ fn test_section1_physical_unit_arithmetic_expanded() {
     assert_eq!(calc.eval("10 N * 5 m").unwrap().to_display(), "50 J");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unit_arithmetic() {
     // Verifies unit-aware addition, subtraction, multiplication, and division
@@ -50,6 +66,7 @@ fn test_unit_arithmetic() {
     assert_eq!(eval("10 m / 2 s").unwrap().to_display(), "5 m/s");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_implicit_multiplication() {
     // Tests juxtaposition implicit multiplication without explicit '*' (e.g., 5(2+3) -> 25)
@@ -58,6 +75,7 @@ fn test_implicit_multiplication() {
     assert_eq!(eval("2 sqrt(9 m^2)").unwrap().to_display(), "6 m");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_dimensionless_promotion() {
     // Tests automatic unit promotion when adding/subtracting dimensionless scalars to physical units
@@ -67,6 +85,7 @@ fn test_dimensionless_promotion() {
     assert_eq!(eval("1 as inches").unwrap().to_display(), "1 in");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unit_conversions() {
     // Tests explicit user conversion syntax ('as', 'to', 'in')
@@ -77,6 +96,7 @@ fn test_unit_conversions() {
     assert_eq!(eval("5 km / m").unwrap().to_display(), "5000");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_automatic_derived_si_unit_reduction() {
     // Tests automatic reduction of compound units into SI derived units (e.g. N*m -> J, W*s -> J, V*A -> W)
@@ -85,6 +105,7 @@ fn test_automatic_derived_si_unit_reduction() {
     assert_eq!(eval("12 V * 2 A").unwrap().to_display(), "24 W");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_statistical_functions() {
     // Verifies built-in statistical functions operating on physical unit ranges and discrete arguments
@@ -104,6 +125,7 @@ fn test_statistical_functions() {
     assert_eq!(eval("iqr(1 m .. 5 m)").unwrap().to_display(), "2 m");
 }
 
+#[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_range_step_expansion() {
     // Tests explicit step expansion syntax in ranges (start..end..step)
@@ -114,6 +136,7 @@ fn test_range_step_expansion() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_trigonometric_functions() {
     // Tests standard trigonometric functions with radian inputs
@@ -122,6 +145,7 @@ fn test_trigonometric_functions() {
     assert_eq!(eval("tan(0 rad)").unwrap().to_display(), "0");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unparenthesized_single_parameter_functions() {
     let calc = Abacus::standard();
@@ -176,6 +200,7 @@ fn test_combinatorics() {
     assert_eq!(eval("nPr(5, 2)").unwrap().to_display(), "20");
 }
 
+#[cfg(all(feature = "units", feature = "distributions"))]
 #[test]
 fn test_probability_distributions() {
     // Tests continuous normal CDF and inverse cumulative distribution functions
@@ -198,6 +223,7 @@ fn test_probability_distributions() {
     assert!((invnorm_val - 1.959_963_984_540_054).abs() < 1e-14);
 }
 
+#[cfg(feature = "financial")]
 #[test]
 fn test_financial_functions() {
     // Tests loan payment PMT function
@@ -208,6 +234,7 @@ fn test_financial_functions() {
     assert!((pmt_val - (-1_073.643_246_024_279_5)).abs() < 1e-9);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_unary_increment_decrement() {
     // Tests prefix (++x, --x) and postfix (x++, x--) incrementers and decrementers
@@ -226,6 +253,7 @@ fn test_unary_increment_decrement() {
     assert_eq!(eval("500 cm++").unwrap().to_display(), "501 cm");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_error_handling() {
     // Verifies incompatible dimension addition and unknown unit errors
@@ -240,6 +268,7 @@ fn test_error_handling() {
     ));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_inches_and_conversion_keyword_disambiguation() {
     let calc = Abacus::standard();

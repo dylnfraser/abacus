@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, Date};
 
 #[test]
@@ -130,6 +143,7 @@ fn test_quarter_and_period_boundaries() {
     assert_eq!(d7.day, 31);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_days_until_calculations() {
     let anchor = Date::new(2026, 9, 1);

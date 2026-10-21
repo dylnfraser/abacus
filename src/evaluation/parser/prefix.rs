@@ -70,7 +70,11 @@ impl<'a> Parser<'a> {
                     EvalResult::Scalar(v)
                         if v.unit.dimensions == crate::units::dimensions::Dimensions::TIME =>
                     {
-                        let sign = if name == "before" || name == "ago" { -1 } else { 1 };
+                        let sign = if name == "before" || name == "ago" {
+                            -1
+                        } else {
+                            1
+                        };
                         let weekend = self.config.weekend;
                         Ok(EvalResult::Date(
                             self.get_now().apply_time_value_with(&v, sign, weekend)?,

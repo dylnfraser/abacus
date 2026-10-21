@@ -11,6 +11,17 @@ use std::process::ExitCode;
 
 use abacus::Abacus;
 
+/// Like `println!`, but exits quietly when stdout is closed (e.g. `abacus --demo | head`)
+/// instead of panicking on a broken pipe.
+macro_rules! out {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        if writeln!(std::io::stdout(), $($arg)*).is_err() {
+            std::process::exit(0);
+        }
+    }};
+}
+
 const USAGE: &str = "\
 Usage: abacus [OPTIONS] [EXPRESSION]...
 
@@ -106,17 +117,17 @@ const DEMO: &[(&str, &[&str])] = &[
 fn run_demo(calc: &Abacus) -> bool {
     let mut ok = true;
     for (i, (title, exprs)) in DEMO.iter().enumerate() {
-        println!("{}. {title}", i + 1);
+        out!("{}. {title}", i + 1);
         for expr in *exprs {
             match calc.eval(expr) {
-                Ok(res) => println!("  {expr} = {}", res.to_display()),
+                Ok(res) => out!("  {expr} = {}", res.to_display()),
                 Err(err) => {
                     ok = false;
-                    println!("  {expr} => error: {err}");
+                    out!("  {expr} => error: {err}");
                 }
             }
         }
-        println!();
+        out!();
     }
     ok
 }
@@ -125,7 +136,7 @@ fn run_demo(calc: &Abacus) -> bool {
 fn eval_one(calc: &mut Abacus, expr: &str) -> bool {
     match calc.eval_mut(expr) {
         Ok(res) => {
-            println!("{}", res.to_display());
+            out!("{}", res.to_display());
             true
         }
         Err(err) => {
@@ -148,11 +159,11 @@ fn main() -> ExitCode {
         match arg.as_str() {
             "--" => flags_done = true,
             "-h" | "--help" => {
-                println!("{USAGE}");
+                out!("{USAGE}");
                 return ExitCode::SUCCESS;
             }
             "-V" | "--version" => {
-                println!("abacus {}", env!("CARGO_PKG_VERSION"));
+                out!("abacus {}", env!("CARGO_PKG_VERSION"));
                 return ExitCode::SUCCESS;
             }
             "--demo" => {

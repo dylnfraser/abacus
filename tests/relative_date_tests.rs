@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, Date};
 
 /// Fixed reference instant (Wednesday 2026-10-21 09:30, floating local time) so these tests never
@@ -50,6 +63,7 @@ fn test_relative_date_with_at_time() {
     assert_eq!(d2.time.minute, 30);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_relative_time_interval_today_at_12_to_1() {
     let abacus = anchored_calc();
@@ -65,6 +79,7 @@ fn test_relative_time_interval_today_at_12_to_1() {
     assert_eq!(res2.to_display(), "2.75 h");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_relative_time_interval_defaults_to_hours() {
     let abacus = anchored_calc();
@@ -93,6 +108,7 @@ fn test_last_thursday_at_3pm() {
     assert!((today.to_epoch_days() - d.to_epoch_days()) <= 7);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_relative_date_arithmetic_with_last_thursday() {
     let abacus = anchored_calc();
@@ -153,6 +169,7 @@ fn test_standalone_time_literals() {
     assert_eq!(d2.time.minute, 15);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_relative_time_ago_before_after_in() {
     let abacus = anchored_calc();
@@ -195,6 +212,7 @@ fn test_relative_time_ago_before_after_in() {
     assert!((diff_bs_ms - 3 * 3_600_000).abs() < 5000);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_more_relative_time_expressions() {
     let abacus = anchored_calc();
@@ -242,6 +260,7 @@ fn test_more_relative_time_expressions() {
     assert!((diff_10d - 10 * 86_400_000).abs() < 5000);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_relative_time_chained_arithmetic() {
     let abacus = anchored_calc();

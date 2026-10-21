@@ -1,3 +1,16 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::{Abacus, eval};
 
 #[test]
@@ -92,6 +105,7 @@ fn test_programmatic_variable_definition() {
     assert_eq!(calc.eval("x y").unwrap().to_display(), "336");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_variables_with_physical_units() {
     let mut calc = Abacus::standard();
@@ -110,6 +124,7 @@ fn test_variables_with_physical_units() {
     assert_eq!(converted.to_display(), "27.77777777777778 m/s");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_variables_with_intervals() {
     let mut calc = Abacus::standard();
@@ -120,6 +135,7 @@ fn test_variables_with_intervals() {
     assert_eq!(doubled.to_display(), "[190 Ω, 210 Ω]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_variables_with_dates() {
     let mut calc = Abacus::standard();
@@ -129,6 +145,7 @@ fn test_variables_with_dates() {
     assert_eq!(end_date.to_display(), "August 11, 2026");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_eval_mut_assignment_syntax() {
     let mut calc = Abacus::standard();

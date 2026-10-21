@@ -1,3 +1,4 @@
+#![cfg(feature = "units")]
 use abacus::Abacus;
 
 #[test]

@@ -1,5 +1,19 @@
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 use abacus::Abacus;
 
+#[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn test_section7_business_days_expanded() {
     let calc = Abacus::standard();
@@ -33,6 +47,7 @@ fn test_section7_business_days_expanded() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_business_days_addition_across_weekend() {
     let abacus = Abacus::standard();
@@ -52,6 +67,7 @@ fn test_business_days_addition_across_weekend() {
     assert_eq!(d3.day, 10);
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn test_business_days_subtraction() {
     let abacus = Abacus::standard();
@@ -65,6 +81,7 @@ fn test_business_days_subtraction() {
     assert_eq!(d2.day, 7);
 }
 
+#[cfg(feature = "date")]
 #[test]
 fn test_workdays_functions() {
     let abacus = Abacus::standard();

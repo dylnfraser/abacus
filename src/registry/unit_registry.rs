@@ -228,7 +228,7 @@ impl UnitRegistry {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "units"))]
 mod tests {
     use super::*;
 

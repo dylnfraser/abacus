@@ -1,4 +1,17 @@
 //! Regression tests for the core units / values / intervals audit findings.
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
 
 use abacus::{Abacus, AbacusError, Dimensions, EvalResult, Notation, eval};
 
@@ -10,6 +23,7 @@ fn show(expr: &str) -> String {
 
 // --- Dimensions: no overflow, exact rational exponents -------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn large_exponents_do_not_overflow_or_wrap() {
     assert_eq!(show("1 m^250 * 1 m^250"), "1 m^500");
@@ -28,6 +42,7 @@ fn dimension_overflow_is_an_error() {
     assert!(Dimensions::LENGTH.checked_mul_f64(f64::NAN).is_none());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn fractional_exponents_round_trip() {
     assert_eq!(show("((2 m)^(1/7))^7 to m"), "2 m");
@@ -36,6 +51,7 @@ fn fractional_exponents_round_trip() {
 
 // --- Display -----------------------------------------------------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn tiny_magnitudes_are_not_displayed_as_zero() {
     assert_eq!(show("1.6e-19 C"), "1.6e-19 C");
@@ -43,6 +59,7 @@ fn tiny_magnitudes_are_not_displayed_as_zero() {
     assert_eq!(show("1 fm to m"), "1e-15 m");
 }
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn huge_magnitudes_use_scientific_notation() {
     assert_eq!(show("1e300 m"), "1e300 m");
@@ -54,6 +71,7 @@ fn cancellation_noise_is_snapped_to_zero() {
     assert_eq!(show("0.1 + 0.2 - 0.3"), "0");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn denominator_only_units_are_displayed() {
     assert_eq!(show("1/(2 m)"), "0.5 1/m");
@@ -62,6 +80,7 @@ fn denominator_only_units_are_displayed() {
     assert_eq!(show("1/(1 kg)"), "1 1/kg");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn powers_produce_simplified_units() {
     assert_eq!(show("(4 m^2)^0.5"), "2 m");
@@ -74,6 +93,7 @@ fn powers_produce_simplified_units() {
     assert!(show("sqrt(2 m)").ends_with(" m^0.5"));
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn consolidation_has_no_float_noise() {
     assert_eq!(show("1 m * 1 ft"), "0.3048 m^2");
@@ -81,6 +101,7 @@ fn consolidation_has_no_float_noise() {
 
 // --- Derived-unit reduction --------------------------------------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn ambiguous_dimensions_are_not_relabelled() {
     assert_eq!(show("(10 m/s)^2"), "100 m^2/s^2");
@@ -88,6 +109,7 @@ fn ambiguous_dimensions_are_not_relabelled() {
     assert_eq!(show("5 cd"), "5 cd");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn explicit_single_units_are_kept() {
     assert_eq!(show("1 atm"), "1 atm");
@@ -95,6 +117,7 @@ fn explicit_single_units_are_kept() {
     assert_eq!(show("1 mA"), "1 mA");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn composite_units_still_reduce() {
     assert_eq!(show("10 N * 5 m"), "50 J");
@@ -104,6 +127,7 @@ fn composite_units_still_reduce() {
 
 // --- Affine temperatures -----------------------------------------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn negative_temperatures_can_be_entered() {
     assert_eq!(show("-10 °C"), "-10 °C");
@@ -111,6 +135,7 @@ fn negative_temperatures_can_be_entered() {
     assert_eq!(show("(-40) °C"), "-40 °C");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn temperature_differences_and_shifts() {
     assert_eq!(show("10 °C - 5 °C"), "5 K");
@@ -122,6 +147,7 @@ fn temperature_differences_and_shifts() {
     );
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn affine_exponent_units() {
     assert_eq!(show("10 °C^1 in K"), "283.15 K");
@@ -139,6 +165,7 @@ fn nan_exponents_are_rejected() {
     assert!(eval("1 m^inf").is_err());
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn exponent_cache_is_bounded_and_normalized() {
     let calc = Abacus::standard();
@@ -150,7 +177,11 @@ fn exponent_cache_is_bounded_and_normalized() {
         let _ = calc.units.unit(&format!("m^1.{k:07}"));
     }
     assert!(calc.units.cached_exponent_units() <= 4_096);
-    assert!(calc.units.unit(&format!("m^{}", "1".repeat(1_000))).is_err());
+    assert!(
+        calc.units
+            .unit(&format!("m^{}", "1".repeat(1_000)))
+            .is_err()
+    );
 }
 
 // --- Intervals ---------------------------------------------------------------------------------
@@ -173,6 +204,7 @@ fn zero_dividend_over_zero_spanning_interval() {
     assert_eq!(show("0/[0,1]"), "[0, 0]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn inexact_bounds_are_rounded_outward() {
     let r = eval("[0.1,0.1]+[0.2,0.2]").unwrap();
@@ -186,6 +218,7 @@ fn inexact_bounds_are_rounded_outward() {
     assert_eq!(show("[10 N, 20 N] * [2 m, 5 m]"), "[20 J, 100 J]");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn percent_intervals_with_negative_endpoints() {
     let EvalResult::Interval(i) = eval("[-1,2] + [5%,10%]").unwrap() else {
@@ -197,6 +230,7 @@ fn percent_intervals_with_negative_endpoints() {
 
 // --- Percent arithmetic ------------------------------------------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn percent_arithmetic_is_consistent() {
     assert_eq!(show("50% / 2 s"), "0.25 Hz");
@@ -209,6 +243,7 @@ fn percent_arithmetic_is_consistent() {
 
 // --- Equality ----------------------------------------------------------------------------------
 
+#[cfg(feature = "units")]
 #[test]
 fn value_equality_is_reflexive_and_relative() {
     let inf = eval("1/0").unwrap();
@@ -219,6 +254,7 @@ fn value_equality_is_reflexive_and_relative() {
 
 // --- Output settings apply to display only -----------------------------------------------------
 
+#[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
 fn variables_keep_full_precision() {
     let mut calc = Abacus::standard();
@@ -231,6 +267,7 @@ fn variables_keep_full_precision() {
     assert_eq!(calc.eval("y * 3").unwrap().to_display(), "2");
 }
 
+#[cfg(feature = "units")]
 #[test]
 fn decimal_rounding_does_not_overflow() {
     let calc = Abacus::standard().with_decimal_places(10);
@@ -248,6 +285,7 @@ fn scalar_extraction_errors_match() {
     );
 }
 
+#[cfg(feature = "stats")]
 #[test]
 fn notation_applies_to_intervals_and_hashes() {
     let calc = Abacus::standard().with_notation(Notation::Scientific);
@@ -262,5 +300,24 @@ fn human_duration_handles_non_finite() {
     assert_eq!(
         abacus::units::value::format_human_duration(f64::NAN),
         "NaN seconds"
+    );
+}
+
+#[cfg(feature = "units")]
+#[test]
+fn float_noise_is_hidden_but_real_digits_are_kept() {
+    let show = |e: &str| eval(e).unwrap().to_display();
+    assert_eq!(show("5 lb to kg"), "2.26796185 kg");
+    assert_eq!(show("0.1 + 0.2"), "0.3");
+    assert_eq!(show("-0.1 - 0.2"), "-0.3");
+    assert_eq!(show("1.1 * 3"), "3.3");
+    // Genuine 16-17 digit values are untouched.
+    assert_eq!(show("100 km/h in m/s"), "27.77777777777778 m/s");
+    assert_eq!(show("pi * 25"), "78.53981633974483");
+    assert_eq!(show("1 / 3"), "0.3333333333333333");
+    // Interval bounds stay exact so outward rounding remains visible.
+    assert_eq!(
+        show("[0.1, 0.1] + [0.2, 0.2]"),
+        "[0.3, 0.30000000000000004]"
     );
 }

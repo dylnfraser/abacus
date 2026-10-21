@@ -1,3 +1,18 @@
+#![cfg(all(feature = "units", feature = "currencies"))]
+// Helpers and imports are only used by tests gated on default features.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(unused)
+)]
+
 use abacus::registry::units::currency_units::FIXED_EXCHANGE_RATES;
 use abacus::{Abacus, AbacusError, eval};
 
@@ -191,6 +206,7 @@ fn test_currency_arithmetic_and_rounding() {
     );
 }
 
+#[cfg(feature = "number-scales")]
 #[test]
 fn test_currency_with_number_scales() {
     let three_million = eval("$3 million").unwrap();
@@ -241,6 +257,7 @@ fn test_currency_configuration() {
     assert_eq!(conv_back.to_display(), "$100");
 }
 
+#[cfg(feature = "number-scales")]
 #[test]
 fn test_a_million_dollars_and_articles() {
     // "a million dollars"
@@ -341,6 +358,7 @@ fn test_update_rates_from_json_and_daily_caching() {
     );
 }
 
+#[cfg(feature = "number-scales")]
 #[test]
 fn test_per_division_operator() {
     // "a thousand dollars per day"
@@ -402,6 +420,7 @@ fn test_rate_accumulation_in_duration() {
     assert_eq!(inv.to_display(), "[$40, $60]");
 }
 
+#[cfg(feature = "number-scales")]
 #[test]
 fn test_a_and_an_as_rate_division() {
     // "5 usd a second" represents 5 usd/s (not 5 usd*s)
