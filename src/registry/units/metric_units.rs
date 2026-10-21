@@ -8,7 +8,8 @@ use crate::{
             angle_units::register_angle_units, astronomical_units::register_astronomical_units,
             cgs_physics_units::register_cgs_physics_units,
             computing_niche_units::register_computing_niche_units,
-            derived_units::register_derived_units, humorous_units::register_humorous_units,
+            derived_units::register_derived_units,
+            engineering_units::register_engineering_units, humorous_units::register_humorous_units,
             imperial_units::register_imperial_units, nautical_units::register_nautical_units,
             speed_units::register_speed_units, storage_units::register_storage_units,
             temporal_units::register_temporal_units,
@@ -133,6 +134,7 @@ pub fn register_metric_units() -> HashMap<String, Arc<Unit>> {
     register_storage_units(&mut map);
     register_imperial_units(&mut map);
     register_derived_units(&mut map);
+    register_engineering_units(&mut map);
     register_speed_units(&mut map);
     register_volume_and_area_units(&mut map);
     register_angle_units(&mut map);
@@ -180,8 +182,16 @@ pub fn register_metric_units() -> HashMap<String, Arc<Unit>> {
         );
     }
 
+    // `as` is always the conversion keyword (e.g. `5 km as m`), never the attosecond.
+    // The attosecond remains available as `attosecond(s)`.
+    map.remove("as");
+
     map
 }
+
+/// The micro prefix as typed on most keyboards (U+00B5 MICRO SIGN), accepted as an alias of
+/// the canonical U+03BC GREEK SMALL LETTER MU used for display.
+const MICRO_SIGN: &str = "\u{b5}";
 
 /// Helper function to register metric prefixed units across modules.
 pub fn register_metric_prefixed_units(
@@ -205,6 +215,9 @@ pub fn register_metric_prefixed_units(
             format!("{}{}", pref.alias, base_alias),
             Arc::clone(&pref_unit),
         );
+        if pref.name == "micro" {
+            map.insert(format!("{MICRO_SIGN}{base_alias}"), Arc::clone(&pref_unit));
+        }
 
         if let Some(name) = base_name {
             map.insert(format!("{}{}", pref.name, name), Arc::clone(&pref_unit));

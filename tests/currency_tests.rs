@@ -1,4 +1,69 @@
+use abacus::registry::units::currency_units::FIXED_EXCHANGE_RATES;
 use abacus::{Abacus, AbacusError, eval};
+
+/// Bundled fallback `rate_per_usd` for `code`, so assertions don't hardcode a rate snapshot.
+fn rate(code: &str) -> f64 {
+    FIXED_EXCHANGE_RATES
+        .iter()
+        .find(|d| d.code == code)
+        .unwrap()
+        .rate_per_usd
+}
+
+/// Formats `amount` the way currency results are displayed: rounded to `decimals`
+/// with trailing zeros trimmed.
+fn money(amount: f64, decimals: usize) -> String {
+    let s = format!("{amount:.decimals$}");
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        s
+    }
+}
+
+/// Unique, self-cleaning temp path so tests never touch the user's real cache.
+struct TempCache(std::path::PathBuf);
+
+impl TempCache {
+    fn new(tag: &str) -> Self {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        Self(std::env::temp_dir().join(format!(
+            "abacus_test_{tag}_{}_{nanos}.json",
+            std::process::id()
+        )))
+    }
+}
+
+impl Drop for TempCache {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Today's UTC date as `YYYY-MM-DD` (civil-from-days), for cache freshness tests.
+fn today_iso() -> String {
+    let days = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            / 86_400,
+    )
+    .unwrap();
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
 
 #[test]
 fn test_basic_currencies() {
@@ -9,7 +74,7 @@ fn test_basic_currencies() {
     let eur = eval("50 EUR").unwrap();
     assert_eq!(eur.to_display(), "50 EUR");
     let eur_scalar = eur.into_scalar().unwrap();
-    assert!((eur_scalar.canonical - 50.0 / 0.86281).abs() < 1e-4);
+    assert!((eur_scalar.canonical - 50.0 / rate("EUR")).abs() < 1e-9);
 
     let gbp = eval("25 GBP").unwrap();
     assert_eq!(gbp.to_display(), "25 GBP");
@@ -56,8 +121,11 @@ fn test_currency_aliases() {
     let one_euro = eval("1 euro").unwrap();
     assert_eq!(one_euro.to_display(), "1 EUR");
 
-    let pounds = eval("20 pounds").unwrap();
-    assert_eq!(pounds.to_display(), "20 GBP");
+    // `pounds` is the mass unit; the currency is GBP / £ / quid / pound(s) sterling.
+    assert_eq!(eval("20 pounds").unwrap().to_display(), "20 lb");
+    assert_eq!(eval("20 quid").unwrap().to_display(), "20 GBP");
+    assert_eq!(eval("20 pounds sterling").unwrap().to_display(), "20 GBP");
+    assert_eq!(eval("1 pound sterling").unwrap().to_display(), "1 GBP");
 
     let yen = eval("5000 yen").unwrap();
     assert_eq!(yen.to_display(), "5000 JPY");
@@ -65,23 +133,29 @@ fn test_currency_aliases() {
 
 #[test]
 fn test_cross_currency_conversions() {
-    // 100 USD in EUR: 100 * 0.86281 = 86.281 EUR -> rounded to 2 decimals = 86.28 EUR
+    // 100 USD in EUR, rounded to 2 decimals
     let eur_conv = eval("100 USD in EUR").unwrap();
-    assert_eq!(eur_conv.to_display(), "86.28 EUR");
+    assert_eq!(
+        eur_conv.to_display(),
+        format!("{} EUR", money(100.0 * rate("EUR"), 2))
+    );
 
-    // 86.28 EUR in USD converts back to ~100 USD
+    // 86.28 EUR in USD (within display rounding of the exact value)
     let usd_conv = eval("86.28 EUR in USD").unwrap();
     let val = usd_conv.into_scalar().unwrap();
-    assert!((val.canonical - 100.0).abs() < 1e-1);
+    assert!((val.canonical - 86.28 / rate("EUR")).abs() <= 0.005 + 1e-9);
 
-    // 160.16 JPY in USD: 160.16 / 160.16 = 1 USD
-    let jpy_conv = eval("160.16 JPY in USD").unwrap();
+    // One USD worth of JPY converts back to exactly $1
+    let jpy_conv = eval(&format!("{} JPY in USD", rate("JPY"))).unwrap();
     let val_jpy = jpy_conv.into_scalar().unwrap();
-    assert!((val_jpy.canonical - 1.0).abs() < 1e-4);
+    assert!((val_jpy.canonical - 1.0).abs() < 1e-12);
 
-    // EUR to GBP: 100 EUR in GBP -> rounded to 2 decimals = 85.66 GBP
+    // EUR to GBP, rounded to 2 decimals
     let eur_to_gbp = eval("100 EUR in GBP").unwrap();
-    assert_eq!(eur_to_gbp.to_display(), "85.66 GBP");
+    assert_eq!(
+        eur_to_gbp.to_display(),
+        format!("{} GBP", money(100.0 / rate("EUR") * rate("GBP"), 2))
+    );
 }
 
 #[test]
@@ -96,16 +170,25 @@ fn test_currency_arithmetic_and_rounding() {
     let third = eval("$100 / 3").unwrap();
     assert_eq!(third.to_display(), "$33.33");
 
-    // Addition with cross-currency conversion: $50 + €20 in USD -> $73.18
+    // Addition with cross-currency conversion
     let mixed = eval("$50 + €20 in USD").unwrap();
-    assert_eq!(mixed.to_display(), "$73.18");
+    assert_eq!(
+        mixed.to_display(),
+        format!("${}", money(50.0 + 20.0 / rate("EUR"), 2))
+    );
 
     let mixed_in_eur = eval("(50 USD + 50 EUR) in EUR").unwrap();
-    assert_eq!(mixed_in_eur.to_display(), "93.14 EUR");
+    assert_eq!(
+        mixed_in_eur.to_display(),
+        format!("{} EUR", money(50.0 * rate("EUR") + 50.0, 2))
+    );
 
-    // Zero-decimal currency rounding: 50 EUR in JPY -> 9281 JPY
+    // Zero-decimal currency rounding for JPY
     let jpy_rounded = eval("50 EUR in JPY").unwrap();
-    assert_eq!(jpy_rounded.to_display(), "9281 JPY");
+    assert_eq!(
+        jpy_rounded.to_display(),
+        format!("{} JPY", money(50.0 / rate("EUR") * rate("JPY"), 0))
+    );
 }
 
 #[test]
@@ -118,7 +201,10 @@ fn test_currency_with_number_scales() {
     assert_eq!(five_billion.to_display(), "$2500");
 
     let conv = eval("$1 million in EUR").unwrap();
-    assert_eq!(conv.to_display(), "862810 EUR");
+    assert_eq!(
+        conv.to_display(),
+        format!("{} EUR", money(1e6 * rate("EUR"), 2))
+    );
 }
 
 #[test]
@@ -156,30 +242,6 @@ fn test_currency_configuration() {
 }
 
 #[test]
-fn test_update_rates_from_json() {
-    let json_response = r#"{
-        "amount": 1.0,
-        "base": "USD",
-        "date": "2026-09-01",
-        "rates": {
-            "EUR": 0.50,
-            "GBP": 0.25,
-            "JPY": 200.0
-        }
-    }"#;
-
-    let mut calc = Abacus::standard();
-    calc.update_rates_from_json(json_response).unwrap();
-
-    assert_eq!(calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
-    assert_eq!(calc.eval("100 USD in GBP").unwrap().to_display(), "25 GBP");
-    assert_eq!(
-        calc.eval("100 USD in JPY").unwrap().to_display(),
-        "20000 JPY"
-    );
-}
-
-#[test]
 fn test_a_million_dollars_and_articles() {
     // "a million dollars"
     let million_dollars = eval("a million dollars").unwrap();
@@ -191,7 +253,10 @@ fn test_a_million_dollars_and_articles() {
 
     // "a billion dollars in EUR"
     let billion_eur = eval("a billion dollars in EUR").unwrap();
-    assert_eq!(billion_eur.to_display(), "862810000 EUR");
+    assert_eq!(
+        billion_eur.to_display(),
+        format!("{} EUR", money(1e9 * rate("EUR"), 2))
+    );
 
     // "a dozen"
     assert_eq!(eval("a dozen").unwrap().to_display(), "12");
@@ -219,43 +284,46 @@ fn test_a_million_dollars_and_articles() {
 }
 
 #[test]
-fn test_daily_currency_caching() {
-    use std::time::{SystemTime, UNIX_EPOCH};
+fn test_update_rates_from_json_and_daily_caching() {
+    let cache = TempCache::new("daily_cache");
+    let cache_file = &cache.0;
 
-    let unique_id = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let cache_file = std::env::temp_dir().join(format!("abacus_test_cache_{unique_id}.json"));
-
-    // Ensure clean state
-    let _ = std::fs::remove_file(&cache_file);
-
-    let sample_json = r#"{
+    let sample_json = format!(
+        r#"{{
         "amount": 1.0,
         "base": "USD",
-        "date": "2026-09-01",
-        "rates": {
+        "date": "{}",
+        "rates": {{
             "EUR": 0.50,
             "GBP": 0.25,
             "JPY": 200.0
-        }
-    }"#;
+        }}
+    }}"#,
+        today_iso()
+    );
 
-    // 1. Initial calculation without cache uses fallback rates (EUR ~ 0.86281)
-    let calc = Abacus::standard();
-    let initial_eur = calc.eval("100 USD in EUR").unwrap();
-    assert_eq!(initial_eur.to_display(), "86.28 EUR");
+    // 1. A standard engine has no implicit cache path, so `update_rates_from_json` never
+    //    writes to the user's real cache.
+    let mut calc = Abacus::standard();
+    assert!(calc.currency_cache_path.is_none());
+    assert!(abacus::registry::units::currency_units::is_using_fallback_rates(&calc.units));
+    assert_eq!(
+        calc.eval("100 USD in EUR").unwrap().to_display(),
+        format!("{} EUR", money(100.0 * rate("EUR"), 2))
+    );
+    calc.update_rates_from_json(&sample_json).unwrap();
+    assert!(!abacus::registry::units::currency_units::is_using_fallback_rates(&calc.units));
+    assert_eq!(calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
 
-    // 2. Write to cache file and verify is_cache_fresh is true
-    let mut calc_cached = Abacus::standard().with_currency_cache(&cache_file);
-    calc_cached.update_rates_from_json(sample_json).unwrap();
+    // 2. Write to an explicit cache file and verify it is fresh
+    let mut calc_cached = Abacus::standard().with_currency_cache(cache_file);
+    calc_cached.update_rates_from_json(&sample_json).unwrap();
 
     assert!(cache_file.exists());
-    assert!(abacus::is_currency_cache_fresh(&cache_file));
+    assert!(abacus::is_currency_cache_fresh(cache_file));
 
     // 3. Create a new calc instance pointing to this cache and update daily rates
-    let mut new_calc = Abacus::standard().with_currency_cache(&cache_file);
+    let mut new_calc = Abacus::standard().with_currency_cache(cache_file);
     new_calc.update_daily_rates().unwrap();
 
     // Rates should now reflect the cached values: 100 USD = 50 EUR, 25 GBP, 20000 JPY
@@ -271,9 +339,6 @@ fn test_daily_currency_caching() {
         new_calc.eval("100 USD in JPY").unwrap().to_display(),
         "20000 JPY"
     );
-
-    // Clean up
-    let _ = std::fs::remove_file(&cache_file);
 }
 
 #[test]

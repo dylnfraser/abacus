@@ -140,10 +140,12 @@ fn get_history_path() -> Option<PathBuf> {
         .map(|h| PathBuf::from(h).join(".abacus_history"))
 }
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn print_welcome_banner(use_color: bool) {
     if use_color {
         println!("\x1b[1;36m=============================================================\x1b[0m");
-        println!("               \x1b[1;33mABACUS INTERACTIVE SHELL (1.0)\x1b[0m               ");
+        println!("               \x1b[1;33mABACUS INTERACTIVE SHELL ({VERSION})\x1b[0m");
         println!(" \x1b[1;34mType physical math expressions, date calculations, etc.\x1b[0m   ");
         println!(" \x1b[90mUse ↑/↓ Arrow Keys to navigate command history.\x1b[0m            ");
         println!(" \x1b[1;33mExamples:\x1b[0m                                                 ");
@@ -159,13 +161,13 @@ fn print_welcome_banner(use_color: bool) {
         println!(
             "    • \x1b[38;2;139;233;253msqrt(14 m^3)\x1b[0m                                       "
         );
-        println!(" \x1b[90mType '.help' for help, '.clear' to clear, 'exit' to leave.\x1b[0m");
+        println!(" \x1b[90mType 'help' for help, 'clear' to clear, 'exit' to leave.\x1b[0m");
         println!(
             "\x1b[1;36m=============================================================\x1b[0m\n"
         );
     } else {
         println!("=============================================================");
-        println!("               ABACUS INTERACTIVE SHELL (1.0)               ");
+        println!("               ABACUS INTERACTIVE SHELL ({VERSION})");
         println!(" Type physical math expressions, date calculations, etc.   ");
         println!(" Use ↑/↓ Arrow Keys to navigate command history.            ");
         println!(" Examples:                                                 ");
@@ -173,7 +175,7 @@ fn print_welcome_banner(use_color: bool) {
         println!("    • sin(30deg)                                          ");
         println!("    • last thursday at 3pm                                 ");
         println!("    • sqrt(14 m^3)                                       ");
-        println!(" Type '.help' for help, '.clear' to clear, 'exit' to leave.");
+        println!(" Type 'help' for help, 'clear' to clear, 'exit' to leave.");
         println!("=============================================================\n");
     }
 }
@@ -182,7 +184,7 @@ use rustyline::ColorMode;
 
 fn main() {
     let use_color = std::io::stdout().is_terminal();
-    let calc = Abacus::standard();
+    let mut calc = Abacus::standard();
     let config = Config::builder()
         .color_mode(if use_color {
             ColorMode::Forced
@@ -239,7 +241,7 @@ fn main() {
                     break;
                 }
 
-                if trimmed == "clear" {
+                if trimmed == "clear" || trimmed == ".clear" {
                     if use_color {
                         print!("\x1b[2J\x1b[1;1H");
                         let _ = std::io::stdout().flush();
@@ -248,7 +250,7 @@ fn main() {
                     continue;
                 }
 
-                if trimmed == "help" {
+                if trimmed == "help" || trimmed == ".help" {
                     if use_color {
                         println!("\x1b[38;2;189;147;249m  Abacus REPL Commands & Syntax:\x1b[0m");
                     } else {
@@ -256,11 +258,13 @@ fn main() {
                     }
                     println!("    help       Show this help summary");
                     println!("    clear      Clear the terminal screen");
-                    println!("    :q / exit  Exit the REPL\n");
+                    println!("    x = expr   Assign a variable for later expressions");
+                    println!("    Ctrl-C     Discard the current line");
+                    println!("    Ctrl-D / :q / exit  Exit the REPL\n");
                     continue;
                 }
 
-                match calc.eval(trimmed) {
+                match calc.eval_mut(trimmed) {
                     Ok(result) => {
                         let formatted = format_repl_result(&result);
                         if use_color {
@@ -278,14 +282,8 @@ fn main() {
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) => {
-                if use_color {
-                    println!("\x1b[33mCTRL-C\x1b[0m");
-                } else {
-                    println!("CTRL-C");
-                }
-                break;
-            }
+            // Ctrl-C discards the current line (like a shell); Ctrl-D exits.
+            Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => {
                 if use_color {
                     println!("\x1b[33mGoodbye!\x1b[0m");

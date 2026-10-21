@@ -113,16 +113,9 @@ impl Abacus {
             number_scales: cfg!(feature = "number-scales"),
             currencies: cfg!(feature = "currencies"),
             live_rates: false,
-            currency_cache_path: {
-                #[cfg(feature = "currencies")]
-                {
-                    Some(crate::registry::units::currency_units::default_currency_cache_path())
-                }
-                #[cfg(not(feature = "currencies"))]
-                {
-                    None
-                }
-            },
+            // No implicit disk writes: `update_rates_from_json` only persists when a cache path
+            // is configured. Live-rate methods fall back to `default_currency_cache_path()`.
+            currency_cache_path: None,
             unit_display_overrides: HashMap::new(),
             variables: HashMap::new(),
             anchor_date: None,

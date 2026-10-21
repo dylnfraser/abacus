@@ -62,7 +62,7 @@ fn test_unusual_niche_and_humorous_units() {
 
     // Typography
     let pica = eval("1 pica to point").unwrap();
-    assert_eq!(pica.to_display(), "12 pt_type");
+    assert_eq!(pica.to_display(), "12 point");
 }
 
 #[test]
