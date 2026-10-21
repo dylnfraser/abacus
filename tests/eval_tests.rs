@@ -183,19 +183,19 @@ fn test_probability_distributions() {
         .eval_scalar("normcdf(0)")
         .unwrap()
         .canonical;
-    assert!((result - 0.5).abs() < 1e-5);
+    assert_eq!(result, 0.5);
 
     let norm_val = Abacus::standard()
         .eval_scalar("normcdf(70 kg, 65 kg, 5 kg)")
         .unwrap()
         .canonical;
-    assert!((norm_val - 0.8413447).abs() < 1e-4);
+    assert!((norm_val - 0.841_344_746_068_542_9).abs() < 1e-15);
 
     let invnorm_val = Abacus::standard()
         .eval_scalar("invnorm(0.975)")
         .unwrap()
         .canonical;
-    assert!((invnorm_val - 1.95996).abs() < 1e-3);
+    assert!((invnorm_val - 1.959_963_984_540_054).abs() < 1e-14);
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn test_financial_functions() {
         .eval_scalar("pmt(0.05 / 12, 360, 200000)")
         .unwrap()
         .canonical;
-    assert!((pmt_val - (-1073.64)).abs() < 1e-1);
+    assert!((pmt_val - (-1_073.643_246_024_279_5)).abs() < 1e-9);
 }
 
 #[test]

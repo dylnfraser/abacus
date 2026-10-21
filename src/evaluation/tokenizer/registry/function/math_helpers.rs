@@ -1,4 +1,8 @@
-use crate::{AbacusError, Value, evaluation::tokenizer::registry::function::operators::FunctionOp};
+use crate::{
+    AbacusError, Value,
+    evaluation::tokenizer::registry::function::operators::FunctionOp,
+    units::unit::{Unit, UnitExpr},
+};
 use std::sync::Arc;
 
 /// Validates that all values in the slice are dimensionless.
@@ -10,6 +14,80 @@ pub fn check_dimensionless(args: &[Value]) -> Result<(), AbacusError> {
     }
 }
 
+/// Returns the unit to use for a *difference* (spread) of values measured in `unit`.
+///
+/// For affine units such as °C or °F, a difference is not itself a temperature reading, so it
+/// is reported in kelvin (the canonical temperature unit). Other units are returned unchanged.
+#[must_use]
+pub fn delta_unit(unit: &Arc<Unit>) -> Arc<Unit> {
+    if unit.is_affine() {
+        Arc::new(Unit {
+            dimensions: unit.dimensions,
+            scalar: 1.0,
+            offset: 0.0,
+            display: UnitExpr::single("K"),
+        })
+    } else {
+        Arc::clone(unit)
+    }
+}
+
+/// Interprets a value as a difference/spread (e.g. a standard deviation) and returns its
+/// canonical magnitude. For affine units, `2 °C` as a spread means 2 K, not 275.15 K.
+#[inline]
+#[must_use]
+pub fn delta_canonical(value: &Value) -> f64 {
+    value.canonical - value.unit.offset
+}
+
+/// Validates a strictly positive spread parameter (σ, s) with units compatible with `unit`,
+/// returning its canonical magnitude.
+pub fn positive_spread(value: &Value, unit: &Unit) -> Result<f64, AbacusError> {
+    if !value.unit.is_compatible_with(unit) {
+        return Err(AbacusError::IncompatibleDimensions);
+    }
+    let s = delta_canonical(value);
+    if !(s > 0.0 && s.is_finite()) {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(s)
+}
+
+/// Largest integer that f64 represents exactly (2^53).
+const MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
+
+/// Returns `x` as a non-negative integer, rejecting fractional, negative, non-finite, or
+/// inexact (> 2^53) input with `IncompatibleFunctionArguments`.
+///
+/// Error convention for the function registry: invalid *arguments* (out of domain, wrong
+/// sign, non-integer) are `IncompatibleFunctionArguments`; failures of the *computation*
+/// (overflow, non-convergence, an undefined result) are `EvaluationError` with a message.
+pub fn non_negative_integer(x: f64) -> Result<u64, AbacusError> {
+    let rounded = x.round();
+    if !x.is_finite() || rounded < 0.0 || (x - rounded).abs() > 1e-9 || rounded > MAX_EXACT_INTEGER
+    {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(rounded as u64)
+}
+
+/// Validates a dimensionless, non-negative integer argument.
+pub fn integer_arg(value: &Value) -> Result<u64, AbacusError> {
+    if !value.unit.is_dimensionless() {
+        return Err(AbacusError::IncompatibleDimensions);
+    }
+    non_negative_integer(value.canonical)
+}
+
+/// Validates a sample-size argument `n`: dimensionless integer ≥ `min`.
+pub fn sample_size(value: &Value, min: u64) -> Result<f64, AbacusError> {
+    let n = integer_arg(value)?;
+    if n < min {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    Ok(n as f64)
+}
+
 fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
     while b != 0 {
         let t = b;
@@ -19,12 +97,19 @@ fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
-fn lcm_u64(a: u64, b: u64) -> u64 {
+fn lcm_u64(a: u64, b: u64) -> Option<u64> {
     if a == 0 || b == 0 {
-        0
+        Some(0)
     } else {
-        (a / gcd_u64(a, b)) * b
+        (a / gcd_u64(a, b)).checked_mul(b)
     }
+}
+
+fn integer_magnitude(value: &Value) -> Result<u64, AbacusError> {
+    if !value.unit.is_dimensionless() {
+        return Err(AbacusError::IncompatibleDimensions);
+    }
+    non_negative_integer(value.canonical.abs())
 }
 
 /// clamp(x, min, max) — clamps x within [min, max]
@@ -64,41 +149,50 @@ fn clamp_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// gcd(a, b) — Greatest Common Divisor
+/// gcd(a, b) — Greatest Common Divisor of two integers
 fn gcd_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-    let a = args[0].canonical.abs().round() as u64;
-    let b = args[1].canonical.abs().round() as u64;
+    let a = integer_magnitude(&args[0])?;
+    let b = integer_magnitude(&args[1])?;
     Ok(Value::dimensionless(gcd_u64(a, b) as f64))
 }
 
-/// lcm(a, b) — Least Common Multiple
+/// lcm(a, b) — Least Common Multiple of two integers; errors if the result overflows u64.
 fn lcm_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-    let a = args[0].canonical.abs().round() as u64;
-    let b = args[1].canonical.abs().round() as u64;
-    Ok(Value::dimensionless(lcm_u64(a, b) as f64))
+    let a = integer_magnitude(&args[0])?;
+    let b = integer_magnitude(&args[1])?;
+    let l = lcm_u64(a, b)
+        .ok_or_else(|| AbacusError::EvaluationError("lcm result overflows".to_string()))?;
+    Ok(Value::dimensionless(l as f64))
 }
 
-/// `modulo_fn(a`, b) — Unit-aware modulo calculation
+/// Unit-aware floored modulo: `a - b * floor(a / b)`.
+///
+/// The result has the sign of the divisor (like Excel's `MOD` and Python's `%`), so
+/// `mod(-7, 3) = 2`. The calculation is done in canonical units, so `mod(1 m, 30 cm)` is
+/// `0.1 m`; the result is expressed in the unit of `a`. A dimensionless divisor applied to a
+/// dimensional `a` is interpreted in `a`'s unit (`mod(7 m, 3) = 1 m`).
 pub fn compute_modulo(a: &Value, b: &Value) -> Result<Value, AbacusError> {
     if a.unit.is_affine() || b.unit.is_affine() {
         return Err(AbacusError::AffineUnitOperation("modulo"));
     }
 
-    if a.unit.is_compatible_with(&b.unit)
-        || (b.unit.is_dimensionless() && !a.unit.is_dimensionless())
-    {
-        let a_amount = a.amount();
-        let b_amount = b.amount();
-        if b_amount == 0.0 {
-            return Err(AbacusError::IncompatibleFunctionArguments);
-        }
-        let rem_amount = a_amount % b_amount;
-        Ok(Value::new(rem_amount, Arc::clone(&a.unit)))
+    let divisor = if a.unit.is_compatible_with(&b.unit) {
+        b.canonical
+    } else if b.unit.is_dimensionless() {
+        b.canonical * a.unit.scalar
     } else {
-        Err(AbacusError::IncompatibleDimensions)
+        return Err(AbacusError::IncompatibleDimensions);
+    };
+
+    if divisor == 0.0 || !divisor.is_finite() || !a.canonical.is_finite() {
+        return Err(AbacusError::IncompatibleFunctionArguments);
     }
+
+    let mut rem = a.canonical % divisor;
+    if rem != 0.0 && (rem < 0.0) != (divisor < 0.0) {
+        rem += divisor;
+    }
+    Ok(Value::from_canonical(rem, Arc::clone(&a.unit)))
 }
 
 fn modulo_fn(args: &[Value]) -> Result<Value, AbacusError> {

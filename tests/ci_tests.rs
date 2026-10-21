@@ -18,19 +18,21 @@ fn test_section3_confidence_intervals_expanded() {
     let t_int = calc.eval("TInterval(10 m, 12 m, 11 m, 14 m)").unwrap();
     assert!(t_int.to_display().contains("m"));
 
-    // ZInterval(100 m, 15 m, 100) -> [97.06 m, 102.94 m]
+    // ZInterval(100 m, 15 m, 100) -> [97.06 m, 102.94 m]; z* = 1.959963984540054
     let z_int = calc.eval("ZInterval(100 m, 15 m, 100)").unwrap();
     assert_eq!(
         z_int.to_display(),
-        "[97.06142659296519 m, 102.93857340703481 m]"
+        "[97.06005402318992 m, 102.93994597681008 m]"
     );
 
-    // 1-PropZInt(45, 100)
+    // 1-PropZInt(45, 100) — Wald interval, as on the TI-84
     let prop_int = calc.eval("1-PropZInt(45, 100)").unwrap();
-    assert_eq!(
-        prop_int.to_display(),
-        "[0.35618676253533, 0.5475092615069975]"
-    );
+    if let EvalResult::Interval(interval) = prop_int {
+        assert!((interval.lo.canonical - 0.352_493_022_910_060_6).abs() < 1e-14);
+        assert!((interval.hi.canonical - 0.547_506_977_089_939_5).abs() < 1e-14);
+    } else {
+        panic!("Expected interval result");
+    }
 
     // 2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)
     let samp2_int = calc
@@ -54,12 +56,12 @@ fn test_ti84_t_interval_sample_data() {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
         let hi = (interval.hi.canonical - interval.hi.unit.offset) / interval.hi.unit.scalar;
         assert!(
-            (lo - 9.0326).abs() < 0.05,
+            (lo - 9.032_469_116_203_982).abs() < 1e-12,
             "lo should be ~9.03 m, got {}",
             lo
         );
         assert!(
-            (hi - 14.4674).abs() < 0.05,
+            (hi - 14.467_530_883_796_018).abs() < 1e-12,
             "hi should be ~14.47 m, got {}",
             hi
         );
@@ -70,8 +72,8 @@ fn test_ti84_t_interval_sample_data() {
 
 #[test]
 fn test_ti84_t_interval_summary_stats() {
-    // Tests TInterval with summary statistics: TInterval(100 m, 15 m, 25)
-    let result = eval("TInterval(100 m, 15 m, 25)").unwrap();
+    // Tests TIntervalStats with summary statistics: TIntervalStats(100 m, 15 m, 25)
+    let result = eval("TIntervalStats(100 m, 15 m, 25)").unwrap();
     let display = result.to_display();
     assert!(
         display.contains("m"),
@@ -83,12 +85,12 @@ fn test_ti84_t_interval_summary_stats() {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
         let hi = (interval.hi.canonical - interval.hi.unit.offset) / interval.hi.unit.scalar;
         assert!(
-            (lo - 93.8083).abs() < 0.05,
+            (lo - 93.808_304_315_115_92).abs() < 1e-11,
             "lo should be ~93.81, got {}",
             lo
         );
         assert!(
-            (hi - 106.1917).abs() < 0.05,
+            (hi - 106.191_695_684_884_08).abs() < 1e-11,
             "hi should be ~106.19, got {}",
             hi
         );
@@ -106,9 +108,13 @@ fn test_ti84_z_interval_summary_stats() {
     if let EvalResult::Interval(interval) = result {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
         let hi = (interval.hi.canonical - interval.hi.unit.offset) / interval.hi.unit.scalar;
-        assert!((lo - 97.06).abs() < 0.05, "lo should be ~97.06, got {}", lo);
         assert!(
-            (hi - 102.94).abs() < 0.05,
+            (lo - 97.060_054_023_189_92).abs() < 1e-11,
+            "lo should be ~97.06, got {}",
+            lo
+        );
+        assert!(
+            (hi - 102.939_945_976_810_08).abs() < 1e-11,
             "hi should be ~102.94, got {}",
             hi
         );
@@ -129,8 +135,16 @@ fn test_ti84_1_prop_z_int() {
     if let EvalResult::Interval(interval) = result1 {
         let lo = interval.lo.canonical;
         let hi = interval.hi.canonical;
-        assert!((lo - 0.355).abs() < 0.02, "lo should be ~0.355, got {}", lo);
-        assert!((hi - 0.548).abs() < 0.02, "hi should be ~0.548, got {}", hi);
+        assert!(
+            (lo - 0.352_493_022_910_060_6).abs() < 1e-14,
+            "lo should be ~0.3525, got {}",
+            lo
+        );
+        assert!(
+            (hi - 0.547_506_977_089_939_5).abs() < 1e-14,
+            "hi should be ~0.5475, got {}",
+            hi
+        );
     } else {
         panic!("Expected interval result");
     }
@@ -153,9 +167,13 @@ fn test_ti84_2_samp_t_int() {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
         let hi = (interval.hi.canonical - interval.hi.unit.offset) / interval.hi.unit.scalar;
         // mean diff = 10 m, Welch df ≈ 41.3, SE ≈ 3.51 m, t*(95%) ≈ 2.02, MoE ≈ 7.09 m -> [2.91 m, 17.09 m]
-        assert!((lo - 2.91).abs() < 0.5, "lo should be ~2.91 m, got {}", lo);
         assert!(
-            (hi - 17.09).abs() < 0.5,
+            (lo - 2.904_810_776_916_694).abs() < 1e-11,
+            "lo should be ~2.90 m, got {}",
+            lo
+        );
+        assert!(
+            (hi - 17.095_189_223_083_306).abs() < 1e-11,
             "hi should be ~17.09 m, got {}",
             hi
         );
@@ -174,8 +192,16 @@ fn test_ti84_2_samp_z_int() {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
         let hi = (interval.hi.canonical - interval.hi.unit.offset) / interval.hi.unit.scalar;
         // mean diff = 10 m, SE = sqrt(2.25 + 2.0) ≈ 2.55 m, z*(95%) ≈ 1.96, MoE ≈ 5.0 m -> [5.0 m, 15.0 m]
-        assert!((lo - 5.0).abs() < 0.5, "lo should be ~5.0 m, got {}", lo);
-        assert!((hi - 15.0).abs() < 0.5, "hi should be ~15.0 m, got {}", hi);
+        assert!(
+            (lo - 5.003_052_698_445_598).abs() < 1e-11,
+            "lo should be ~5.0 m, got {}",
+            lo
+        );
+        assert!(
+            (hi - 14.996_947_301_554_401).abs() < 1e-11,
+            "hi should be ~15.0 m, got {}",
+            hi
+        );
     } else {
         panic!("Expected interval result");
     }
@@ -191,8 +217,16 @@ fn test_ti84_2_prop_z_int() {
         let lo = interval.lo.canonical;
         let hi = interval.hi.canonical;
         // p1 = 0.45, p2 = 0.30, diff = 0.15, SE ≈ 0.0676, z*(95%) ≈ 1.96, MoE ≈ 0.132 -> [0.018, 0.282]
-        assert!((lo - 0.018).abs() < 0.02, "lo should be ~0.018, got {}", lo);
-        assert!((hi - 0.282).abs() < 0.02, "hi should be ~0.282, got {}", hi);
+        assert!(
+            (lo - 0.017_430_493_307_564_77).abs() < 1e-14,
+            "lo should be ~0.0174, got {}",
+            lo
+        );
+        assert!(
+            (hi - 0.282_569_506_692_435_2).abs() < 1e-14,
+            "hi should be ~0.2826, got {}",
+            hi
+        );
     } else {
         panic!("Expected interval result");
     }
@@ -204,15 +238,15 @@ fn test_ti84_2_prop_z_int() {
 fn test_moe_scalar_margin_of_error() {
     let moe_val = eval_scalar("moe(10 m, 12 m, 11 m, 14 m)").unwrap();
     assert_eq!(moe_val.unit.display.render(), "m");
-    assert!((moe_val.canonical - 2.7174).abs() < 0.05);
+    assert!((moe_val.canonical - 2.717_530_883_796_017).abs() < 1e-12);
 
     let tmoe_val = eval_scalar("tmoe(15 m, 25)").unwrap();
     assert_eq!(tmoe_val.unit.display.render(), "m");
-    assert!((tmoe_val.canonical - 6.1917).abs() < 0.05);
+    assert!((tmoe_val.canonical - 6.191_695_684_884_078).abs() < 1e-12);
 
     let zmoe_val = eval_scalar("zmoe(15 m, 100)").unwrap();
     assert_eq!(zmoe_val.unit.display.render(), "m");
-    assert!((zmoe_val.canonical - 2.94).abs() < 0.05);
+    assert!((zmoe_val.canonical - 2.939_945_976_810_081).abs() < 1e-13);
 }
 
 // ── Interval arithmetic with TI-84 Confidence Intervals ──

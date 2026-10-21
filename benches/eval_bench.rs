@@ -40,7 +40,7 @@ fn bench_complex_expressions(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_expressions");
     group.bench_function("z_test", |b| {
         b.iter(|| {
-            let res = eval(black_box("ZTest(10 m, 2 m, 12 m, 14 m, 10 m, 16 m)"))
+            let res = eval(black_box("ZTestData(10 m, 2 m, 12 m, 14 m, 10 m, 16 m)"))
                 .expect("evaluation succeeds");
             black_box(res);
         })

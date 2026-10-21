@@ -1,66 +1,69 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        check_dimensionless,
-        distributions::special::{factorial, n_cr},
+        distributions::special::{factorial, lgamma, n_cr},
+        math_helpers::integer_arg,
         operators::FunctionOp,
     },
 };
 
+fn overflow(what: &str) -> AbacusError {
+    AbacusError::EvaluationError(format!("{what} result overflows"))
+}
+
+/// Number of r-permutations of n, n!/(n-r)!; `inf` on overflow.
 fn n_pr(n: u64, r: u64) -> f64 {
     if r > n {
         return 0.0;
     }
-    ((n - r + 1)..=n).fold(1.0, |acc, x| acc * (x as f64))
+    if r <= 200 {
+        return ((n - r + 1)..=n).fold(1.0, |acc, x| acc * (x as f64));
+    }
+    let ln_p = lgamma(n as f64 + 1.0) - lgamma((n - r) as f64 + 1.0);
+    if ln_p > f64::MAX.ln() {
+        f64::INFINITY
+    } else {
+        ln_p.exp().round()
+    }
 }
 
-/// factorial(n)
-fn factorial_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-    let n_val = args[0].canonical;
-    if n_val < 0.0 || !n_val.is_finite() || n_val > 170.0 {
+/// Parses `(n, r)` as integers with 0 ≤ r ≤ n.
+fn parse_n_r(args: &[Value]) -> Result<(u64, u64), AbacusError> {
+    let n = integer_arg(&args[0])?;
+    let r = integer_arg(&args[1])?;
+    if r > n {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
-    let n = n_val.round() as u64;
+    Ok((n, r))
+}
+
+/// factorial(n) for integer 0 ≤ n ≤ 170 (171! overflows f64).
+fn factorial_fn(args: &[Value]) -> Result<Value, AbacusError> {
+    let n = integer_arg(&args[0])?;
+    if n > 170 {
+        return Err(overflow("factorial"));
+    }
     Ok(Value::dimensionless(factorial(n)))
 }
 
 /// nCr(n, r) or comb(n, r)
 fn n_cr_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-    let n_val = args[0].canonical;
-    let r_val = args[1].canonical;
-    if n_val < 0.0
-        || r_val < 0.0
-        || r_val > n_val
-        || !n_val.is_finite()
-        || !r_val.is_finite()
-        || n_val > 1000.0
-    {
-        return Err(AbacusError::IncompatibleFunctionArguments);
+    let (n, r) = parse_n_r(args)?;
+    let c = n_cr(n, r);
+    if c.is_infinite() {
+        return Err(overflow("nCr"));
     }
-    let n = n_val.round() as u64;
-    let r = r_val.round() as u64;
-    Ok(Value::dimensionless(n_cr(n, r)))
+    Ok(Value::dimensionless(c))
 }
 
 /// nPr(n, r) or perm(n, r)
 fn n_pr_fn(args: &[Value]) -> Result<Value, AbacusError> {
-    check_dimensionless(args)?;
-    let n_val = args[0].canonical;
-    let r_val = args[1].canonical;
-    if n_val < 0.0
-        || r_val < 0.0
-        || r_val > n_val
-        || !n_val.is_finite()
-        || !r_val.is_finite()
-        || n_val > 170.0
-    {
-        return Err(AbacusError::IncompatibleFunctionArguments);
+    let (n, r) = parse_n_r(args)?;
+    let p = n_pr(n, r);
+    if p.is_infinite() {
+        return Err(overflow("nPr"));
     }
-    let n = n_val.round() as u64;
-    let r = r_val.round() as u64;
-    Ok(Value::dimensionless(n_pr(n, r)))
+    Ok(Value::dimensionless(p))
 }
 
 pub fn register_combinatorics() -> Vec<FunctionOp> {

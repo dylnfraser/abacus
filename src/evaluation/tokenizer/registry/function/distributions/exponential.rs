@@ -29,7 +29,7 @@ fn expcdf_fn(args: &[Value]) -> Result<Value, AbacusError> {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 
-    let cdf = 1.0 - (-lambda * x).exp();
+    let cdf = -(-lambda * x).exp_m1();
     Ok(Value::dimensionless(cdf))
 }
 
@@ -44,7 +44,7 @@ fn invexp_fn(args: &[Value]) -> Result<Value, AbacusError> {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 
-    let x = -(1.0 - p).ln() / lambda;
+    let x = -(-p).ln_1p() / lambda;
     Ok(Value::dimensionless(x))
 }
 
