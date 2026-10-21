@@ -492,8 +492,18 @@ impl Interval {
 
     /// Simplify the unit display on both endpoints.
     pub fn simplify_unit_display(&mut self, registry: &UnitRegistry) {
-        self.lo.simplify_unit_display(registry);
-        self.hi.simplify_unit_display(registry);
+        self.simplify_unit_display_with_options(registry, true);
+    }
+
+    pub(crate) fn simplify_unit_display_with_options(
+        &mut self,
+        registry: &UnitRegistry,
+        consolidate: bool,
+    ) {
+        self.lo
+            .simplify_unit_display_with_options(registry, consolidate);
+        self.hi
+            .simplify_unit_display_with_options(registry, consolidate);
     }
 
     /// Render the interval as `[lo, hi]` or `lo..hi` depending on style.

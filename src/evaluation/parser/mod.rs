@@ -73,7 +73,12 @@ pub fn evaluate_with_variables(
     let mut parser =
         Parser::new_with_variables(&tokens, token_registry, unit_registry, variables, config);
     let result = parser.parse()?;
-    if parser.has_explicit_conversion || !parser.config.auto_derived {
+    if parser.has_explicit_conversion {
+        // Keep the unit the user asked for instead of merging it into another.
+        let mut result = result;
+        result.simplify_unit_display_with_options(unit_registry, false);
+        Ok(result)
+    } else if !parser.config.auto_derived {
         let mut result = result;
         result.simplify_unit_display(unit_registry);
         Ok(result)

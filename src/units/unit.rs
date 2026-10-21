@@ -214,8 +214,8 @@ impl UnitExpr {
                 .iter()
                 .position(|unit| unit == &self.numerator[numerator_index])
             {
-                self.numerator.swap_remove(numerator_index);
-                self.denominator.swap_remove(denominator_index);
+                self.numerator.remove(numerator_index);
+                self.denominator.remove(denominator_index);
             } else {
                 numerator_index += 1;
             }
@@ -286,41 +286,74 @@ impl std::fmt::Display for UnitList<'_> {
     }
 }
 
+/// Largest scale ratio between two units that may be merged for display. Beyond this,
+/// converting into the leading unit produces amounts that round to zero or show
+/// spurious precision (e.g. `au*cm`), so the units are left as written.
+const MAX_CONSOLIDATION_RATIO: f64 = 1e6;
+
+/// Whether a unit has a fixed, well-defined conversion factor that makes it safe to
+/// fold into another unit of the same dimension purely for display.
+fn is_consolidatable(sym: &str, unit: &Unit) -> bool {
+    !unit.dimensions.is_dimensionless()
+        && unit.dimensions != crate::units::dimensions::Dimensions::CURRENCY
+        && unit.offset == 0.0
+        && unit.scalar.is_finite()
+        && unit.scalar > 0.0
+        && !crate::registry::units::temporal_units::is_business_day_symbol(sym)
+}
+
 impl Unit {
     /// Simplifies this unit's display: cancels same-dimension units between numerator and
     /// denominator (`km/m` → dimensionless), relabels same-dimension units to the leading one
     /// (`m*ft` → `m^2`), and merges powers. The scalar is recomputed from the final display
     /// when every symbol is known, avoiding accumulated rounding noise.
     pub fn simplify_display_with(&self, lookup: impl Fn(&str) -> Option<Arc<Unit>>) -> Unit {
+        self.simplify_display_with_options(lookup, true)
+    }
+
+    /// Simplifies the display expression. When `consolidate` is false, units of the same
+    /// dimension are kept as written (used when the user explicitly requested a unit).
+    pub(crate) fn simplify_display_with_options(
+        &self,
+        lookup: impl Fn(&str) -> Option<Arc<Unit>>,
+        consolidate: bool,
+    ) -> Unit {
         let mut scalar = self.scalar;
         let mut display = self.display.clone();
         display.numerator.retain(|u| u != "dimensionless");
         display.denominator.retain(|u| u != "dimensionless");
         let mut display = display.simplified();
 
+        // Cancel numerator/denominator pairs that share a dimension, preserving symbol order.
         let mut num_idx = 0;
         while num_idx < display.numerator.len() {
-            let mut matched = false;
-            if let Some(un1) = lookup(&display.numerator[num_idx]) {
-                for den_idx in 0..display.denominator.len() {
-                    if let Some(un2) = lookup(&display.denominator[den_idx])
-                        && un1.dimensions == un2.dimensions
-                    {
-                        scalar *= un2.scalar / un1.scalar;
-                        display.numerator.swap_remove(num_idx);
-                        display.denominator.swap_remove(den_idx);
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-            if !matched {
+            let matched = lookup(&display.numerator[num_idx]).and_then(|un1| {
+                display
+                    .denominator
+                    .iter()
+                    .enumerate()
+                    .find_map(|(den_idx, sym)| {
+                        let un2 = lookup(sym)?;
+                        (un1.dimensions == un2.dimensions
+                            && un1.scalar.is_finite()
+                            && un1.scalar != 0.0
+                            && un2.scalar.is_finite())
+                        .then(|| (den_idx, un2.scalar / un1.scalar))
+                    })
+            });
+            if let Some((den_idx, ratio)) = matched {
+                scalar *= ratio;
+                display.numerator.remove(num_idx);
+                display.denominator.remove(den_idx);
+            } else {
                 num_idx += 1;
             }
         }
 
-        consolidate(&mut display.numerator, &lookup, &mut scalar, false);
-        consolidate(&mut display.denominator, &lookup, &mut scalar, true);
+        if consolidate {
+            consolidate_same_dimension(&mut display.numerator, &lookup, &mut scalar, false);
+            consolidate_same_dimension(&mut display.denominator, &lookup, &mut scalar, true);
+        }
         let display = display.simplified();
 
         if let Some(exact) = scalar_from_display(&display, &lookup)
@@ -437,8 +470,10 @@ fn relative_close(a: f64, b: f64, tol: f64) -> bool {
 }
 
 /// Relabels units in `list` that share dimensions with an earlier unit to that unit,
-/// adjusting `scalar` accordingly.
-fn consolidate(
+/// adjusting `scalar` accordingly. Units without a fixed linear factor (currencies, affine
+/// temperatures, business days) and pairs whose scales differ by more than
+/// [`MAX_CONSOLIDATION_RATIO`] are left as written.
+fn consolidate_same_dimension(
     list: &mut [String],
     lookup: &impl Fn(&str) -> Option<Arc<Unit>>,
     scalar: &mut f64,
@@ -448,7 +483,7 @@ fn consolidate(
         let Some(target_un) = lookup(&list[i]) else {
             continue;
         };
-        if target_un.dimensions.is_dimensionless() || !target_un.scalar.is_finite() {
+        if !is_consolidatable(&list[i], &target_un) {
             continue;
         }
         for j in (i + 1)..list.len() {
@@ -457,8 +492,9 @@ fn consolidate(
             }
             if let Some(other_un) = lookup(&list[j])
                 && target_un.dimensions == other_un.dimensions
-                && other_un.scalar != 0.0
-                && other_un.scalar.is_finite()
+                && is_consolidatable(&list[j], &other_un)
+                && (1.0 / MAX_CONSOLIDATION_RATIO..=MAX_CONSOLIDATION_RATIO)
+                    .contains(&(target_un.scalar / other_un.scalar))
             {
                 let ratio = target_un.scalar / other_un.scalar;
                 if in_denominator {

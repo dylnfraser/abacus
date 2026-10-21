@@ -1192,4 +1192,110 @@ mod tests {
         assert_eq!(crate::eval("2 ft * 6 in").unwrap().to_display(), "1 ft^2");
         assert_eq!(crate::eval("5 h * 30 min").unwrap().to_display(), "2.5 h^2");
     }
+
+    #[cfg(feature = "units")]
+    fn display_and_amount(expr: &str) -> (String, f64) {
+        match crate::eval(expr).unwrap() {
+            EvalResult::Scalar(v) => (v.to_display(), v.amount()),
+            other => panic!("expected scalar for {expr}, got {other:?}"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn explicit_conversion_target_is_not_consolidated() {
+        assert_eq!(
+            crate::eval("1 km * 1 m to km*m").unwrap().to_display(),
+            "1 km*m"
+        );
+        assert_eq!(
+            crate::eval("100 km/h / 5 s to km/h/s")
+                .unwrap()
+                .to_display(),
+            "20 km/h*s"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn denominator_only_units_are_kept() {
+        assert_eq!(crate::eval("2 / 1 km").unwrap().to_display(), "2 1/km");
+        assert_eq!(
+            crate::eval("1 / 5 s to 1/s").unwrap().to_display(),
+            "0.2 1/s"
+        );
+        assert_eq!(
+            crate::eval("1 / (1 km * 1 m)").unwrap().to_display(),
+            "1000 1/km^2"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn consolidation_uses_first_written_unit_after_cancellation() {
+        assert_eq!(
+            crate::eval("2 s * 3 km * 4 m / 1 s").unwrap().to_display(),
+            "0.024 km^2"
+        );
+        assert_eq!(
+            crate::eval("2 km * 3 s * 4 m / 1 s").unwrap().to_display(),
+            "0.024 km^2"
+        );
+        assert_eq!(
+            crate::eval("1 m * 1 km * 1 cm / 1 mm")
+                .unwrap()
+                .to_display(),
+            "0.01 km^2"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn units_with_very_different_scales_are_not_consolidated() {
+        assert_eq!(crate::eval("1 au * 1 cm").unwrap().to_display(), "1 au*cm");
+        assert_eq!(crate::eval("1 mm * 1 ly").unwrap().to_display(), "1 mm*ly");
+        assert_eq!(
+            crate::eval("1 km * 1 mm").unwrap().to_display(),
+            "0.000001 km^2"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn consolidation_does_not_add_float_noise() {
+        assert_eq!(
+            display_and_amount("1 L * 1 mL"),
+            ("0.001 L^2".to_string(), 0.001)
+        );
+        assert_eq!(
+            display_and_amount("2 ft * 6 in"),
+            ("1 ft^2".to_string(), 1.0)
+        );
+        assert_eq!(display_and_amount("1 ft * 1 in").1, 1.0 / 12.0);
+    }
+
+    #[test]
+    #[cfg(all(feature = "units", feature = "currencies", feature = "date"))]
+    fn currencies_and_business_days_are_not_consolidated() {
+        assert_eq!(
+            crate::eval("5 USD * 3 EUR").unwrap().to_display(),
+            "15 $*EUR"
+        );
+        assert_eq!(
+            crate::eval("1 h * 2 bdays").unwrap().to_display(),
+            "2 h*bdays"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "units")]
+    fn integer_powers_consolidate_like_products() {
+        let mut abacus = Abacus::standard();
+        abacus.eval_mut("x = 5 km").unwrap();
+        let power = abacus.eval_mut("x^2 * 3 m").unwrap().to_display();
+        let product = abacus.eval_mut("x * x * 3 m").unwrap().to_display();
+        assert_eq!(power, "0.075 km^3");
+        assert_eq!(power, product);
+        assert_eq!(abacus.eval_mut("x^-1").unwrap().to_display(), "0.2 1/km");
+    }
 }

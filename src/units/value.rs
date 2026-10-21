@@ -156,14 +156,57 @@ impl Value {
     }
 
     pub fn simplify_unit_display(&mut self, unit_registry: &UnitRegistry) {
+        self.simplify_unit_display_with_options(unit_registry, true);
+    }
+
+    /// Simplifies the unit display; `consolidate` controls whether same-dimension units
+    /// are merged (disabled when the user explicitly requested a target unit).
+    pub(crate) fn simplify_unit_display_with_options(
+        &mut self,
+        unit_registry: &UnitRegistry,
+        consolidate: bool,
+    ) {
         if self.unit.is_dimensionless() && self.unit.display.is_empty() {
             return;
         }
         let unit = self
             .unit
-            .simplify_display_with(|sym| unit_registry.get(sym));
+            .simplify_display_with_options(|sym| unit_registry.get(sym), consolidate);
         if unit != *self.unit {
+            let old_amount = self.amount();
+            let factor = unit.scalar / self.unit.scalar;
             self.unit = Arc::new(unit);
+            if factor != 1.0 {
+                self.align_amount(snap_float_noise(old_amount / snap_float_noise(factor)));
+            }
+        }
+    }
+
+    /// Re-expressing an amount in a different display unit divides by a product of
+    /// inexact conversion factors, which leaves noise in the last bits (e.g. `0.0009999999999999998`
+    /// instead of `0.001`). Nudge `canonical` by at most a few ULPs so `amount()` equals `target`,
+    /// the amount computed directly from the previous display. Leaves `canonical` unchanged if
+    /// no nearby value round-trips.
+    fn align_amount(&mut self, target: f64) {
+        const MAX_NUDGE_ULPS: usize = 8;
+        if !target.is_finite() || !self.canonical.is_finite() || self.amount() == target {
+            return;
+        }
+        let amount_of = |canonical: f64| (canonical - self.unit.offset) / self.unit.scalar;
+        let start = target * self.unit.scalar + self.unit.offset;
+        if (start - self.canonical).abs() > 1e-14 * self.canonical.abs() {
+            return;
+        }
+        let (mut up, mut down) = (start, start);
+        for _ in 0..=MAX_NUDGE_ULPS {
+            for candidate in [up, down] {
+                if amount_of(candidate) == target {
+                    self.canonical = candidate;
+                    return;
+                }
+            }
+            up = up.next_up();
+            down = down.next_down();
         }
     }
 
@@ -406,6 +449,18 @@ pub fn format_engineering(val: f64) -> String {
         format!("{mantissa_rounded}")
     } else {
         format!("{mantissa_rounded}e{eng_exp}")
+    }
+}
+
+/// Snaps a value that is within float noise of a 12-significant-figure value
+/// (e.g. `ft/in` = `12.000000000000002`) to that value. Genuine long fractions such as
+/// `1/12` differ from their 12-figure rounding by far more than the tolerance and are kept.
+fn snap_float_noise(value: f64) -> f64 {
+    let snapped = round_f64_sig_figs(value, 12);
+    if (snapped - value).abs() <= 1e-14 * value.abs() {
+        snapped
+    } else {
+        value
     }
 }
 
