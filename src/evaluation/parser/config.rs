@@ -29,7 +29,7 @@ impl Default for EvalConfig {
             default_interval_style: None,
             default_timezone: None,
             weekend: WeekendDays::SaturdaySunday,
-            max_recursion_depth: 64,
+            max_recursion_depth: crate::evaluation::parser::MAX_RECURSION_DEPTH,
             max_exponent: 1_000.0,
             implicit_multiplication: true,
             number_scales: cfg!(feature = "number-scales"),

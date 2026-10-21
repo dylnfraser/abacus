@@ -145,26 +145,9 @@ impl<'a> Parser<'a> {
             Some(Token::OpenBracket) => {
                 let prev_depth = self.function_arg_depth;
                 self.function_arg_depth = 0;
-
-                let lo_result = self.parse_expr(0)?;
-                let lo = lo_result.into_scalar().map_err(|_| {
-                    AbacusError::UnexpectedToken(
-                        "interval endpoints must be scalar values".to_string(),
-                    )
-                })?;
-
-                self.expect(&Token::Comma).map_err(|_| {
-                    AbacusError::UnexpectedToken("expected ',' between interval bounds".to_string())
-                })?;
-
-                let hi_result = self.parse_expr(0)?;
-                let hi = hi_result.into_scalar().map_err(|_| {
-                    AbacusError::UnexpectedToken(
-                        "interval endpoints must be scalar values".to_string(),
-                    )
-                })?;
-
+                let bounds = self.parse_bracket_bounds();
                 self.function_arg_depth = prev_depth;
+                let (lo, hi) = bounds?;
 
                 self.expect(&Token::CloseBracket)
                     .map_err(|_| AbacusError::UnclosedBracket)?;
@@ -197,6 +180,12 @@ impl<'a> Parser<'a> {
                 operand.apply_unary(op)
             }
 
+            // Unary plus is the identity (e.g. `+5`, `2++3` = 2 + (+3)).
+            Some(Token::BinaryOp("+")) => {
+                let bp = self.prefix_bp("-");
+                self.parse_expr(bp)
+            }
+
             Some(Token::UnaryOp(name)) => {
                 let name = *name;
                 let bp = self.prefix_bp(name);
@@ -205,6 +194,9 @@ impl<'a> Parser<'a> {
                     && let EvalResult::Scalar(ref v) = operand
                     && v.unit.is_dimensionless()
                 {
+                    if v.canonical < 0.0 {
+                        return Err(crate::evaluation::tokenizer::registry::unary::general::negative_sqrt_error());
+                    }
                     return Ok(EvalResult::Scalar(Value::dimensionless(v.canonical.sqrt())));
                 }
                 let op = self
@@ -224,5 +216,20 @@ impl<'a> Parser<'a> {
             Some(tok) => Err(AbacusError::UnexpectedToken(format!("{tok:?}"))),
             None => Err(AbacusError::UnexpectedEnd),
         }
+    }
+
+    /// Parses `lo , hi` inside `[ ... ]` (the opening bracket is already consumed).
+    fn parse_bracket_bounds(&mut self) -> Result<(Value, Value), AbacusError> {
+        let endpoint = |res: EvalResult| {
+            res.into_scalar().map_err(|_| {
+                AbacusError::UnexpectedToken("interval endpoints must be scalar values".to_string())
+            })
+        };
+        let lo = endpoint(self.parse_expr(0)?)?;
+        self.expect(&Token::Comma).map_err(|_| {
+            AbacusError::UnexpectedToken("expected ',' between interval bounds".to_string())
+        })?;
+        let hi = endpoint(self.parse_expr(0)?)?;
+        Ok((lo, hi))
     }
 }

@@ -805,7 +805,11 @@ pub(crate) fn try_parse_date_literal_with_anchor(
     opts: DateLexOptions<'_>,
 ) -> Result<Option<(Date, usize)>, AbacusError> {
     if let Some(stripped) = remaining.strip_prefix('@') {
-        if let Some(end_idx) = stripped.find('@') {
+        // `@...@` is an explicit date literal only when it has content; `@@` and friends stay
+        // available as custom operator symbols.
+        if let Some(end_idx) = stripped.find('@')
+            && stripped[..end_idx].starts_with(|c: char| c.is_ascii_alphanumeric())
+        {
             let date = stripped[..end_idx].parse::<Date>()?;
             return Ok(Some((date, end_idx + 2)));
         }

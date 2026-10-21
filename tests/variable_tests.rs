@@ -67,9 +67,10 @@ fn test_implicit_multiplication_with_constants() {
     let res2 = eval("2 pi").unwrap();
     assert!((res2.into_scalar().unwrap().canonical - 2.0 * std::f64::consts::PI).abs() < 1e-12);
 
-    // 4e == 4 * e
-    let res3 = eval("4e").unwrap();
+    // `4 e` == 4 * e (spaced); unspaced `4e` is a truncated exponent literal and is rejected
+    let res3 = eval("4 e").unwrap();
     assert!((res3.into_scalar().unwrap().canonical - 4.0 * std::f64::consts::E).abs() < 1e-12);
+    assert!(eval("4e").is_err());
 
     // Scientific notation 4e2 must still be 400.0, NOT 4 * e^2
     let res4 = eval("4e2").unwrap();

@@ -107,6 +107,43 @@ pub fn min_significant_figures_in_expr(expr: &str) -> Option<usize> {
             continue;
         }
 
+        // Identifiers (function names like `log10`/`atan2`, unit symbols) never contain
+        // measured numbers; skip them whole.
+        if c.is_alphabetic() || c == '_' {
+            while let Some(&(_, ch)) = chars.peek() {
+                if ch.is_alphanumeric() || ch == '_' {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            prev_non_ws = Some('a');
+            continue;
+        }
+
+        // A sign directly after `^` (e.g. `^-2`) still belongs to the exact exponent.
+        if (c == '-' || c == '+') && prev_non_ws == Some('^') {
+            chars.next();
+            continue;
+        }
+
+        // Parenthesized exponents (e.g. `2^(3.0)`) are exact powers: skip the whole group.
+        if c == '(' && prev_non_ws == Some('^') {
+            let mut depth = 0usize;
+            for (_, ch) in chars.by_ref() {
+                if ch == '(' {
+                    depth += 1;
+                } else if ch == ')' {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+            }
+            prev_non_ws = Some(')');
+            continue;
+        }
+
         // Detect number start (digit or leading dot followed by digit)
         if c.is_ascii_digit()
             || (c == '.'

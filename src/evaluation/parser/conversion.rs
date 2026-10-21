@@ -110,10 +110,14 @@ impl<'a> Parser<'a> {
         }
 
         // The RHS of a conversion must be a scalar unit expression
+        let target_start = self.pos;
         let target_result = self.parse_expr(1)?;
 
-        // Check for rate accumulation over a time duration (e.g. "5 usd per second in 20 days" -> $8640000)
-        if target_result.unit().dimensions == crate::units::dimensions::Dimensions::TIME
+        // Rate accumulation over an explicit duration (e.g. "5 usd per second in 20 days" ->
+        // $8640000). A bare unit target (`5 m/s in s`, `1 kHz in ms`) is a plain conversion and
+        // must fail on incompatible dimensions rather than silently multiplying.
+        if self.target_has_magnitude(target_start)
+            && target_result.unit().dimensions == crate::units::dimensions::Dimensions::TIME
             && lhs.unit().dimensions.0[2] < 0
         {
             return self.accumulate_rate_over_time(&lhs, &target_result);
@@ -121,6 +125,17 @@ impl<'a> Parser<'a> {
 
         let target_unit = target_result.unit().clone();
         lhs.convert_to(target_unit)
+    }
+
+    /// Returns true if the conversion target parsed from `start` contains an explicit number
+    /// (e.g. `20 days`) rather than being a pure unit expression (`days`, `m^2/s`).
+    fn target_has_magnitude(&self, start: usize) -> bool {
+        let target = &self.tokens[start..self.pos];
+        target.iter().enumerate().any(|(i, tok)| {
+            matches!(tok, Token::Val(_))
+                || (matches!(tok, Token::Float(_))
+                    && !matches!(i.checked_sub(1).map(|p| &target[p]), Some(Token::BinaryOp("^"))))
+        })
     }
 
     pub(crate) fn accumulate_rate_over_time(
@@ -174,16 +189,18 @@ impl<'a> Parser<'a> {
                 .unwrap_or(false)
         });
 
-        let mut new_denom = rate.unit.display.denominator.clone();
-        let time_scalar = if let Some(idx) = time_denom_idx {
-            let removed_sym = new_denom.remove(idx);
-            self.unit_registry
-                .unit(&removed_sym)
-                .map(|u| u.scalar)
-                .unwrap_or(1.0)
-        } else {
-            1.0
+        // Without a single time unit to cancel in the denominator (e.g. `kHz`, `m/s^2`), fall back
+        // to plain multiplication so the resulting display always matches its dimensions.
+        let Some(idx) = time_denom_idx else {
+            return rate * duration;
         };
+        let mut new_denom = rate.unit.display.denominator.clone();
+        let removed_sym = new_denom.remove(idx);
+        let time_scalar = self
+            .unit_registry
+            .unit(&removed_sym)
+            .map(|u| u.scalar)
+            .unwrap_or(1.0);
 
         let remaining_scalar = rate.unit.scalar * time_scalar;
 

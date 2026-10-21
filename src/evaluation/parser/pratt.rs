@@ -4,7 +4,24 @@ use crate::{
     units::{eval_result::EvalResult, interval::Interval, interval::IntervalStyle, value::Value},
 };
 
+/// Default maximum parser recursion depth.
 pub const MAX_RECURSION_DEPTH: usize = 64;
+
+/// Hard upper bound accepted by [`crate::Abacus::with_max_recursion_depth`]. Deeper limits are
+/// clamped so that hostile input cannot overflow the stack.
+pub const MAX_RECURSION_DEPTH_CAP: usize = 256;
+
+/// Maximum stack the parser may consume for one evaluation. Frames are much larger in debug
+/// builds, so in addition to the depth limit, recursion stops once this much stack has been used.
+/// 1 MiB leaves headroom on the default 2 MiB stack of spawned threads.
+const STACK_BUDGET_BYTES: usize = 1024 * 1024;
+
+/// Approximate current stack position (address of a local).
+#[inline(always)]
+fn stack_position() -> usize {
+    let marker = 0u8;
+    std::ptr::from_ref(std::hint::black_box(&marker)) as usize
+}
 
 /// Pratt expression parser for mathematical, dimensional, and date expressions.
 pub struct Parser<'a> {
@@ -18,6 +35,10 @@ pub struct Parser<'a> {
     pub(crate) now: Option<crate::Date>,
     pub(crate) variables: Option<&'a std::collections::HashMap<String, EvalResult>>,
     pub(crate) last_percent_tag: Option<&'static str>,
+    /// Total number of values expanded from `a..b` ranges in function arguments so far.
+    pub(crate) range_elements: usize,
+    /// Stack position at the outermost `parse_expr` call (0 until parsing starts).
+    stack_base: usize,
     pub config: EvalConfig,
 }
 
@@ -60,6 +81,8 @@ impl<'a> Parser<'a> {
             now: config.anchor_date.clone(),
             variables,
             last_percent_tag: None,
+            range_elements: 0,
+            stack_base: 0,
             config,
         }
     }
@@ -152,7 +175,14 @@ impl<'a> Parser<'a> {
 
     /// Core Pratt expression parser.
     pub(crate) fn parse_expr(&mut self, min_bp: u8) -> Result<EvalResult, AbacusError> {
-        if self.recursion_depth >= self.config.max_recursion_depth {
+        let limit = self.config.max_recursion_depth.min(MAX_RECURSION_DEPTH_CAP);
+        if self.recursion_depth >= limit {
+            return Err(AbacusError::RecursionLimitExceeded);
+        }
+        let here = stack_position();
+        if self.recursion_depth == 0 {
+            self.stack_base = here;
+        } else if self.stack_base.abs_diff(here) > STACK_BUDGET_BYTES {
             return Err(AbacusError::RecursionLimitExceeded);
         }
         self.recursion_depth += 1;
@@ -169,6 +199,11 @@ impl<'a> Parser<'a> {
         loop {
             // Consume trailing percentage descriptor tags (e.g. "18% tip", "15% tax")
             if let Some(Token::PercentTag(tag)) = self.peek() {
+                // A tag is only meaningful after a percentage (`20% off`); `5 off` is an error
+                // rather than silently ignoring the word.
+                if !lhs.as_scalar().is_ok_and(|v| v.unit.is_percent()) {
+                    return Err(AbacusError::UnexpectedToken((*tag).to_string()));
+                }
                 self.last_percent_tag = Some(*tag);
                 self.advance();
                 continue;
@@ -267,9 +302,11 @@ impl<'a> Parser<'a> {
 
                 // If op_name is "after" and lhs is NOT a time duration, check for conversational percentage (e.g. "$50 after 15% tax")
                 if op_name == "after"
-                    && let Ok(val) = lhs.clone().into_scalar()
-                    && val.unit.dimensions != crate::units::dimensions::Dimensions::TIME
+                    && lhs
+                        .as_scalar()
+                        .is_ok_and(|v| v.unit.dimensions != crate::units::dimensions::Dimensions::TIME)
                 {
+                    let val = lhs.into_scalar()?;
                     self.advance();
                     self.last_percent_tag = None;
                     let rhs = self.parse_expr(l_bp)?;
@@ -315,7 +352,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
 
-                    let val = lhs.clone().into_scalar()?;
+                    let val = lhs.into_scalar()?;
                     if val.unit.dimensions != crate::units::dimensions::Dimensions::TIME {
                         return Err(AbacusError::IncompatibleDimensions);
                     }
@@ -404,15 +441,15 @@ impl<'a> Parser<'a> {
                 if bp < min_bp {
                     break;
                 }
-                let prop = match self.next_token() {
-                    Some(Token::DotProperty(p)) => p,
-                    _ => unreachable!(),
+                let Some(Token::DotProperty(prop)) = self.next_token() else {
+                    break;
                 };
+                let prop = *prop;
                 lhs = match lhs {
                     EvalResult::Hash(hash) => {
                         let val = hash
                             .get(prop)
-                            .or_else(|| match prop.as_str() {
+                            .or_else(|| match prop {
                                 "m" => hash.get("slope"),
                                 "b" => hash.get("intercept"),
                                 "R2" | "r_squared" => hash.get("r2"),
@@ -497,53 +534,37 @@ impl<'a> Parser<'a> {
         lhs.apply_binary_with_weekend(op, rhs, self.config.weekend)
     }
 
-    /// Returns (`left_bp`, `right_bp`) for an infix binary operator.
+    /// Returns (`left_bp`, `right_bp`) for an infix binary operator, derived from the registered
+    /// precedence (`+ -` = 0 -> (2, 3), `* / % of` = 1 -> (4, 5), `^` = 3 right-assoc -> (9, 8)).
     pub(crate) fn infix_bp(&self, name: &str) -> (u8, u8) {
-        match name {
-            "+" | "-" => (2, 3),
-            "*" | "/" | "%" | "of" => (4, 5),
-            "^" => (9, 8),
-            _ => {
-                if let Some(op) = self.token_registry.binary_operators.get(name) {
-                    let base = (op.precedence * 2) + 2;
-                    if op.right_associative {
-                        (base + 1, base)
-                    } else {
-                        (base, base + 1)
-                    }
+        self.token_registry
+            .binary_operators
+            .get(name)
+            .map_or((0, 0), |op| {
+                let base = op.precedence.saturating_mul(2).saturating_add(2);
+                if op.right_associative {
+                    (base.saturating_add(1), base)
                 } else {
-                    (0, 0)
+                    (base, base.saturating_add(1))
                 }
-            }
-        }
+            })
     }
 
-    /// Returns the binding power for a prefix unary operator.
+    /// Returns the binding power for a prefix unary operator, derived from the registered
+    /// precedence (`-`, `sqrt`, `++`, `--` = 2 -> 6, binding tighter than `*` but looser than `^`).
     pub(crate) fn prefix_bp(&self, name: &str) -> u8 {
-        match name {
-            "-" | "sqrt" => 6,
-            "++" | "--" => 2,
-            _ => {
-                if let Some(op) = self.token_registry.unary_operators.get(name) {
-                    (op.precedence * 2) + 2
-                } else {
-                    10
-                }
-            }
-        }
+        self.unary_bp(name)
     }
 
-    /// Returns the binding power for a postfix unary operator.
+    /// Returns the binding power for a postfix unary operator (`!` = 4 -> 10, tighter than `^`).
     pub(crate) fn postfix_bp(&self, name: &str) -> u8 {
-        match name {
-            "!" => 10,
-            _ => {
-                if let Some(op) = self.token_registry.unary_operators.get(name) {
-                    (op.precedence * 2) + 2
-                } else {
-                    10
-                }
-            }
-        }
+        self.unary_bp(name)
+    }
+
+    fn unary_bp(&self, name: &str) -> u8 {
+        self.token_registry
+            .unary_operators
+            .get(name)
+            .map_or(10, |op| op.precedence.saturating_mul(2).saturating_add(2))
     }
 }
