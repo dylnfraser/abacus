@@ -368,33 +368,32 @@ pub fn tokenize_string_with_anchor<'a>(
             }
         }
 
-        // Multi-word unit symbols (e.g. "business days", "business day", "work days", "work day", "working days", "working day")
-        if c == 'b' || c == 'B' || c == 'w' || c == 'W' {
-            const MULTI_WORD_UNITS: &[&str] = &[
-                "business days",
-                "business day",
-                "working days",
-                "working day",
-                "work days",
-                "work day",
-            ];
+        // Multi-word unit symbols (e.g. "business days", "fl oz", "long ton", "R$"),
+        // listed in `registry::units::MULTI_WORD_UNITS`.
+        if c.is_ascii_alphabetic() {
             let remaining = &input_text[i..];
-            let mut matched_len = 0;
-            for &unit_name in MULTI_WORD_UNITS {
-                if remaining.len() >= unit_name.len()
-                    && remaining.as_bytes()[..unit_name.len()]
-                        .eq_ignore_ascii_case(unit_name.as_bytes())
+            let mut matched: Option<&'static str> = None;
+            for &unit_name in crate::registry::units::MULTI_WORD_UNITS {
+                let name = unit_name.as_bytes();
+                if remaining.len() >= name.len()
+                    && name[0].eq_ignore_ascii_case(&(c as u8))
+                    && remaining.as_bytes()[..name.len()].eq_ignore_ascii_case(name)
                 {
-                    let next_char = remaining[unit_name.len()..].chars().next();
-                    if next_char.is_none_or(|nc| !nc.is_alphanumeric() && nc != '_') {
-                        matched_len = unit_name.len();
+                    // Names ending in a symbol (e.g. "R$") may be glued to a number ("R$5").
+                    let needs_boundary = name[name.len() - 1].is_ascii_alphanumeric();
+                    let next_char = remaining[name.len()..].chars().next();
+                    if (!needs_boundary
+                        || next_char.is_none_or(|nc| !nc.is_alphanumeric() && nc != '_'))
+                        && unit_registry.contains(unit_name)
+                    {
+                        matched = Some(unit_name);
                         break;
                     }
                 }
             }
-            if matched_len > 0 {
-                let unit_str = &input_text[i..i + matched_len];
-                tokens.push(Token::Unit(unit_str));
+            if let Some(unit_name) = matched {
+                let matched_len = unit_name.len();
+                tokens.push(Token::Unit(unit_name));
                 let target_idx = i + matched_len;
                 while let Some(&(idx, _)) = chars.peek() {
                     if idx < target_idx {

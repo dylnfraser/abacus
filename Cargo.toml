@@ -3,22 +3,30 @@ name = "abacus"
 version = "0.1.0"
 edition = "2024"
 authors = ["Dylan Fraser"]
-description = "A fast, zero-dependency, unit-aware mathematical evaluation engine and interval calculator"
+description = "A fast, unit-aware mathematical evaluation engine and interval calculator with no required crate dependencies"
+license = "MIT"
 repository = "https://github.com/dylnfraser/abacus"
 homepage = "https://github.com/dylnfraser/abacus"
 readme = "README.md"
 keywords = ["calculator", "units", "dimensions", "interval-arithmetic", "math"]
 categories = ["science", "mathematics", "parser-implementations"]
 
+# Note: profiles only affect binaries built from this repository (the `abacus` CLI, the REPL,
+# benches); crates depending on abacus use their own profile settings.
 [profile.release]
-opt-level = "z"
+opt-level = 3
 strip = "symbols"
 debug = 0
 lto = "thin"
 codegen-units = 1
-panic = "abort"
+# Unwind (the default) so a panic in an evaluation can be caught instead of aborting.
 incremental = false
 overflow-checks = true
+
+# Size-optimised build: `cargo build --profile release-small`.
+[profile.release-small]
+inherits = "release"
+opt-level = "z"
 
 [profile.dev]
 opt-level = 0
@@ -39,6 +47,9 @@ date = []
 financial = []
 number-scales = []
 currencies = []
+# Enables `Abacus::with_live_rates`/`update_daily_rates`/`fetch_live_rates`, which run the
+# system `curl` binary against api.frankfurter.dev. Nothing touches the network unless one of
+# those methods is called explicitly.
 live-rates = ["currencies"]
 serde = ["dep:serde"]
 repl = ["dep:rustyline"]

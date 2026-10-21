@@ -79,7 +79,8 @@ const IMPERIAL_UNITS: &[UnitDefinition] = &[
         dimensions: Dimensions::MASS,
     },
     UnitDefinition {
-        keys: &["pound", "pounds", "lb"],
+        // `pound`/`pounds` always mean mass; the currency is `GBP` / `£` / `pound sterling`.
+        keys: &["pound", "pounds", "lb", "lbs"],
         display: "lb",
         scalar: 453.592_37,
         offset: 0.0,
@@ -99,45 +100,83 @@ const IMPERIAL_UNITS: &[UnitDefinition] = &[
         offset: 0.0,
         dimensions: Dimensions::MASS,
     },
+    // Short (US) ton: 2000 lb. This is what plain `ton` means.
     UnitDefinition {
-        keys: &["long ton", "long tons", "imperial ton", "ton"],
+        keys: &["ton", "tons", "short ton", "short tons", "short_ton", "short_tons"],
         display: "ton",
+        scalar: 907_184.74,
+        offset: 0.0,
+        dimensions: Dimensions::MASS,
+    },
+    // Long (imperial) ton: 2240 lb.
+    UnitDefinition {
+        keys: &[
+            "long ton",
+            "long tons",
+            "long_ton",
+            "long_tons",
+            "imperial ton",
+            "imperial tons",
+        ],
+        display: "long_ton",
         scalar: 1_016_046.908_8,
         offset: 0.0,
         dimensions: Dimensions::MASS,
     },
-    // British Imperial liquid measures. US customary units have different scalars.
+    // Metric ton (tonne): 1000 kg. Not prefixable, since e.g. `kt` is the knot and `ft` the foot.
     UnitDefinition {
-        keys: &["fluid ounce", "fluid ounces", "fl oz", "floz"],
-        display: "fl oz",
+        keys: &[
+            "t",
+            "tonne",
+            "tonnes",
+            "metric ton",
+            "metric tons",
+            "metric_ton",
+            "metric_tons",
+        ],
+        display: "t",
+        scalar: 1_000_000.0,
+        offset: 0.0,
+        dimensions: Dimensions::MASS,
+    },
+    // British Imperial liquid measures. Plain `gal`, `qt`, `pt`, `gi` and `fl oz` are the
+    // US customary measures (see `volume_units.rs`); imperial ones need an `imp_` prefix.
+    UnitDefinition {
+        keys: &[
+            "imp_fl_oz",
+            "imp_floz",
+            "imperial fluid ounce",
+            "imperial fluid ounces",
+        ],
+        display: "imp_fl_oz",
         scalar: 0.000_028_413_062_5,
         offset: 0.0,
         dimensions: Dimensions::VOLUME,
     },
     UnitDefinition {
-        keys: &["gill", "gills", "gi"],
-        display: "gi",
+        keys: &["imp_gill", "imp_gi", "imperial gill", "imperial gills"],
+        display: "imp_gi",
         scalar: 0.000_142_065_312_5,
         offset: 0.0,
         dimensions: Dimensions::VOLUME,
     },
     UnitDefinition {
-        keys: &["pint", "pints", "pt"],
-        display: "pt",
+        keys: &["imp_pint", "imp_pt", "imperial pint", "imperial pints"],
+        display: "imp_pt",
         scalar: 0.000_568_261_25,
         offset: 0.0,
         dimensions: Dimensions::VOLUME,
     },
     UnitDefinition {
-        keys: &["quart", "quarts", "qt"],
-        display: "qt",
+        keys: &["imp_quart", "imp_qt", "imperial quart", "imperial quarts"],
+        display: "imp_qt",
         scalar: 0.001_136_522_5,
         offset: 0.0,
         dimensions: Dimensions::VOLUME,
     },
     UnitDefinition {
-        keys: &["gallon", "gallons", "gal"],
-        display: "gal",
+        keys: &["imp_gallon", "imp_gal", "imperial gallon", "imperial gallons"],
+        display: "imp_gal",
         scalar: 0.004_546_09,
         offset: 0.0,
         dimensions: Dimensions::VOLUME,

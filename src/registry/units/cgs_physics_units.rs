@@ -29,11 +29,19 @@ const CGS_SIMPLE: &[UnitDefinition] = &[
         offset: 0.0,
         dimensions: Dimensions::from_f64([-1.0, 1.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     },
-    // Torr / mmHg
+    // Torr: 101,325/760 Pa (exact by definition)
     UnitDefinition {
-        keys: &["torr", "Torr", "mmHg"],
+        keys: &["torr", "Torr"],
         display: "torr",
         scalar: 101_325.0 * 1000.0 / 760.0,
+        offset: 0.0,
+        dimensions: Dimensions::from_f64([-1.0, 1.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    },
+    // Conventional millimetre of mercury: 133.322387415 Pa (differs from torr by ~1.4e-7)
+    UnitDefinition {
+        keys: &["mmHg"],
+        display: "mmHg",
+        scalar: 133_322.387_415,
         offset: 0.0,
         dimensions: Dimensions::from_f64([-1.0, 1.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     },
@@ -63,11 +71,11 @@ const CGS_PREFIXABLE: &[PrefixableCgs] = &[
         scalar: 1.602_176_634e-16,
         dimensions: Dimensions::from_f64([2.0, 1.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     },
-    // Dalton / amu: 1.6605390666e-24 g
+    // Dalton / amu (CODATA 2022): 1.66053906892e-27 kg = 1.66053906892e-24 g
     PrefixableCgs {
         keys: &["dalton", "Da", "amu"],
         display: "Da",
-        scalar: 1.660_539_066_6e-24,
+        scalar: 1.660_539_068_92e-24,
         dimensions: Dimensions::MASS,
     },
     // Bar: 100,000 Pa = 1e8 g/(m*s^2)
@@ -154,5 +162,8 @@ mod tests {
         assert_eq!(units.get("eV").unwrap().scalar, 1.602_176_634e-16);
         assert!((units.get("keV").unwrap().scalar - 1.602_176_634e-13).abs() < 1e-25);
         assert_eq!(units.get("atm").unwrap().scalar, 1.013_25e8);
+        assert_eq!(units.get("mmHg").unwrap().scalar, 133_322.387_415);
+        assert_eq!(units.get("torr").unwrap().scalar, 101_325.0 * 1000.0 / 760.0);
+        assert_eq!(units.get("Da").unwrap().scalar, 1.660_539_068_92e-24);
     }
 }

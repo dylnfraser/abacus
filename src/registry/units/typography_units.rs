@@ -6,10 +6,11 @@ use crate::{
 };
 
 const TYPO_UNITS: &[UnitDefinition] = &[
-    // Point (pt): 1/72 inch = 0.0254 / 72 m
+    // Desktop-publishing point: 1/72 inch = 0.0254 / 72 m.
+    // `pt` is the (US) pint, so the point is written `point`/`points` (or `typ_pt`).
     UnitDefinition {
-        keys: &["point", "points", "pt_type"],
-        display: "pt_type",
+        keys: &["point", "points", "typ_pt", "pt_type"],
+        display: "point",
         scalar: 0.0254 / 72.0,
         offset: 0.0,
         dimensions: Dimensions::LENGTH,

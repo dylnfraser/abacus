@@ -1,200 +1,202 @@
-use abacus::{Abacus, AbacusError};
+//! `abacus` command-line calculator.
+//!
+//! ```text
+//! abacus "10 N * 5 m" "100 km/h in m/s"   # evaluate each argument
+//! echo "x = 5 m" | abacus                 # evaluate stdin line by line
+//! abacus --demo                           # feature tour
+//! ```
 
-fn main() -> Result<(), AbacusError> {
-    // Standard Abacus setup examples
-    let calc = Abacus::standard();
+use std::io::{BufRead, IsTerminal};
+use std::process::ExitCode;
 
-    // Physical unit arithmetic examples
-    println!("1. Physical Unit Arithmetic");
-    println!("10 N * 5 m = {}", calc.eval("10 N * 5 m")?.to_display());
-    println!(
-        "100 km / 2 h to m/s = {}",
-        calc.eval("100 km / 2 h to m/s")?.to_display()
-    );
-    println!(
-        "500 J / 10 s = {}\n",
-        calc.eval("500 J / 10 s")?.to_display()
-    );
+use abacus::Abacus;
 
-    // Guaranteed physical interval arithmetic examples
-    println!("2. Guaranteed Physical Interval Arithmetic");
-    println!(
-        "[9.8 m, 10.2 m] / [1.9 s, 2.1 s] = {}",
-        calc.eval("[9.8 m, 10.2 m] / [1.9 s, 2.1 s]")?.to_display()
-    );
-    println!(
-        "5 m + [1 m, 3 m] = {}",
-        calc.eval("5 m + [1 m, 3 m]")?.to_display()
-    );
-    println!(
-        "[1 km, 2 km] to m = {}",
-        calc.eval("[1 km, 2 km] to m")?.to_display()
-    );
-    println!(
-        "[10 N, 20 N] * [2 m, 5 m] = {}\n",
-        calc.eval("[10 N, 20 N] * [2 m, 5 m]")?.to_display()
-    );
+const USAGE: &str = "\
+Usage: abacus [OPTIONS] [EXPRESSION]...
 
-    // Inferential statistics & confidence intervals examples
-    println!("3. Inferential Statistics & Confidence Intervals");
-    println!(
-        "TInterval(10 m, 12 m, 11 m, 14 m) = {}",
-        calc.eval("TInterval(10 m, 12 m, 11 m, 14 m)")?.to_display()
-    );
-    println!(
-        "ZInterval(100 m, 15 m, 100) = {}",
-        calc.eval("ZInterval(100 m, 15 m, 100)")?.to_display()
-    );
-    println!(
-        "1-PropZInt(45, 100) = {}",
-        calc.eval("1-PropZInt(45, 100)")?.to_display()
-    );
-    println!(
-        "2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30) = {}\n",
-        calc.eval("2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)")?
-            .to_display()
-    );
+Evaluates each EXPRESSION (quote expressions containing spaces or shell
+metacharacters). With no expressions, reads one expression per line from
+stdin; blank lines and lines starting with '#' are skipped. Variables
+assigned with `name = expr` persist across expressions.
 
-    // Hypothesis testing examples
-    println!("4. Hypothesis Testing");
-    println!(
-        "ZTest(100 m, 105 m, 15 m, 50) = {}",
-        calc.eval("ZTest(100 m, 105 m, 15 m, 50)")?.to_display()
-    );
-    println!(
-        "ZTest(100 m, 105 m, 15 m, 50).p_value = {}",
-        calc.eval("ZTest(100 m, 105 m, 15 m, 50).p_value")?
-            .to_display()
-    );
-    println!(
-        "TTest(100 m, 105 m, 15 m, 25) = {}",
-        calc.eval("TTest(100 m, 105 m, 15 m, 25)")?.to_display()
-    );
-    println!(
-        "2-SampTTest(100 m, 15 m, 25, 90 m, 10 m, 30) = {}",
-        calc.eval("2-SampTTest(100 m, 15 m, 25, 90 m, 10 m, 30)")?
-            .to_display()
-    );
-    println!(
-        "Chi2Test(15, 25, 10, 30).p_value = {}\n",
-        calc.eval("Chi2Test(15, 25, 10, 30).p_value")?.to_display()
-    );
+Options:
+  --demo         Print a tour of supported features
+  -h, --help     Print this help
+  -V, --version  Print version
+  --             Treat all following arguments as expressions";
 
-    println!("5. Dimension-Aware Linear Regression & Dot Property Access");
-    println!(
-        "linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m) = {}",
-        calc.eval("linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)")?
-            .to_display()
-    );
-    println!(
-        "linreg(1 s, 2 s, 3 s, 4 s, 15 m, 25 m, 35 m, 45 m).intercept = {}",
-        calc.eval("linreg(1 s, 2 s, 3 s, 4 s, 15 m, 25 m, 35 m, 45 m).intercept")?
-            .to_display()
-    );
-    println!(
-        "linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m).slope = {}",
-        calc.eval("linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m).slope")?
-            .to_display()
-    );
-    println!(
-        "linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m).slope * 5 s = {}\n",
-        calc.eval("linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m).slope * 5 s")?
-            .to_display()
-    );
+const DEMO: &[(&str, &[&str])] = &[
+    (
+        "Physical Unit Arithmetic",
+        &["10 N * 5 m", "100 km / 2 h to m/s", "500 J / 10 s"],
+    ),
+    (
+        "Interval Arithmetic",
+        &[
+            "[9.8 m, 10.2 m] / [1.9 s, 2.1 s]",
+            "5 m + [1 m, 3 m]",
+            "[1 km, 2 km] to m",
+            "[10 N, 20 N] * [2 m, 5 m]",
+        ],
+    ),
+    (
+        "Inferential Statistics & Confidence Intervals",
+        &[
+            "TInterval(10 m, 12 m, 11 m, 14 m)",
+            "ZInterval(100 m, 15 m, 100)",
+            "1-PropZInt(45, 100)",
+            "2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)",
+        ],
+    ),
+    (
+        "Hypothesis Testing",
+        &[
+            "ZTest(100 m, 105 m, 15 m, 50)",
+            "ZTest(100 m, 105 m, 15 m, 50).p_value",
+            "TTest(100 m, 105 m, 15 m, 25)",
+            "2-SampTTest(100 m, 15 m, 25, 90 m, 10 m, 30)",
+            "Chi2Test(15, 25, 10, 30).p_value",
+        ],
+    ),
+    (
+        "Dimension-Aware Linear Regression & Dot Property Access",
+        &[
+            "linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)",
+            "linreg(1 s, 2 s, 3 s, 4 s, 15 m, 25 m, 35 m, 45 m).intercept",
+            "linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m).slope * 5 s",
+        ],
+    ),
+    (
+        "Dates, Times & Time Zones",
+        &[
+            "07-08-2026 + 5 days",
+            "2026/08/07 - 2 weeks",
+            "2026-08-07 10:30:00 + 3 hours",
+            "07-08-2026 10:00 AM EST to PST",
+            "2026-08-07 10:00:00 -04:00 to +02:00",
+            "07-08-2026 to 17-08-2026 in days",
+            "year(17-08-2026)",
+            "07-08-2026.day_of_week",
+            "last thursday at 3pm",
+            "in 3 hours",
+            "date(2026, 8, 7, 10, 54, 49)",
+        ],
+    ),
+    (
+        "Business Days",
+        &[
+            "07-08-2026 + 5 business days",
+            "workdays(07-08-2026, 14-08-2026)",
+            "is_weekend(07-08-2026)",
+        ],
+    ),
+    (
+        "Customary Units & Currencies",
+        &[
+            "5 pounds to kg",
+            "1 gal in L",
+            "1 imp_gal in L",
+            "2 tonnes in ton",
+            "1 kWh in BTU",
+            "$50 + €20 in USD",
+        ],
+    ),
+];
 
-    // Date arithmetic and timezone conversion examples
-    println!("6. Date Functionality, Literals, AM/PM, and TimeZone Conversions");
-    println!(
-        "07-08-2026 + 5 days = {}",
-        calc.eval("07-08-2026 + 5 days")?.to_display()
-    );
-    println!(
-        "2026/08/07 - 2 weeks = {}",
-        calc.eval("2026/08/07 - 2 weeks")?.to_display()
-    );
-    println!(
-        "2026-08-07 10:30:00 + 3 hours = {}",
-        calc.eval("2026-08-07 10:30:00 + 3 hours")?.to_display()
-    );
-    println!(
-        "07-08-2026 02:30 PM = {}",
-        calc.eval("07-08-2026 02:30 PM")?.to_display()
-    );
-    println!(
-        "07-08-2026 10:00 AM EST to PST = {}",
-        calc.eval("07-08-2026 10:00 AM EST to PST")?.to_display()
-    );
-    println!(
-        "07-08-2026 14:00 UTC to JST = {}",
-        calc.eval("07-08-2026 14:00 UTC to JST")?.to_display()
-    );
-    println!(
-        "2026-08-07 10:00:00 -04:00 to +02:00 = {}",
-        calc.eval("2026-08-07 10:00:00 -04:00 to +02:00")?
-            .to_display()
-    );
-    println!(
-        "today at 12:00 to 3:00 = {}",
-        calc.eval("today at 12:00 to 3:00")?.to_display()
-    );
-    println!(
-        "07-08-2026 to 17-08-2026 in days = {}",
-        calc.eval("07-08-2026 to 17-08-2026 in days")?.to_display()
-    );
-    println!(
-        "(17-08-2026 - 07-08-2026) in days = {}",
-        calc.eval("(17-08-2026 - 07-08-2026) in days")?.to_display()
-    );
-    println!(
-        "07-08-2026 10:00 AM EST - 07-08-2026 07:00 AM PST = {}",
-        calc.eval("07-08-2026 10:00 AM EST - 07-08-2026 07:00 AM PST")?
-            .to_display()
-    );
-    println!(
-        "year(17-08-2026) = {}",
-        calc.eval("year(17-08-2026)")?.to_display()
-    );
-    println!(
-        "month(17-08-2026) = {}",
-        calc.eval("month(17-08-2026)")?.to_display()
-    );
-    println!(
-        "07-08-2026.day_of_week = {}",
-        calc.eval("07-08-2026.day_of_week")?.to_display()
-    );
-    println!(
-        "last thursday at 3pm = {}",
-        calc.eval("last thursday at 3pm")?.to_display()
-    );
-    println!(
-        "3 hours before last thursday at 3pm = {}",
-        calc.eval("3 hours before last thursday at 3pm")?
-            .to_display()
-    );
-    println!("3 hours ago = {}", calc.eval("3 hours ago")?.to_display());
-    println!("in 3 hours = {}", calc.eval("in 3 hours")?.to_display());
-    println!(
-        "date(2026, 8, 7, 10, 54, 49) = {}\n",
-        calc.eval("date(2026, 8, 7, 10, 54, 49)")?.to_display()
-    );
+fn run_demo(calc: &Abacus) -> bool {
+    let mut ok = true;
+    for (i, (title, exprs)) in DEMO.iter().enumerate() {
+        println!("{}. {title}", i + 1);
+        for expr in *exprs {
+            match calc.eval(expr) {
+                Ok(res) => println!("  {expr} = {}", res.to_display()),
+                Err(err) => {
+                    ok = false;
+                    println!("  {expr} => error: {err}");
+                }
+            }
+        }
+        println!();
+    }
+    ok
+}
 
-    println!("7. Business Days & Workdays Arithmetic");
-    println!(
-        "07-08-2026 + 5 business days = {}",
-        calc.eval("07-08-2026 + 5 business days")?.to_display()
-    );
-    println!(
-        "07-08-2026 + 3 work days = {}",
-        calc.eval("07-08-2026 + 3 work days")?.to_display()
-    );
-    println!(
-        "workdays(07-08-2026, 14-08-2026) = {}",
-        calc.eval("workdays(07-08-2026, 14-08-2026)")?.to_display()
-    );
-    println!(
-        "is_weekend(07-08-2026) = {}\n",
-        calc.eval("is_weekend(07-08-2026)")?.to_display()
-    );
+/// Evaluates one expression, printing the result to stdout or the error to stderr.
+fn eval_one(calc: &mut Abacus, expr: &str) -> bool {
+    match calc.eval_mut(expr) {
+        Ok(res) => {
+            println!("{}", res.to_display());
+            true
+        }
+        Err(err) => {
+            eprintln!("error: {err} (in `{expr}`)");
+            false
+        }
+    }
+}
 
-    Ok(())
+fn main() -> ExitCode {
+    let mut calc = Abacus::standard();
+    let mut exprs = Vec::new();
+    let mut flags_done = false;
+
+    for arg in std::env::args().skip(1) {
+        if flags_done {
+            exprs.push(arg);
+            continue;
+        }
+        match arg.as_str() {
+            "--" => flags_done = true,
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                return ExitCode::SUCCESS;
+            }
+            "-V" | "--version" => {
+                println!("abacus {}", env!("CARGO_PKG_VERSION"));
+                return ExitCode::SUCCESS;
+            }
+            "--demo" => {
+                return if run_demo(&calc) {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                };
+            }
+            flag if flag.starts_with("--") => {
+                eprintln!("error: unknown option `{flag}`\n\n{USAGE}");
+                return ExitCode::from(2);
+            }
+            _ => exprs.push(arg),
+        }
+    }
+
+    let mut ok = true;
+    if exprs.is_empty() {
+        let stdin = std::io::stdin();
+        if stdin.is_terminal() {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        }
+        for line in stdin.lock().lines() {
+            let Ok(line) = line else {
+                eprintln!("error: failed to read stdin");
+                return ExitCode::FAILURE;
+            };
+            let expr = line.trim();
+            if expr.is_empty() || expr.starts_with('#') {
+                continue;
+            }
+            ok &= eval_one(&mut calc, expr);
+        }
+    } else {
+        for expr in &exprs {
+            ok &= eval_one(&mut calc, expr);
+        }
+    }
+
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }

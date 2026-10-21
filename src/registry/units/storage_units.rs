@@ -42,6 +42,11 @@ pub fn register_storage_units(map: &mut HashMap<String, Arc<Unit>>) {
             );
         }
     }
+
+    // Common (non-SI) uppercase spelling of the kilobyte; still 1000 bytes (use KiB for 1024).
+    if let Some(kilobyte) = map.get("kB").map(Arc::clone) {
+        map.insert("KB".to_string(), kilobyte);
+    }
 }
 
 #[cfg(test)]

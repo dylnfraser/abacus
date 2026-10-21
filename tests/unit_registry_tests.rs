@@ -14,6 +14,16 @@ fn test_standard_unit_registry_lookups() {
     assert!(registry.contains("N"));
     assert!(registry.contains("J"));
     assert!(registry.contains("W"));
+
+    // Scalars are relative to canonical SI units (with the gram as the mass base).
+    assert_eq!(registry.unit("km").unwrap().scalar, 1000.0);
+    assert_eq!(registry.unit("hour").unwrap().scalar, 3600.0);
+    assert_eq!(registry.unit("kg").unwrap().scalar, 1000.0);
+    assert_eq!(registry.unit("N").unwrap().scalar, 1000.0);
+    assert!(Arc::ptr_eq(
+        &registry.unit("h").unwrap(),
+        &registry.unit("hour").unwrap()
+    ));
 }
 
 #[test]
@@ -60,7 +70,13 @@ fn test_exponent_units_resolution() {
 
     let m2 = registry.unit("m^2").unwrap();
     assert_eq!(m2.display.render(), "m^2");
+    assert_eq!(m2.dimensions, abacus::Dimensions::AREA);
+    assert_eq!(m2.scalar, 1.0);
 
     let m3 = registry.unit("m^3").unwrap();
     assert_eq!(m3.display.render(), "m^3");
+    assert_eq!(m3.dimensions, abacus::Dimensions::VOLUME);
+
+    let km2 = registry.unit("km^2").unwrap();
+    assert_eq!(km2.scalar, 1e6);
 }
