@@ -56,8 +56,14 @@ pub static DIMENSIONLESS_UNIT: std::sync::LazyLock<Arc<Unit>> =
 /// floating-point cancellation noise and are snapped to zero (`0.1 + 0.2 - 0.3` → `0`).
 const CANCELLATION_EPSILON: f64 = 4.0 * f64::EPSILON;
 
+/// Snaps a tiny `a ± b` result to zero when it is cancellation noise. Whole-number operands
+/// are exempt: their sum/difference is computed exactly, so a small result is real
+/// (`9007199254740992 - 9007199254740991` = 1).
 fn snap_cancellation(result: f64, a: f64, b: f64) -> f64 {
-    if result != 0.0 && result.abs() <= CANCELLATION_EPSILON * a.abs().max(b.abs()) {
+    if result != 0.0
+        && !(a.fract() == 0.0 && b.fract() == 0.0)
+        && result.abs() <= CANCELLATION_EPSILON * a.abs().max(b.abs())
+    {
         0.0
     } else {
         result
@@ -421,6 +427,10 @@ fn write_number<W: fmt::Write>(out: &mut W, v: f64, denoise: bool) -> fmt::Resul
 /// (like `pi * 25`) almost never sits within 2 ulps of a 12-digit decimal, while accumulated
 /// rounding error on a short decimal (`0.1 + 0.2`, `5 lb in kg`) always does.
 fn denoised(v: f64) -> f64 {
+    // Whole numbers are exact; snapping `1e20 + 16384` to `1e20` would hide a real difference.
+    if v.fract() == 0.0 {
+        return v;
+    }
     let mut sci = StackStr::new();
     let _ = write!(sci, "{v:e}");
     let mantissa = sci.as_str().split('e').next().unwrap_or("");
@@ -681,7 +691,7 @@ impl Value {
 }
 
 /// A temperature-difference unit matching the degree size of `affine` (K for °C, °R for °F).
-fn temperature_delta_unit(affine: &Unit) -> Arc<Unit> {
+pub(crate) fn temperature_delta_unit(affine: &Unit) -> Arc<Unit> {
     let (scalar, display) = if (affine.scalar - 5.0 / 9.0).abs() < 1e-12 {
         (affine.scalar, "°R")
     } else {
@@ -914,6 +924,11 @@ impl Div<&Value> for &Value {
     fn div(self, rhs: &Value) -> Self::Output {
         match (self.unit.is_affine(), rhs.unit.is_affine()) {
             (true, false) if rhs.unit.is_dimensionless() => {
+                if rhs.canonical == 0.0 {
+                    return Err(AbacusError::EvaluationError(
+                        "cannot divide a temperature by zero".to_string(),
+                    ));
+                }
                 return Ok(Value::scale_affine(self, 1.0 / rhs.canonical));
             }
             (false, false) => {}
@@ -1020,6 +1035,9 @@ mod tests {
 
     /// The original (allocating, unscreened) noise-suppression rule, kept as a reference.
     fn denoised_reference(v: f64) -> f64 {
+        if v.fract() == 0.0 {
+            return v;
+        }
         let sci = format!("{v:e}");
         let mantissa = sci.split('e').next().unwrap_or("");
         if mantissa.bytes().filter(u8::is_ascii_digit).count() < 16 {

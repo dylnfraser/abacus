@@ -78,6 +78,15 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 
 ### Fixes
 
+**Code review follow-ups**
+- Exact whole-number differences are no longer snapped to zero (`9007199254740992 - 9007199254740991` = 1); cancellation noise on decimals (`0.1 + 0.2 - 0.3` = 0) is still cleaned up.
+- Tiny angles keep their value (`sin(1e-13)` = 1e-13); only exact multiples of 90° snap.
+- Temperature spreads use the same difference unit as subtraction: °R for °F inputs, K for °C (`range(20 °F, 30 °F)` = 10 °R).
+- Distinct whole numbers always display distinctly (`1e20 + 16384` no longer prints as `1e20`).
+- Dividing a temperature by zero is an error instead of `inf °C`.
+- `Date` equality, ordering and hashing use a total-order key: zoned dates compare by instant, and distinct floating (no-timezone) times never compare equal, even across a DST gap.
+- Built-in operators are identified by registry identity instead of `fn_addr_eq`, so interval power/division/remainder handling is reliable under any build settings.
+
 **Crashes and denial-of-service**
 - Dimension exponent overflow (`1 m^250 * 1 m^250`) and `lcm` overflow no longer panic; they return errors.
 - Lexing was O(n²); 80k characters went from ~5 s to ~6 ms.

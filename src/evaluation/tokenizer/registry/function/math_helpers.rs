@@ -1,7 +1,6 @@
 use crate::{
-    AbacusError, Value,
-    evaluation::tokenizer::registry::function::operators::FunctionOp,
-    units::unit::{Unit, UnitExpr},
+    AbacusError, Value, evaluation::tokenizer::registry::function::operators::FunctionOp,
+    units::unit::Unit,
 };
 use std::sync::Arc;
 
@@ -17,16 +16,12 @@ pub fn check_dimensionless(args: &[Value]) -> Result<(), AbacusError> {
 /// Returns the unit to use for a *difference* (spread) of values measured in `unit`.
 ///
 /// For affine units such as °C or °F, a difference is not itself a temperature reading, so it
-/// is reported in kelvin (the canonical temperature unit). Other units are returned unchanged.
+/// is reported in the matching difference unit — K for °C, °R for °F — exactly as
+/// subtraction (`30 °F - 20 °F` → `10 °R`) does. Other units are returned unchanged.
 #[must_use]
 pub fn delta_unit(unit: &Arc<Unit>) -> Arc<Unit> {
     if unit.is_affine() {
-        Arc::new(Unit {
-            dimensions: unit.dimensions,
-            scalar: 1.0,
-            offset: 0.0,
-            display: UnitExpr::single("K"),
-        })
+        crate::units::value::temperature_delta_unit(unit)
     } else {
         Arc::clone(unit)
     }

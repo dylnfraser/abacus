@@ -32,7 +32,11 @@ fn make_angle_rad(radians: f64) -> Value {
 fn quarter_turns(rad: f64) -> Option<u8> {
     let k = rad / std::f64::consts::FRAC_PI_2;
     let rounded = k.round();
-    if rounded.abs() < 1e15 && (k - rounded).abs() <= 1e-12 * rounded.abs().max(1.0) {
+    if rounded == 0.0 {
+        // Tiny angles are not "almost zero": sin(1e-13) = 1e-13, so only exact zero snaps.
+        return (rad == 0.0).then_some(0);
+    }
+    if rounded.abs() < 1e15 && (k - rounded).abs() <= 1e-12 * rounded.abs() {
         Some(rounded.rem_euclid(4.0) as u8)
     } else {
         None

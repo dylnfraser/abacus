@@ -1,7 +1,7 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        distributions::special::{factorial, lgamma, n_cr},
+        distributions::special::{factorial, n_cr},
         math_helpers::integer_arg,
         operators::FunctionOp,
     },
@@ -16,15 +16,12 @@ fn n_pr(n: u64, r: u64) -> f64 {
     if r > n {
         return 0.0;
     }
-    if r <= 200 {
-        return ((n - r + 1)..=n).fold(1.0, |acc, x| acc * (x as f64));
+    // n!/(n-r)! >= r!, and 171! already exceeds f64::MAX, so r > 170 always overflows.
+    // Otherwise the exact product is used (it reaches `inf` on its own if it overflows).
+    if r > 170 {
+        return f64::INFINITY;
     }
-    let ln_p = lgamma(n as f64 + 1.0) - lgamma((n - r) as f64 + 1.0);
-    if ln_p > f64::MAX.ln() {
-        f64::INFINITY
-    } else {
-        ln_p.exp().round()
-    }
+    ((n - r + 1)..=n).fold(1.0, |acc, x| acc * (x as f64))
 }
 
 /// Parses `(n, r)` as integers with 0 ≤ r ≤ n.

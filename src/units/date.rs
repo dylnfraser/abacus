@@ -697,9 +697,25 @@ pub(crate) const FLAG_TIME_ONLY: u8 = 2;
 /// The display format was chosen explicitly (e.g. via `format_date`) and must not be overridden.
 pub(crate) const FLAG_EXPLICIT_FORMAT: u8 = 4;
 
+impl Date {
+    /// Total-order key used by `Eq`, `Ord` and `Hash`: the instant first, then whether the date
+    /// is floating (no timezone), then — for floating dates — the wall-clock time. Zoned dates
+    /// compare purely by instant (`10:00 EST == 15:00 UTC`), while distinct floating wall times
+    /// never collapse together, even when a DST gap maps them to the same local instant.
+    fn order_key(&self) -> (i64, bool, i64) {
+        let floating = self.timezone.is_none();
+        let wall = if floating {
+            self.to_epoch_milliseconds()
+        } else {
+            0
+        };
+        (self.instant_ms(), floating, wall)
+    }
+}
+
 impl PartialEq for Date {
     fn eq(&self, other: &Self) -> bool {
-        self.instant_ms() == other.instant_ms()
+        self.order_key() == other.order_key()
     }
 }
 
@@ -713,13 +729,13 @@ impl PartialOrd for Date {
 
 impl Ord for Date {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.instant_ms().cmp(&other.instant_ms())
+        self.order_key().cmp(&other.order_key())
     }
 }
 
 impl std::hash::Hash for Date {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.instant_ms().hash(state);
+        self.order_key().hash(state);
     }
 }
 
