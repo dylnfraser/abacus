@@ -2,7 +2,7 @@ use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
         check_dimensionless,
-        distributions::special::{beta_inc_xy, lgamma, norm_ppf, solve_increasing},
+        distributions::special::{beta_inc_xy, erfc, ln_beta, norm_ppf, solve_increasing},
         operators::FunctionOp,
     },
 };
@@ -14,14 +14,37 @@ fn non_convergent(what: &str) -> AbacusError {
 }
 
 fn compute_tpdf(df: f64, t: f64) -> f64 {
-    let num_log = lgamma(f64::midpoint(df, 1.0));
-    let den_log = (df * std::f64::consts::PI).ln() * 0.5 + lgamma(df / 2.0);
+    // ln Γ((ν+1)/2) − ln Γ(ν/2) = ln Γ(½) − ln B(ν/2, ½); `ln_beta` avoids the cancellation of
+    // two huge log-gamma values when ν is large.
+    let ln_gamma_ratio = 0.5 * std::f64::consts::PI.ln() - ln_beta(df / 2.0, 0.5);
+    let den_log = (df * std::f64::consts::PI).ln() * 0.5;
     let power = -f64::midpoint(df, 1.0) * (t * t / df).ln_1p();
-    (num_log - den_log + power).exp()
+    (ln_gamma_ratio - den_log + power).exp()
+}
+
+/// Above this many degrees of freedom the incomplete-beta continued fraction converges slowly
+/// and accumulates rounding error, while Hill's normal-equivalent expansion is accurate to
+/// ~1e-13 (the two agree to 2e-13 here), so the tail switches to the expansion.
+const LARGE_DF: f64 = 1e4;
+
+/// One tail P(T ≤ -|t|) for large ν via Hill's normal-equivalent deviate (ACM Algorithm 395):
+/// `z = √(a·ln(1 + t²/ν))` with `a = ν − ½`, refined by an asymptotic series in `1/a`.
+fn t_tail_large_df(df: f64, t: f64) -> f64 {
+    let a = df - 0.5;
+    let b = 48.0 * a * a;
+    let mut z = (a * (t * t / df).ln_1p()).sqrt();
+    let z2 = z * z;
+    let z4 = z2 * z2;
+    z += z * (z2 + 3.0) / b
+        - z * (((4.0 * z2 + 33.0) * z2 + 240.0) * z2 + 855.0) / (10.0 * b * (b + 0.8 * z4 + 100.0));
+    0.5 * erfc(z / std::f64::consts::SQRT_2)
 }
 
 /// Lower-tail probability P(T ≤ -|t|) for Student's t, i.e. one tail.
 fn t_tail(df: f64, t: f64) -> Option<f64> {
+    if df > LARGE_DF {
+        return Some(t_tail_large_df(df, t));
+    }
     let denom = df + t * t;
     beta_inc_xy(df / 2.0, 0.5, df / denom, t * t / denom).map(|ib| 0.5 * ib)
 }

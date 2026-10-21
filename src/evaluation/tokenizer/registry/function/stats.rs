@@ -173,6 +173,23 @@ pub fn compute_mean(args: &[Value]) -> f64 {
 #[must_use]
 pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
     let n = args.len() as f64;
+    // Affine readings (°C, °F) are stored in kelvin on a large offset, so `20 °F` comes back
+    // as 19.99999999999995 °F. When every reading shares one affine unit, compute on the
+    // amounts as displayed (float noise removed) and rescale, avoiding that cancellation error.
+    if let Some(first) = args.first()
+        && first.unit.is_affine()
+        && args
+            .iter()
+            .all(|v| v.unit.scalar == first.unit.scalar && v.unit.offset == first.unit.offset)
+    {
+        let amounts: Vec<f64> = args
+            .iter()
+            .map(|v| crate::units::value::snap_float_noise(v.amount()))
+            .collect();
+        let mean = amounts.iter().sum::<f64>() / n;
+        let var = amounts.iter().map(|a| (a - mean).powi(2)).sum::<f64>() / (n - ddof);
+        return var * first.unit.scalar * first.unit.scalar;
+    }
     let mean = compute_mean(args);
     args.iter()
         .map(|v| (v.canonical - mean).powi(2))

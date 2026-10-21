@@ -569,6 +569,14 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 `tests/readme_examples_tests.rs` checks that every example output in this README matches the engine. See [CHANGELOG.md](CHANGELOG.md) for behaviour changes.
 
+Coverage-guided fuzzing uses [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) (nightly toolchain). Two targets exist: `fuzz_eval` (raw expressions) and `fuzz_eval_config` (expressions under varied engine settings). `fuzz/abacus.dict` holds expression keywords to steer the fuzzer:
+
+```sh
+cargo install cargo-fuzz
+cd fuzz
+cargo +nightly fuzz run fuzz_eval -- -dict=abacus.dict -max_len=256 -timeout=2
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

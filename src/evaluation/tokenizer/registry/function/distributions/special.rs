@@ -272,7 +272,9 @@ fn gamma_log_prefactor(a: f64, x: f64) -> f64 {
 }
 
 fn iteration_budget(scale: f64) -> u64 {
-    (500.0 + 50.0 * scale.max(0.0).sqrt()).min(1e8) as u64
+    // Convergent cases need far fewer iterations than this even at scale 1e15; the cap only
+    // bounds hopeless inputs (e.g. `fcdf(1e30, 1e30, 1)`) to ~0.1 s before reporting failure.
+    (500.0 + 50.0 * scale.max(0.0).sqrt()).min(1e7) as u64
 }
 
 /// Series for P(a, x), used when x < a + 1.

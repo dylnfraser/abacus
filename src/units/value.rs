@@ -539,7 +539,7 @@ pub fn format_engineering(val: f64) -> String {
 /// Snaps a value that is within float noise of a 12-significant-figure value
 /// (e.g. `ft/in` = `12.000000000000002`) to that value. Genuine long fractions such as
 /// `1/12` differ from their 12-figure rounding by far more than the tolerance and are kept.
-fn snap_float_noise(value: f64) -> f64 {
+pub(crate) fn snap_float_noise(value: f64) -> f64 {
     let snapped = round_f64_sig_figs(value, 12);
     if (snapped - value).abs() <= 1e-14 * value.abs() {
         snapped

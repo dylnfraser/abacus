@@ -85,6 +85,9 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 - Distinct whole numbers always display distinctly (`1e20 + 16384` no longer prints as `1e20`).
 - Dividing a temperature by zero is an error instead of `inf °C`.
 - `Date` equality, ordering and hashing use a total-order key: zoned dates compare by instant, and distinct floating (no-timezone) times never compare equal, even across a DST gap.
+- Student's t with very large degrees of freedom (found by cargo-fuzz): `invt(2e-10, 1e30)` took ~10 s and returned `-8388608`; `tcdf`/`invt` now use Hill's normal-equivalent expansion above 1e4 df and match the normal limit, and `tpdf` avoids log-gamma cancellation (`tpdf(1e30, 0)` = 1/√(2π)).
+- The incomplete-beta/gamma iteration budget is capped so hopeless inputs (`fcdf(1e30, 1e30, 1)`) fail in ~0.1 s instead of ~1 s.
+- `std`/`var` (and the CIs and t-tests built on them) of °C/°F readings keep full precision: `std(20 °F, 30 °F)` = 7.0710678118654755 °R.
 - Built-in operators are identified by registry identity instead of `fn_addr_eq`, so interval power/division/remainder handling is reliable under any build settings.
 
 **Crashes and denial-of-service**
