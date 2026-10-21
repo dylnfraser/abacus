@@ -102,9 +102,10 @@ fn test_date_subtraction_arithmetic() {
     let d1 = abacus.eval_date("07-08-2026 - 2 days").unwrap();
     assert_eq!(d1, Date::new(2026, 8, 5));
 
+    // A whole number of days is reported in days (864,000 s).
     let diff_sec = abacus.eval_scalar("17-08-2026 - 07-08-2026").unwrap();
     assert_eq!(diff_sec.canonical, 864_000.0);
-    assert_eq!(diff_sec.to_display(), "864000 s");
+    assert_eq!(diff_sec.to_display(), "10 d");
 
     let diff_days = eval("(17-08-2026 - 07-08-2026) in days").unwrap();
     assert_eq!(diff_days.to_display(), "10 d");

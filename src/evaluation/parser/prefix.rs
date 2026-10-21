@@ -37,8 +37,10 @@ impl<'a> Parser<'a> {
                     EvalResult::Scalar(v)
                         if v.unit.dimensions == crate::units::dimensions::Dimensions::TIME =>
                     {
-                        let ms = (v.canonical * 1000.0).round() as i64;
-                        Ok(EvalResult::Date(self.get_now().add_milliseconds(ms)))
+                        let weekend = self.config.weekend;
+                        Ok(EvalResult::Date(
+                            self.get_now().apply_time_value_with(&v, 1, weekend)?,
+                        ))
                     }
                     EvalResult::Date(d) => Ok(EvalResult::Date(d)),
                     other => Ok(other),
@@ -68,14 +70,11 @@ impl<'a> Parser<'a> {
                     EvalResult::Scalar(v)
                         if v.unit.dimensions == crate::units::dimensions::Dimensions::TIME =>
                     {
-                        let ms = (v.canonical * 1000.0).round() as i64;
-                        if name == "before" || name == "ago" {
-                            Ok(EvalResult::Date(
-                                self.get_now().add_milliseconds(ms.saturating_neg()),
-                            ))
-                        } else {
-                            Ok(EvalResult::Date(self.get_now().add_milliseconds(ms)))
-                        }
+                        let sign = if name == "before" || name == "ago" { -1 } else { 1 };
+                        let weekend = self.config.weekend;
+                        Ok(EvalResult::Date(
+                            self.get_now().apply_time_value_with(&v, sign, weekend)?,
+                        ))
                     }
                     EvalResult::Date(d) => Ok(EvalResult::Date(d)),
                     other => Ok(other),

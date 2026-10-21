@@ -18,8 +18,10 @@ fn test_configurable_date_format() {
     let d = abacus_iso.eval_date("07-08-2026").unwrap();
     assert_eq!(d.format_with_style(abacus_iso.date_format), "2026-08-07");
 
+    // With a month-first format, ambiguous input is also read month-first so output round-trips.
     let abacus_us = Abacus::standard().set_date_format(DateFormat::MMDDYYYY);
-    let d2 = abacus_us.eval_date("07-08-2026").unwrap();
+    let d2 = abacus_us.eval_date("08-07-2026").unwrap();
+    assert_eq!((d2.month, d2.day), (8, 7));
     assert_eq!(d2.format_with_style(abacus_us.date_format), "08-07-2026");
 
     let abacus_eu = Abacus::standard().set_date_format(DateFormat::DDMMYYYY);
@@ -31,9 +33,9 @@ fn test_configurable_date_format() {
 fn test_date_to_date_time_between_conversion() {
     let abacus = Abacus::standard();
 
-    // 07-08-2026 to 17-08-2026 yields 10 days in hours by default (240 h)
-    let res_hours_default = abacus.eval("07-08-2026 to 17-08-2026").unwrap();
-    assert_eq!(res_hours_default.to_display(), "240 h");
+    // 07-08-2026 to 17-08-2026 is a whole number of days, so it is shown in days by default
+    let res_days_default = abacus.eval("07-08-2026 to 17-08-2026").unwrap();
+    assert_eq!(res_days_default.to_display(), "10 d");
 
     // Chained conversion in days
     let res_days = abacus.eval("07-08-2026 to 17-08-2026 in days").unwrap();

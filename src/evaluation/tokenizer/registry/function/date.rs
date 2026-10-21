@@ -3,35 +3,52 @@ use crate::{
     evaluation::tokenizer::registry::function::operators::FunctionOp,
 };
 
-fn date_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
-    if args.len() == 3 {
-        let year = args[0].canonical as i32;
-        let month = args[1].canonical as u32;
-        let day = args[2].canonical as u32;
-        let d = Date::new(year, month, day);
-        if !d.is_valid() {
-            return Err(AbacusError::InvalidDate(
-                "invalid calendar date".to_string(),
-            ));
-        }
-        Ok(EvalResult::Date(d))
-    } else if args.len() == 6 {
-        let year = args[0].canonical as i32;
-        let month = args[1].canonical as u32;
-        let day = args[2].canonical as u32;
-        let hour = args[3].canonical as u32;
-        let minute = args[4].canonical as u32;
-        let second = args[5].canonical as u32;
-        let d = Date::new_with_hms(year, month, day, hour, minute, second);
-        if !d.is_valid() {
-            return Err(AbacusError::InvalidDate(
-                "invalid date/time values".to_string(),
-            ));
-        }
-        Ok(EvalResult::Date(d))
-    } else {
-        Err(AbacusError::IncompatibleFunctionArguments)
+/// Extracts a dimensionless whole number within `range` for argument `name` of `date()`.
+fn integer_arg(
+    v: &Value,
+    name: &str,
+    range: std::ops::RangeInclusive<i64>,
+) -> Result<i64, AbacusError> {
+    let x = v.canonical;
+    if !v.unit.is_dimensionless() || !x.is_finite() || x.fract() != 0.0 {
+        return Err(AbacusError::InvalidDate(format!(
+            "date(): {name} must be a whole number, got {x}"
+        )));
     }
+    let n = x as i64;
+    if !range.contains(&n) {
+        return Err(AbacusError::InvalidDate(format!(
+            "date(): {name} {n} is out of range {}..={}",
+            range.start(),
+            range.end()
+        )));
+    }
+    Ok(n)
+}
+
+/// `date(year, month, day[, hour, minute, second])`. All arguments must be whole numbers in range
+/// (years -9999..=9999) and form a valid calendar date.
+fn date_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
+    if args.len() != 3 && args.len() != 6 {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    }
+    let year = integer_arg(&args[0], "year", -9999..=9999)? as i32;
+    let month = integer_arg(&args[1], "month", 1..=12)? as u32;
+    let day = integer_arg(&args[2], "day", 1..=31)? as u32;
+    let d = if args.len() == 6 {
+        let hour = integer_arg(&args[3], "hour", 0..=23)? as u32;
+        let minute = integer_arg(&args[4], "minute", 0..=59)? as u32;
+        let second = integer_arg(&args[5], "second", 0..=59)? as u32;
+        Date::new_with_hms(year, month, day, hour, minute, second)
+    } else {
+        Date::new(year, month, day)
+    };
+    if !d.is_valid() {
+        return Err(AbacusError::InvalidDate(format!(
+            "date(): {year:04}-{month:02}-{day:02} is not a valid calendar date"
+        )));
+    }
+    Ok(EvalResult::Date(d))
 }
 
 fn date_prop_helper(args: &[EvalResult], prop: &str) -> Result<EvalResult, AbacusError> {
@@ -107,33 +124,72 @@ fn workdays_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
     }
 }
 
+/// Maps a style name (`YYYY-MM-DD`, `iso`, `ymd`, `DD-MM-YYYY`, `dmy`, `MM-DD-YYYY`, `mdy`,
+/// `long`) to a [`DateFormat`](crate::units::date::DateFormat).
+fn parse_format_style(spec: &str) -> Option<crate::units::date::DateFormat> {
+    use crate::units::date::DateFormat;
+    let normalized: String = spec
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    match normalized.as_str() {
+        "YYYYMMDD" | "ISO" | "YMD" => Some(DateFormat::YYYYMMDD),
+        "DDMMYYYY" | "DMY" => Some(DateFormat::DDMMYYYY),
+        "MMDDYYYY" | "MDY" => Some(DateFormat::MMDDYYYY),
+        "LONG" | "MONTHDAYYEAR" | "MMMMDYYYY" => Some(DateFormat::MonthDayYear),
+        _ => None,
+    }
+}
+
+fn with_style(d: &Date, style: crate::units::date::DateFormat) -> EvalResult {
+    let mut formatted_d = d.clone();
+    formatted_d.format = style;
+    formatted_d.flags |= crate::units::date::FLAG_EXPLICIT_FORMAT;
+    EvalResult::Date(formatted_d)
+}
+
+/// `format_date(date[, style])`: with no style the default (`MonthDayYear`) format is used.
 fn format_date_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
     if args.is_empty() || args.len() > 2 {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
-    match &args[0] {
-        EvalResult::Date(d) => {
-            let style = if args.len() == 2 {
-                let fmt_str = match &args[1] {
-                    EvalResult::Scalar(v) => v.to_units_display().to_ascii_uppercase(),
-                    other => other.to_display().to_ascii_uppercase(),
-                };
-                if fmt_str.contains("YYYY") && fmt_str.starts_with('Y') {
-                    crate::units::date::DateFormat::YYYYMMDD
-                } else if fmt_str.starts_with('M') {
-                    crate::units::date::DateFormat::MMDDYYYY
-                } else {
-                    crate::units::date::DateFormat::DDMMYYYY
-                }
-            } else {
-                crate::units::date::DateFormat::DDMMYYYY
-            };
-            let mut formatted_d = d.clone();
-            formatted_d.format = style;
-            Ok(EvalResult::Date(formatted_d))
-        }
+    let EvalResult::Date(d) = &args[0] else {
+        return Err(AbacusError::IncompatibleFunctionArguments);
+    };
+    let style = if args.len() == 2 {
+        let spec = match &args[1] {
+            EvalResult::Scalar(v) => v.to_units_display(),
+            other => other.to_display(),
+        };
+        parse_format_style(&spec).ok_or(AbacusError::IncompatibleFunctionArguments)?
+    } else {
+        crate::units::date::DateFormat::default()
+    };
+    Ok(with_style(d, style))
+}
+
+fn style_fn(
+    args: &[EvalResult],
+    style: crate::units::date::DateFormat,
+) -> Result<EvalResult, AbacusError> {
+    match args {
+        [EvalResult::Date(d)] => Ok(with_style(d, style)),
         _ => Err(AbacusError::IncompatibleFunctionArguments),
     }
+}
+
+fn format_iso_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
+    style_fn(args, crate::units::date::DateFormat::YYYYMMDD)
+}
+fn format_dmy_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
+    style_fn(args, crate::units::date::DateFormat::DDMMYYYY)
+}
+fn format_mdy_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
+    style_fn(args, crate::units::date::DateFormat::MMDDYYYY)
+}
+fn format_long_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
+    style_fn(args, crate::units::date::DateFormat::MonthDayYear)
 }
 
 pub fn register_date_functions() -> Vec<FunctionOp> {
@@ -155,5 +211,9 @@ pub fn register_date_functions() -> Vec<FunctionOp> {
         FunctionOp::general("workdays", 2, 2, workdays_fn),
         FunctionOp::general("business_days", 2, 2, workdays_fn),
         FunctionOp::general("format_date", 1, 2, format_date_fn),
+        FunctionOp::general("format_iso", 1, 1, format_iso_fn),
+        FunctionOp::general("format_dmy", 1, 1, format_dmy_fn),
+        FunctionOp::general("format_mdy", 1, 1, format_mdy_fn),
+        FunctionOp::general("format_long", 1, 1, format_long_fn),
     ]
 }

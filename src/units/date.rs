@@ -113,10 +113,22 @@ impl TimeZone {
         Self::new("UTC", 0)
     }
 
+    /// Supported fixed-offset timezone abbreviations.
+    ///
+    /// Abbreviations are fixed offsets: `EST` is always UTC-05:00 regardless of the time of year, so
+    /// use the daylight variant (`EDT`, `CEST`, …) explicitly when needed. Ambiguous abbreviations
+    /// resolve as follows: `IST` = India (+05:30), `CST` = US Central (-06:00), `BST` = British
+    /// Summer Time (+01:00), `AST` = Atlantic (-04:00).
     pub const SUPPORTED_TIMEZONES: &'static [(&'static str, i32)] = &[
         ("UTC", 0),
         ("GMT", 0),
         ("Z", 0),
+        ("WET", 0),
+        ("WEST", 60),
+        ("NST", -210),
+        ("NDT", -150),
+        ("AST", -240),
+        ("ADT", -180),
         ("EST", -300),
         ("EDT", -240),
         ("CST", -360),
@@ -128,21 +140,46 @@ impl TimeZone {
         ("AKST", -540),
         ("AKDT", -480),
         ("HST", -600),
+        ("BRT", -180),
+        ("ART", -180),
         ("CET", 60),
         ("BST", 60),
+        ("WAT", 60),
         ("CEST", 120),
         ("EET", 120),
+        ("CAT", 120),
+        ("SAST", 120),
         ("EEST", 180),
         ("MSK", 180),
-        ("IST", 330), // +05:30
+        ("EAT", 180),
+        ("GST", 240),
+        ("PKT", 300),
+        ("IST", 330), // +05:30 (India)
+        ("NPT", 345),
+        ("ICT", 420),
+        ("WIB", 420),
+        ("SGT", 480),
+        ("HKT", 480),
+        ("PHT", 480),
+        ("AWST", 480),
         ("JST", 540), // +09:00
         ("KST", 540),
+        ("ACST", 570),
+        ("ACDT", 630),
         ("AEST", 600), // +10:00
+        ("AEDT", 660),
         ("NZST", 720), // +12:00
+        ("NZDT", 780),
     ];
 
+    /// Largest accepted absolute UTC offset in minutes (UTC-14:00 ..= UTC+14:00).
+    pub const MAX_OFFSET_MINUTES: i32 = 14 * 60;
+
+    /// Parses a timezone abbreviation (`EST`, `utc`) or numeric offset (`+05:30`, `-0400`, `+2`,
+    /// `UTC+5`). Offsets must be within ±14:00 with minutes below 60.
     pub fn parse(s: &str) -> Result<Self, AbacusError> {
         let s = s.trim();
+        let invalid = || AbacusError::InvalidDate(format!("invalid timezone offset: '{s}'"));
         let upper = s.to_ascii_uppercase();
 
         let offset = Self::SUPPORTED_TIMEZONES
@@ -154,35 +191,70 @@ impl TimeZone {
             return Ok(Self::new(upper, off));
         }
 
-        let clean = upper.strip_prefix("UTC").unwrap_or(&upper);
-        if clean.starts_with('+') || clean.starts_with('-') {
-            let sign = if clean.starts_with('-') { -1 } else { 1 };
+        let clean = upper
+            .strip_prefix("UTC")
+            .or_else(|| upper.strip_prefix("GMT"))
+            .unwrap_or(&upper);
+        if let Some(sign_char) = clean.chars().next()
+            && (sign_char == '+' || sign_char == '-')
+        {
+            let sign = if sign_char == '-' { -1 } else { 1 };
             let body = &clean[1..];
-            let parts: Vec<&str> = body.split(':').collect();
-            let (hours, mins) = if parts.len() == 1 {
-                let h = parts[0].parse::<i32>().map_err(|_| {
-                    AbacusError::InvalidDate(format!("invalid timezone offset: '{s}'"))
-                })?;
-                (h, 0)
-            } else if parts.len() == 2 {
-                let h = parts[0].parse::<i32>().map_err(|_| {
-                    AbacusError::InvalidDate(format!("invalid timezone offset: '{s}'"))
-                })?;
-                let m = parts[1].parse::<i32>().map_err(|_| {
-                    AbacusError::InvalidDate(format!("invalid timezone offset: '{s}'"))
-                })?;
-                (h, m)
+            let all_digits = |p: &str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
+            let (hours, mins) = if let Some((h, m)) = body.split_once(':') {
+                if !all_digits(h) || h.len() > 2 || !all_digits(m) || m.len() != 2 {
+                    return Err(invalid());
+                }
+                (
+                    h.parse::<i32>().map_err(|_| invalid())?,
+                    m.parse::<i32>().map_err(|_| invalid())?,
+                )
+            } else if all_digits(body) && body.len() <= 2 {
+                (body.parse::<i32>().map_err(|_| invalid())?, 0)
+            } else if all_digits(body) && body.len() == 4 {
+                (
+                    body[..2].parse::<i32>().map_err(|_| invalid())?,
+                    body[2..].parse::<i32>().map_err(|_| invalid())?,
+                )
             } else {
-                return Err(AbacusError::InvalidDate(format!(
-                    "invalid timezone offset format: '{s}'"
-                )));
+                return Err(invalid());
             };
 
             let total_mins = sign * (hours * 60 + mins);
+            if mins >= 60 || total_mins.abs() > Self::MAX_OFFSET_MINUTES {
+                return Err(AbacusError::InvalidDate(format!(
+                    "timezone offset out of range: '{s}'"
+                )));
+            }
             return Ok(Self::new(s, total_mins));
         }
 
         Err(AbacusError::InvalidDate(format!("unknown timezone: '{s}'")))
+    }
+
+    /// Returns `true` if `s` is a numeric offset in an unambiguous literal form (`±HH:MM`, `±HHMM`,
+    /// `UTC±H`), as accepted directly after a time literal.
+    #[must_use]
+    pub(crate) fn is_literal_offset(s: &str) -> bool {
+        let upper = s.to_ascii_uppercase();
+        let explicit_prefix = upper.starts_with("UTC") || upper.starts_with("GMT");
+        let body = upper
+            .strip_prefix("UTC")
+            .or_else(|| upper.strip_prefix("GMT"))
+            .unwrap_or(&upper);
+        let Some(digits) = body.strip_prefix(['+', '-']) else {
+            return false;
+        };
+        (explicit_prefix || digits.contains(':') || digits.len() == 4) && Self::parse(s).is_ok()
+    }
+
+    /// Returns the system's local timezone at the current instant (abbreviation and offset,
+    /// including DST), resolved from `TZ` / `/etc/localtime`; UTC when unavailable.
+    #[must_use]
+    pub fn local() -> Self {
+        let (offset, abbr) =
+            crate::units::local_tz::local_offset_at_utc_ms(Date::now_utc().to_epoch_milliseconds());
+        Self::new(abbr, offset)
     }
 
     #[must_use]
@@ -287,8 +359,16 @@ impl Time {
         )
     }
 
+    /// Parses a time of day (`15:30`, `3pm`, `3 PM`, `9:15:30.250 am`). Without `has_at`, a bare
+    /// number is only accepted when followed by AM/PM.
     #[must_use]
     pub fn parse_time_spec(s: &str, has_at: bool) -> Option<(Time, usize)> {
+        Self::parse_time_spec_ext(s, has_at).map(|(t, len, _)| (t, len))
+    }
+
+    /// Like [`Time::parse_time_spec`], additionally reporting whether AM/PM was given explicitly.
+    #[must_use]
+    pub(crate) fn parse_time_spec_ext(s: &str, has_at: bool) -> Option<(Time, usize, bool)> {
         if s.is_empty() {
             return None;
         }
@@ -425,9 +505,18 @@ impl Time {
             return None;
         }
 
+        // A trailing digit/colon run (e.g. "10:00:00:00", "25:61") must not be silently truncated.
+        if s[current_end..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit() || c == ':')
+        {
+            return None;
+        }
+
         let time = Self::new(hour, minute, second, millisecond);
         if time.is_valid() {
-            Some((time, current_end))
+            Some((time, current_end, is_am_pm))
         } else {
             None
         }
@@ -580,6 +669,13 @@ pub fn epoch_days_to_date(epoch_days: i64) -> (i32, u32, u32) {
 }
 
 /// Structure representing a calendar Date with Time and optional `TimeZone`.
+///
+/// A date without a timezone is a *floating local* wall-clock time: arithmetic between two
+/// floating dates is pure wall-clock arithmetic, while comparing or mixing a floating date with a
+/// zoned date (or converting it with [`Date::to_timezone`]) interprets it in the system's local
+/// zone (see [`TimeZone::local`]).
+///
+/// Equality, ordering and hashing compare the instant in time, so `10:00 EST == 15:00 UTC`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Date {
@@ -589,15 +685,21 @@ pub struct Date {
     pub time: Time,
     pub timezone: Option<TimeZone>,
     pub format: DateFormat,
+    /// Parse-time hints (see `FLAG_*`); not part of the date's identity.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) flags: u8,
 }
+
+/// The time was written with an explicit AM/PM marker.
+pub(crate) const FLAG_EXPLICIT_MERIDIEM: u8 = 1;
+/// The literal was a bare time of day (e.g. `3pm`, `15:00`) anchored to the reference date.
+pub(crate) const FLAG_TIME_ONLY: u8 = 2;
+/// The display format was chosen explicitly (e.g. via `format_date`) and must not be overridden.
+pub(crate) const FLAG_EXPLICIT_FORMAT: u8 = 4;
 
 impl PartialEq for Date {
     fn eq(&self, other: &Self) -> bool {
-        self.year == other.year
-            && self.month == other.month
-            && self.day == other.day
-            && self.time == other.time
-            && self.timezone == other.timezone
+        self.instant_ms() == other.instant_ms()
     }
 }
 
@@ -611,41 +713,57 @@ impl PartialOrd for Date {
 
 impl Ord for Date {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.year, self.month, self.day, &self.time, &self.timezone).cmp(&(
-            other.year,
-            other.month,
-            other.day,
-            &other.time,
-            &other.timezone,
-        ))
+        self.instant_ms().cmp(&other.instant_ms())
     }
 }
 
 impl std::hash::Hash for Date {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.year.hash(state);
-        self.month.hash(state);
-        self.day.hash(state);
-        self.time.hash(state);
-        self.timezone.hash(state);
+        self.instant_ms().hash(state);
     }
 }
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Largest supported absolute shift applied to a date, in milliseconds (~273,790 years).
+const MAX_DATE_SHIFT_MS: f64 = 8.64e15;
+/// Average Gregorian year length in seconds (365.2425 days), used when converting `year` to fixed units.
+pub const SECONDS_PER_AVERAGE_YEAR: f64 = 365.2425 * 86_400.0;
+/// Average Gregorian month length in seconds (1/12 of an average year).
+pub const SECONDS_PER_AVERAGE_MONTH: f64 = SECONDS_PER_AVERAGE_YEAR / 12.0;
+
 impl Date {
-    #[must_use]
-    pub fn now() -> Self {
-        let start = SystemTime::now();
-        let since_epoch = start.duration_since(UNIX_EPOCH).unwrap_or_default();
-        let total_ms = since_epoch.as_millis() as i64;
-        Self::from_epoch_milliseconds(total_ms)
+    fn system_epoch_ms() -> i64 {
+        let since_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        i64::try_from(since_epoch.as_millis()).unwrap_or(i64::MAX)
     }
 
+    /// The current instant expressed in UTC (labelled `UTC`).
+    #[must_use]
+    pub fn now_utc() -> Self {
+        Self::from_epoch_milliseconds(Self::system_epoch_ms()).with_timezone(TimeZone::utc())
+    }
+
+    /// The current local wall-clock time (floating, no timezone label), using the system zone.
+    #[must_use]
+    pub fn now() -> Self {
+        let utc_ms = Self::system_epoch_ms();
+        let offset = crate::units::local_tz::local_offset_minutes_at_utc_ms(utc_ms);
+        Self::from_epoch_milliseconds(utc_ms.saturating_add(i64::from(offset) * 60_000))
+    }
+
+    /// The current instant expressed as wall-clock time in `tz` (labelled with `tz`).
+    #[must_use]
+    pub fn now_in(tz: &TimeZone) -> Self {
+        Self::now_utc().to_timezone(tz)
+    }
+
+    /// Today's local calendar date at midnight (floating, no timezone label).
     #[must_use]
     pub fn today() -> Self {
-        let now = Self::now();
-        Self::new(now.year, now.month, now.day)
+        Self::now().start_of_day()
     }
 
     #[must_use]
@@ -658,16 +776,35 @@ impl Date {
         Self::today().add_days(-1)
     }
 
+    /// The same calendar date at 00:00:00.000, keeping the timezone label.
+    #[must_use]
+    pub fn start_of_day(&self) -> Self {
+        let mut d = self.clone();
+        d.time = Time::default();
+        d.flags = 0;
+        d
+    }
+
+    /// Resolves the reference "now" used for relative expressions: the anchor if given (converted
+    /// into / labelled with `default_tz` when one is configured), otherwise the current instant in
+    /// `default_tz`, or the floating local wall-clock time when no default timezone is set.
+    #[must_use]
+    pub(crate) fn reference_now(anchor: Option<&Date>, default_tz: Option<&TimeZone>) -> Self {
+        match (anchor, default_tz) {
+            (Some(a), Some(tz)) => match &a.timezone {
+                None => a.clone().with_timezone(tz.clone()),
+                Some(existing) if existing == tz => a.clone(),
+                Some(_) => a.to_timezone(tz),
+            },
+            (Some(a), None) => a.clone(),
+            (None, Some(tz)) => Self::now_in(tz),
+            (None, None) => Self::now(),
+        }
+    }
+
     #[must_use]
     pub fn new(year: i32, month: u32, day: u32) -> Self {
-        Self {
-            year,
-            month,
-            day,
-            time: Time::default(),
-            timezone: None,
-            format: DateFormat::default(),
-        }
+        Self::with_time(year, month, day, Time::default())
     }
 
     #[must_use]
@@ -679,7 +816,25 @@ impl Date {
             time,
             timezone: None,
             format: DateFormat::default(),
+            flags: 0,
         }
+    }
+
+    /// The UTC instant (ms since the epoch) this date denotes. Floating dates are interpreted in the
+    /// system's local zone.
+    #[must_use]
+    pub fn instant_ms(&self) -> i64 {
+        if self.timezone.is_some() {
+            self.to_epoch_milliseconds()
+        } else {
+            crate::units::local_tz::local_wall_ms_to_utc_ms(self.to_epoch_milliseconds())
+        }
+    }
+
+    /// Returns `true` if this date's display format was explicitly chosen (e.g. by `format_date`).
+    #[must_use]
+    pub fn has_explicit_format(&self) -> bool {
+        self.flags & FLAG_EXPLICIT_FORMAT != 0
     }
 
     #[must_use]
@@ -694,15 +849,33 @@ impl Date {
         self
     }
 
+    /// Parses a numeric date (`YYYY-MM-DD`, `DD-MM-YYYY`, `MM-DD-YYYY`, with `-` or `/`) at the
+    /// start of `s`. Ambiguous `NN-NN-YYYY` input is read day-first; see
+    /// [`Date::parse_ymd_components_with`] to read it month-first.
     #[must_use]
     pub fn parse_ymd_components(s: &str) -> Option<(i32, u32, u32, usize)> {
+        Self::parse_ymd_components_with(s, false).ok().flatten()
+    }
+
+    /// Parses a numeric date at the start of `s`.
+    ///
+    /// * `YYYY-MM-DD` is always year-month-day (`2026-13-01` is invalid).
+    /// * `NN-NN-YYYY` is day-month unless `month_first` is set; when one field exceeds 12 the
+    ///   unambiguous reading is used.
+    ///
+    /// Returns `Ok(None)` if `s` doesn't look like a numeric date and `Err` if it has the shape of
+    /// a date (four-digit year) but is not a valid calendar date (e.g. `2026-02-30`).
+    pub fn parse_ymd_components_with(
+        s: &str,
+        month_first: bool,
+    ) -> Result<Option<(i32, u32, u32, usize)>, AbacusError> {
         let bytes = s.as_bytes();
         let mut start = 0;
         while start < bytes.len() && (bytes[start] == b' ' || bytes[start] == b'\t') {
             start += 1;
         }
         if start >= bytes.len() || !bytes[start].is_ascii_digit() {
-            return None;
+            return Ok(None);
         }
 
         let mut end = start;
@@ -717,50 +890,43 @@ impl Date {
         } else if date_bytes.contains(&b'/') {
             b'/'
         } else {
-            return None;
+            return Ok(None);
         };
 
         let mut split = date_bytes.split(|&b| b == sep);
-        let p1 = split.next()?;
-        let p2 = split.next()?;
-        let p3 = split.next()?;
-        if split.next().is_some() {
-            return None;
+        let (Some(p1), Some(p2), Some(p3), None) =
+            (split.next(), split.next(), split.next(), split.next())
+        else {
+            return Ok(None);
+        };
+
+        let is_num = |p: &[u8], lens: std::ops::RangeInclusive<usize>| {
+            lens.contains(&p.len()) && p.iter().all(u8::is_ascii_digit)
+        };
+        let year_first = is_num(p1, 4..=4) && is_num(p2, 1..=2) && is_num(p3, 1..=2);
+        let year_last = is_num(p1, 1..=2) && is_num(p2, 1..=2) && is_num(p3, 4..=4);
+        if !year_first && !year_last {
+            return Ok(None);
         }
 
-        if !(p1.len() == 4 || p3.len() == 4) || p1.is_empty() || p2.is_empty() || p3.is_empty() {
-            return None;
-        }
-        if !p1.iter().all(u8::is_ascii_digit)
-            || !p2.iter().all(u8::is_ascii_digit)
-            || !p3.iter().all(u8::is_ascii_digit)
-        {
-            return None;
-        }
+        // All parts are ASCII digits of bounded length, so these parses cannot fail.
+        let num = |p: &[u8]| -> u32 {
+            p.iter()
+                .fold(0u32, |acc, &b| acc * 10 + u32::from(b - b'0'))
+        };
 
-        let p1_str = std::str::from_utf8(p1).ok()?;
-        let p2_str = std::str::from_utf8(p2).ok()?;
-        let p3_str = std::str::from_utf8(p3).ok()?;
-
-        let (year, month, day) = if p1.len() == 4 {
-            let yr = p1_str.parse::<i32>().ok()?;
-            let n2 = p2_str.parse::<u32>().ok()?;
-            let n3 = p3_str.parse::<u32>().ok()?;
-            if n2 > 12 && n3 <= 12 {
-                (yr, n3, n2)
-            } else {
-                (yr, n2, n3)
-            }
+        let (year, month, day) = if year_first {
+            (num(p1) as i32, num(p2), num(p3))
         } else {
-            let n1 = p1_str.parse::<u32>().ok()?;
-            let n2 = p2_str.parse::<u32>().ok()?;
-            let yr = p3_str.parse::<i32>().ok()?;
+            let (n1, n2, yr) = (num(p1), num(p2), num(p3) as i32);
             if n1 <= 12 && n2 > 12 {
-                // e.g. 05-16-2010 or 05/16/2010 -> month = 5, day = 16
+                // e.g. 05-16-2010 -> month = 5, day = 16 (unambiguous)
                 (yr, n1, n2)
             } else if n1 > 12 && n2 <= 12 {
-                // e.g. 16-05-2010 or 16/05/2010 -> month = 5, day = 16
+                // e.g. 16-05-2010 -> month = 5, day = 16 (unambiguous)
                 (yr, n2, n1)
+            } else if month_first {
+                (yr, n1, n2)
             } else {
                 // Ambiguous e.g. 07-08-2026 -> default DD-MM-YYYY
                 (yr, n2, n1)
@@ -768,16 +934,23 @@ impl Date {
         };
 
         if !is_valid_date(year, month, day) {
-            return None;
+            let text = String::from_utf8_lossy(date_bytes);
+            return Err(AbacusError::InvalidDate(format!(
+                "'{text}' is not a valid calendar date"
+            )));
         }
 
-        Some((year, month, day, end))
+        Ok(Some((year, month, day, end)))
     }
 
     pub fn apply_time_value(&self, rhs: &Value, sign: i64) -> Result<Date, AbacusError> {
         self.apply_time_value_with(rhs, sign, WeekendDays::SaturdaySunday)
     }
 
+    /// Shifts this date by a duration. Business-day units step over weekends (and must be whole),
+    /// `month`/`year` units are calendar months/years (clamping the day to the month's end, e.g.
+    /// Jan 31 + 1 month = Feb 28) and must be whole, and other time units shift by their exact
+    /// length. Non-finite or astronomically large shifts are rejected.
     pub fn apply_time_value_with(
         &self,
         rhs: &Value,
@@ -787,13 +960,38 @@ impl Date {
         if rhs.unit.dimensions != Dimensions::TIME {
             return Err(AbacusError::IncompatibleDimensions);
         }
-        if rhs.unit.is_business_day_unit() {
-            let count = (rhs.canonical / 86400.0).round() as i64;
-            Ok(self.add_business_days_with(sign * count, weekend))
+        let out_of_range =
+            || AbacusError::InvalidDate("date shift is out of the supported range".to_string());
+        if !rhs.canonical.is_finite() || (rhs.canonical * 1000.0).abs() > MAX_DATE_SHIFT_MS {
+            return Err(out_of_range());
+        }
+
+        let whole = |count: f64, what: &str| -> Result<i64, AbacusError> {
+            let rounded = count.round();
+            if (count - rounded).abs() > 1e-9 * count.abs().max(1.0) {
+                return Err(AbacusError::InvalidDate(format!(
+                    "cannot shift a date by a fractional number of {what} ({count})"
+                )));
+            }
+            Ok(rounded as i64)
+        };
+
+        let result = if rhs.unit.is_business_day_unit() {
+            let count = whole(rhs.canonical / 86_400.0, "business days")?;
+            self.add_business_days_with(sign * count, weekend)
+        } else if let Some(months_per_unit) = calendar_months_per_unit(&rhs.unit) {
+            let count = whole(rhs.canonical / rhs.unit.scalar, "calendar months/years")?;
+            let months =
+                i32::try_from(sign * count * months_per_unit).map_err(|_| out_of_range())?;
+            self.add_months(months)
         } else {
             let ms = (rhs.canonical * 1000.0).round() as i64;
-            Ok(self.add_milliseconds(sign * ms))
+            self.add_milliseconds(sign * ms)
+        };
+        if !(-MAX_YEAR..=MAX_YEAR).contains(&result.year) {
+            return Err(out_of_range());
         }
+        Ok(result)
     }
 
     /// Retrieves a numerical property value from this Date by property name using custom weekend rules.
@@ -850,6 +1048,7 @@ impl Date {
             time: Time::from_hms(hour, minute, second),
             timezone: None,
             format: DateFormat::default(),
+            flags: 0,
         }
     }
 
@@ -870,6 +1069,7 @@ impl Date {
             time: Time::new(hour, minute, second, millisecond),
             timezone: None,
             format: DateFormat::default(),
+            flags: 0,
         }
     }
 
@@ -902,6 +1102,9 @@ impl Date {
         Self::new(year, month, day)
     }
 
+    /// Milliseconds since the epoch of this date's wall-clock time, corrected by its timezone
+    /// offset. Floating dates are treated as UTC wall-clock time; use [`Date::instant_ms`] to
+    /// resolve them in the local zone.
     #[must_use]
     pub fn to_epoch_milliseconds(&self) -> i64 {
         let local_days_ms = self.to_epoch_days().saturating_mul(86_400_000);
@@ -931,53 +1134,44 @@ impl Date {
             time,
             timezone: None,
             format: DateFormat::default(),
+            flags: 0,
         }
     }
 
     // TimeZone conversions
+    /// Converts to UTC. Floating dates are interpreted in the system's local zone.
     #[must_use]
     pub fn to_utc(&self) -> Date {
-        if let Some(ref tz) = self.timezone {
-            if tz.offset_minutes == 0 {
-                return self.clone();
-            }
-            let utc_ms = self.to_epoch_milliseconds();
-            let mut d = Self::from_epoch_milliseconds(utc_ms);
-            d.timezone = Some(TimeZone::utc());
-            d.format = self.format;
-            d
-        } else {
-            self.clone()
-        }
+        self.to_timezone(&TimeZone::utc())
     }
 
+    /// Converts this instant to wall-clock time in `target_tz`. Floating dates are interpreted in
+    /// the system's local zone.
     #[must_use]
     pub fn to_timezone(&self, target_tz: &TimeZone) -> Date {
-        let utc_ms = self.to_epoch_milliseconds();
-        let target_ms = utc_ms + (i64::from(target_tz.offset_minutes) * 60_000);
+        let utc_ms = self.instant_ms();
+        let target_ms = utc_ms.saturating_add(i64::from(target_tz.offset_minutes) * 60_000);
         let mut d = Self::from_epoch_milliseconds(target_ms);
         d.timezone = Some(target_tz.clone());
         d.format = self.format;
+        d.flags = self.flags & FLAG_EXPLICIT_FORMAT;
         d
     }
 
     // Arithmetic methods
     #[must_use]
     pub fn add_milliseconds(&self, ms: i64) -> Self {
-        if let Some(ref tz) = self.timezone {
-            let utc_ms = self.to_epoch_milliseconds().saturating_add(ms);
-            let target_ms =
-                utc_ms.saturating_add(i64::from(tz.offset_minutes).saturating_mul(60_000));
-            let mut d = Self::from_epoch_milliseconds(target_ms);
-            d.timezone = Some(tz.clone());
-            d.format = self.format;
-            d
-        } else {
-            let mut d =
-                Self::from_epoch_milliseconds(self.to_epoch_milliseconds().saturating_add(ms));
-            d.format = self.format;
-            d
-        }
+        // Wall-clock arithmetic is exact for fixed-offset and floating dates alike.
+        let mut d = Self::from_epoch_milliseconds(
+            self.to_epoch_days()
+                .saturating_mul(86_400_000)
+                .saturating_add(self.time.to_total_milliseconds() as i64)
+                .saturating_add(ms),
+        );
+        d.timezone = self.timezone.clone();
+        d.format = self.format;
+        d.flags = self.flags & FLAG_EXPLICIT_FORMAT;
+        d
     }
 
     #[must_use]
@@ -1024,12 +1218,26 @@ impl Date {
             time: self.time,
             timezone: self.timezone.clone(),
             format: self.format,
+            flags: self.flags & FLAG_EXPLICIT_FORMAT,
         }
     }
 
     #[must_use]
     pub fn add_years(&self, years: i32) -> Self {
         self.add_months(years.saturating_mul(12))
+    }
+
+    /// Milliseconds from `self` to `other`. Two floating dates differ by wall-clock time; otherwise
+    /// the difference between instants is used.
+    #[must_use]
+    pub fn milliseconds_between(&self, other: &Self) -> i64 {
+        if self.timezone.is_none() && other.timezone.is_none() {
+            other
+                .to_epoch_milliseconds()
+                .saturating_sub(self.to_epoch_milliseconds())
+        } else {
+            other.instant_ms().saturating_sub(self.instant_ms())
+        }
     }
 
     #[must_use]
@@ -1039,15 +1247,7 @@ impl Date {
 
     #[must_use]
     pub fn seconds_between(&self, other: &Self) -> i64 {
-        (other
-            .to_epoch_milliseconds()
-            .saturating_sub(self.to_epoch_milliseconds()))
-            / 1000
-    }
-
-    #[must_use]
-    pub fn milliseconds_between(&self, other: &Self) -> i64 {
-        other.to_epoch_milliseconds() - self.to_epoch_milliseconds()
+        self.milliseconds_between(other) / 1000
     }
 
     // Formatting methods
@@ -1058,13 +1258,18 @@ impl Date {
         } else {
             String::new()
         };
+        let year = if self.year < 0 {
+            format!("-{:04}", self.year.unsigned_abs())
+        } else {
+            format!("{:04}", self.year)
+        };
         let date_part = match style {
             DateFormat::MonthDayYear => {
-                format!("{} {}, {:04}", month_name(self.month), self.day, self.year)
+                format!("{} {}, {year}", month_name(self.month), self.day)
             }
-            DateFormat::DDMMYYYY => format!("{:02}-{:02}-{:04}", self.day, self.month, self.year),
-            DateFormat::YYYYMMDD => format!("{:04}-{:02}-{:02}", self.year, self.month, self.day),
-            DateFormat::MMDDYYYY => format!("{:02}-{:02}-{:04}", self.month, self.day, self.year),
+            DateFormat::DDMMYYYY => format!("{:02}-{:02}-{year}", self.day, self.month),
+            DateFormat::YYYYMMDD => format!("{year}-{:02}-{:02}", self.month, self.day),
+            DateFormat::MMDDYYYY => format!("{:02}-{:02}-{year}", self.month, self.day),
         };
 
         if self.time.hour == 0
@@ -1149,6 +1354,10 @@ impl Date {
         self.add_business_days_with(n, WeekendDays::SaturdaySunday)
     }
 
+    /// Counts business days in the half-open range `(self, other]`: the start date is excluded and
+    /// the end date included, mirroring business-day addition (`start + n business days` lands on
+    /// the date where this count reaches `n`). For Mon → Fri of the same week this is 4 (Excel's
+    /// `NETWORKDAYS`, which counts both ends, gives 5). Reversed arguments give a negative count.
     #[must_use]
     pub fn business_days_between_with(&self, other: &Self, weekend: WeekendDays) -> i64 {
         let self_days = self.to_epoch_days();
@@ -1204,9 +1413,10 @@ pub enum DateFormat {
     MMDDYYYY,
 }
 
+/// The Unix epoch, 1970-01-01 00:00:00 (floating).
 impl Default for Date {
     fn default() -> Self {
-        Self::new(0, 0, 0)
+        Self::new(1970, 1, 1)
     }
 }
 
@@ -1234,13 +1444,13 @@ impl FromStr for Date {
         };
 
         let (year, month, day, consumed) =
-            if let Some(res) = Date::parse_ymd_components(&normalized) {
+            if let Some(res) = Date::parse_ymd_components_with(&normalized, false)? {
                 res
             } else if let Some((date, consumed)) =
                 crate::evaluation::tokenizer::date_literal::try_parse_textual_date(
                     &normalized,
                     &Date::today(),
-                )
+                )?
             {
                 (date.year, date.month, date.day, consumed)
             } else {
@@ -1252,22 +1462,18 @@ impl FromStr for Date {
         let mut time = Time::new(0, 0, 0, 0);
         let mut timezone = None;
 
+        // Everything after the date must be an optional time followed by an optional timezone.
         let rem = normalized[consumed..].trim_start();
-        if !rem.is_empty() {
-            if let Some((parsed_time, time_len)) = Time::parse_time_spec(rem, false) {
-                time = parsed_time;
-                let tz_part = rem[time_len..].trim();
-                if !tz_part.is_empty()
-                    && let Ok(tz) = TimeZone::parse(tz_part)
-                {
-                    timezone = Some(tz);
-                }
-            } else {
-                let tz_part = rem.trim();
-                if let Ok(tz) = TimeZone::parse(tz_part) {
-                    timezone = Some(tz);
-                }
-            }
+        let tz_part = if let Some((parsed_time, time_len)) = Time::parse_time_spec(rem, false) {
+            time = parsed_time;
+            rem[time_len..].trim()
+        } else {
+            rem.trim()
+        };
+        if !tz_part.is_empty() {
+            timezone = Some(TimeZone::parse(tz_part).map_err(|_| {
+                AbacusError::InvalidDate(format!("unexpected trailing input in date: '{s}'"))
+            })?);
         }
 
         let mut date = Date::with_time(year, month, day, time);
@@ -1283,21 +1489,57 @@ impl FromStr for Date {
     }
 }
 
+/// Largest absolute calendar year produced by date arithmetic.
+const MAX_YEAR: i32 = 300_000;
+
+/// Number of calendar months represented by one unit of a calendar-duration unit (`mo` → 1,
+/// `yr` → 12), or `None` for fixed-length units.
+pub(crate) fn calendar_months_per_unit(unit: &Unit) -> Option<i64> {
+    if unit.dimensions != Dimensions::TIME
+        || !unit.display.denominator.is_empty()
+        || unit.display.numerator.len() != 1
+    {
+        return None;
+    }
+    match unit.display.numerator[0].as_str() {
+        "mo" => Some(1),
+        "yr" => Some(12),
+        _ => None,
+    }
+}
+
+/// The duration from `from` to `to`: whole non-zero days are expressed in `d`, otherwise the
+/// largest of `h`, `min` or `s` that keeps the magnitude at least 1.
+pub(crate) fn duration_between(from: &Date, to: &Date) -> Value {
+    let diff_ms = from.milliseconds_between(to);
+    let seconds = diff_ms as f64 / 1000.0;
+    let abs_ms = diff_ms.unsigned_abs();
+    let (symbol, scalar) = if abs_ms != 0 && abs_ms.is_multiple_of(86_400_000) {
+        ("d", 86_400.0)
+    } else if abs_ms >= 3_600_000 {
+        ("h", 3_600.0)
+    } else if abs_ms >= 60_000 {
+        ("min", 60.0)
+    } else {
+        ("s", 1.0)
+    };
+    let unit = Unit {
+        scalar,
+        offset: 0.0,
+        dimensions: Dimensions::TIME,
+        display: crate::units::unit::UnitExpr::single(symbol),
+    };
+    Value::new(seconds / scalar, Arc::new(unit))
+}
+
 // Operators for Date arithmetic
 impl Sub<&Date> for &Date {
     type Output = Value;
 
+    /// The duration from `rhs` to `self`, expressed in days when it is a whole (non-zero) number of
+    /// days and in hours otherwise.
     fn sub(self, rhs: &Date) -> Self::Output {
-        let diff_ms = self.to_epoch_milliseconds() - rhs.to_epoch_milliseconds();
-        let seconds = diff_ms as f64 / 1000.0;
-
-        let unit = Unit {
-            scalar: 1.0,
-            offset: 0.0,
-            dimensions: Dimensions::TIME,
-            display: crate::units::unit::UnitExpr::single("s"),
-        };
-        Value::new(seconds, Arc::new(unit))
+        duration_between(rhs, self)
     }
 }
 

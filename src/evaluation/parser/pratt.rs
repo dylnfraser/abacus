@@ -72,11 +72,10 @@ impl<'a> Parser<'a> {
     /// Lazy accessor for anchor date/time. Only evaluated if relative dates are used.
     pub(crate) fn get_now(&mut self) -> &crate::Date {
         if self.now.is_none() {
-            let mut now = crate::Date::now();
-            if now.timezone.is_none() {
-                now.timezone = self.config.default_timezone.clone();
-            }
-            self.now = Some(now);
+            self.now = Some(crate::Date::reference_now(
+                None,
+                self.config.default_timezone.as_ref(),
+            ));
         }
         self.now.as_ref().expect("now initialized")
     }
@@ -341,9 +340,7 @@ impl<'a> Parser<'a> {
                         continue;
                     }
 
-                    let diff_sec = (target_date.to_epoch_milliseconds()
-                        - now.to_epoch_milliseconds()) as f64
-                        / 1000.0;
+                    let diff_sec = now.milliseconds_between(&target_date) as f64 / 1000.0;
                     let sec_val = Value::new(diff_sec, self.unit_registry.unit("s")?);
                     let converted = sec_val.convert_to(std::sync::Arc::clone(&val.unit))?;
                     lhs = EvalResult::Scalar(converted);
@@ -356,16 +353,19 @@ impl<'a> Parser<'a> {
                 if val.unit.dimensions != crate::units::dimensions::Dimensions::TIME {
                     return Err(AbacusError::IncompatibleDimensions);
                 }
-                let ms = (val.canonical * 1000.0).round() as i64;
+                let weekend = self.config.weekend;
 
                 match op_name {
                     "ago" => {
-                        lhs =
-                            EvalResult::Date(self.get_now().add_milliseconds(ms.saturating_neg()));
+                        lhs = EvalResult::Date(self.get_now().apply_time_value_with(
+                            &val, -1, weekend,
+                        )?);
                         continue;
                     }
                     "from_now" => {
-                        lhs = EvalResult::Date(self.get_now().add_milliseconds(ms));
+                        lhs = EvalResult::Date(self.get_now().apply_time_value_with(
+                            &val, 1, weekend,
+                        )?);
                         continue;
                     }
                     "before" => {
@@ -378,7 +378,7 @@ impl<'a> Parser<'a> {
                         } else {
                             self.get_now().clone()
                         };
-                        lhs = EvalResult::Date(ref_date.add_milliseconds(ms.saturating_neg()));
+                        lhs = EvalResult::Date(ref_date.apply_time_value_with(&val, -1, weekend)?);
                         continue;
                     }
                     "after" => {
@@ -391,7 +391,7 @@ impl<'a> Parser<'a> {
                         } else {
                             self.get_now().clone()
                         };
-                        lhs = EvalResult::Date(ref_date.add_milliseconds(ms));
+                        lhs = EvalResult::Date(ref_date.apply_time_value_with(&val, 1, weekend)?);
                         continue;
                     }
                     _ => {}

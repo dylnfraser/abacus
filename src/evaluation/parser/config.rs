@@ -16,6 +16,8 @@ pub struct EvalConfig {
     pub currencies: bool,
     pub live_rates: bool,
     pub anchor_date: Option<crate::Date>,
+    /// Display format for dates; `MMDDYYYY` also makes ambiguous `NN-NN-YYYY` input month-first.
+    pub date_format: crate::DateFormat,
 }
 
 impl Default for EvalConfig {
@@ -34,6 +36,7 @@ impl Default for EvalConfig {
             currencies: cfg!(feature = "currencies"),
             live_rates: false,
             anchor_date: None,
+            date_format: crate::DateFormat::default(),
         }
     }
 }
@@ -54,6 +57,7 @@ impl From<&crate::Abacus> for EvalConfig {
             currencies: abacus.currencies,
             live_rates: abacus.live_rates,
             anchor_date: abacus.anchor_date.clone(),
+            date_format: abacus.date_format,
         }
     }
 }
