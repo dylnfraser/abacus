@@ -243,7 +243,7 @@ fn currency_unit(def: &CurrencyDefinition, rate_per_usd: f64) -> Arc<Unit> {
 }
 
 /// Registers all currency units with default fixed exchange rates into the provided map.
-pub fn register_currency_units(map: &mut HashMap<String, Arc<Unit>>) {
+pub fn register_currency_units<S: std::hash::BuildHasher>(map: &mut HashMap<String, Arc<Unit>, S>) {
     for def in FIXED_EXCHANGE_RATES {
         let unit = currency_unit(def, def.rate_per_usd);
         for &alias in def.aliases {
@@ -255,9 +255,9 @@ pub fn register_currency_units(map: &mut HashMap<String, Arc<Unit>>) {
 /// Updates currency exchange rates in the provided unit map.
 /// `rates` maps currency code (e.g. "EUR") to `rate_per_usd` (e.g. 0.89166).
 /// Non-finite or non-positive rates are ignored.
-pub fn update_currency_rates_in_map(
-    map: &mut HashMap<String, Arc<Unit>>,
-    rates: &HashMap<String, f64>,
+pub fn update_currency_rates_in_map<S: std::hash::BuildHasher, R: std::hash::BuildHasher>(
+    map: &mut HashMap<String, Arc<Unit>, S>,
+    rates: &HashMap<String, f64, R>,
 ) {
     for def in FIXED_EXCHANGE_RATES {
         if let Some(&rate_per_usd) = rates.get(def.code)

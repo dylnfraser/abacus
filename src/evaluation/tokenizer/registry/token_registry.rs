@@ -3,8 +3,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use crate::registry::helpers::fx_hash::FxHashMap;
+
 use crate::evaluation::tokenizer::registry::{
-    binary::{arithmetic::register_arithmetic, operators::BinaryOp},
+    binary::{arithmetic::standard_binary_ops, operators::BinaryOp},
     function::{
         combinatorics::register_combinatorics, math::register_math,
         math_helpers::register_math_helpers, operators::FunctionOp, trig::register_trig,
@@ -32,13 +34,55 @@ pub struct TokenRegistry {
     /// Lazily-built operator index used by the lexer. Cleared by the `register_*` methods and
     /// rebuilt automatically if the operator maps are mutated directly (detected by size change).
     index_cache: RwLock<Option<Arc<OperatorIndex>>>,
+    /// Lock-free copy of the index for the common case where the maps are only changed
+    /// through the `register_*` methods (which reset it).
+    index: std::sync::OnceLock<Arc<OperatorIndex>>,
 }
 
 /// Operator patterns grouped by first character, longest pattern first.
 #[derive(Debug)]
 pub struct OperatorIndex {
     by_first_char: HashMap<char, Vec<(Box<str>, MatchedOpKind)>>,
+    /// Patterns that are not plain words (contain a symbol or `-`), by first character,
+    /// longest first. Plain-word patterns live in `words` instead.
+    symbolic_by_first_char: FxHashMap<char, Vec<(Box<str>, MatchedOpKind)>>,
+    /// Plain-word patterns (see [`is_word_pattern`]) mapped to their kinds in tie-break order.
+    words: FxHashMap<Box<str>, Vec<MatchedOpKind>>,
     signature: (usize, usize, usize),
+}
+
+/// Characters that continue an identifier for operator word-boundary purposes.
+#[inline]
+#[must_use]
+pub(crate) fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '_' | '°' | 'Å' | 'Ω')
+}
+
+/// A pattern is a plain word when every character continues an identifier and it ends in an
+/// alphanumeric or `_` (so the lexer's word-boundary rule applies). Such a pattern can only
+/// match when it equals the input's whole leading word, which allows an exact map lookup.
+pub(crate) fn is_word_pattern(pattern: &str) -> bool {
+    pattern.chars().all(is_word_char)
+        && pattern
+            .chars()
+            .last()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// A borrowed or shared [`OperatorIndex`] (see [`TokenRegistry::operator_index_ref`]).
+pub(crate) enum IndexRef<'r> {
+    Borrowed(&'r OperatorIndex),
+    Shared(Arc<OperatorIndex>),
+}
+
+impl std::ops::Deref for IndexRef<'_> {
+    type Target = OperatorIndex;
+    fn deref(&self) -> &OperatorIndex {
+        match self {
+            Self::Borrowed(index) => index,
+            Self::Shared(index) => index,
+        }
+    }
 }
 
 impl OperatorIndex {
@@ -46,6 +90,20 @@ impl OperatorIndex {
     #[must_use]
     pub fn candidates(&self, c: char) -> Option<&[(Box<str>, MatchedOpKind)]> {
         self.by_first_char.get(&c).map(Vec::as_slice)
+    }
+
+    /// Non-word candidate patterns starting with `c`, sorted by descending length.
+    #[must_use]
+    pub(crate) fn symbolic_candidates(&self, c: char) -> &[(Box<str>, MatchedOpKind)] {
+        self.symbolic_by_first_char
+            .get(&c)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Kinds registered for the plain-word pattern `word`, in tie-break order.
+    #[must_use]
+    pub(crate) fn word_kinds(&self, word: &str) -> &[MatchedOpKind] {
+        self.words.get(word).map_or(&[], Vec::as_slice)
     }
 }
 
@@ -68,8 +126,6 @@ impl TokenRegistry {
     #[must_use]
     #[allow(unused_mut)]
     pub fn standard() -> Self {
-        let binary = register_arithmetic();
-
         let mut unary: Vec<UnaryOp> = Vec::new();
         unary.append(&mut register_general());
 
@@ -100,9 +156,12 @@ impl TokenRegistry {
 
         Self {
             index_cache: RwLock::new(None),
-            binary_operators: binary
-                .into_iter()
-                .map(|op| (op.alias.to_string(), Arc::new(op)))
+            index: std::sync::OnceLock::new(),
+            // Shared built-in instances: their identity is how built-ins are recognised
+            // (see `arithmetic::standard_binary_ops`).
+            binary_operators: standard_binary_ops()
+                .iter()
+                .map(|(op, _)| (op.alias.to_string(), Arc::clone(op)))
                 .collect(),
             unary_operators: unary
                 .into_iter()
@@ -140,10 +199,24 @@ impl TokenRegistry {
     }
 
     fn invalidate_index(&mut self) {
+        self.index = std::sync::OnceLock::new();
         *self
             .index_cache
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    /// Borrows the operator index without locking (the lexer calls this once per input).
+    ///
+    /// The index is built once and reset by the `register_*` methods. If the public maps were
+    /// mutated directly (detected by a size change), falls back to [`Self::operator_index`].
+    pub(crate) fn operator_index_ref(&self) -> IndexRef<'_> {
+        let index = self.index.get_or_init(|| Arc::new(self.build_index()));
+        if index.signature == self.signature() {
+            IndexRef::Borrowed(index)
+        } else {
+            IndexRef::Shared(self.operator_index())
+        }
     }
 
     fn signature(&self) -> (usize, usize, usize) {
@@ -158,6 +231,11 @@ impl TokenRegistry {
     #[must_use]
     pub fn operator_index(&self) -> Arc<OperatorIndex> {
         let signature = self.signature();
+        if let Some(index) = self.index.get()
+            && index.signature == signature
+        {
+            return Arc::clone(index);
+        }
         if let Some(index) = self
             .index_cache
             .read()
@@ -208,8 +286,26 @@ impl TokenRegistry {
                     .then_with(|| a.0.cmp(&b.0))
             });
         }
+        let mut symbolic_by_first_char: FxHashMap<char, Vec<(Box<str>, MatchedOpKind)>> =
+            FxHashMap::default();
+        let mut words: FxHashMap<Box<str>, Vec<MatchedOpKind>> = FxHashMap::default();
+        for (&c, candidates) in &map {
+            for (pattern, kind) in candidates {
+                if is_word_pattern(pattern) {
+                    // Candidates are already in tie-break order, so pushing preserves it.
+                    words.entry(pattern.clone()).or_default().push(*kind);
+                } else {
+                    symbolic_by_first_char
+                        .entry(c)
+                        .or_default()
+                        .push((pattern.clone(), *kind));
+                }
+            }
+        }
         OperatorIndex {
             by_first_char: map,
+            symbolic_by_first_char,
+            words,
             signature: self.signature(),
         }
     }

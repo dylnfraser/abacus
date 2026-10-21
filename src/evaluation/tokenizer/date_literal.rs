@@ -110,6 +110,19 @@ const DATE_PHRASE_FIRST_WORDS: &[&str] = &[
     "yesterday",
 ];
 
+/// For each ASCII first byte, a bitmask of the word lengths (bit `n` = length `n`) that occur in
+/// [`DATE_PHRASE_FIRST_WORDS`].
+fn first_word_shapes() -> &'static [u16; 128] {
+    static SHAPES: std::sync::OnceLock<[u16; 128]> = std::sync::OnceLock::new();
+    SHAPES.get_or_init(|| {
+        let mut shapes = [0u16; 128];
+        for word in DATE_PHRASE_FIRST_WORDS {
+            shapes[usize::from(word.as_bytes()[0])] |= 1 << word.len();
+        }
+        shapes
+    })
+}
+
 /// Returns `true` if the word at the start of `s` can begin a textual date phrase.
 pub(crate) fn could_start_date_phrase(s: &str) -> bool {
     let len = s
@@ -117,6 +130,15 @@ pub(crate) fn could_start_date_phrase(s: &str) -> bool {
         .position(|b| !b.is_ascii_alphanumeric())
         .unwrap_or(s.len());
     if len == 0 || len > 12 {
+        return false;
+    }
+    // Exact pre-filter: most identifiers (`m`, `km`, `sqrt`) have a first letter / length pair
+    // that no phrase word has, so they are rejected without any string comparison.
+    let first = s.as_bytes()[0].to_ascii_lowercase();
+    if !first_word_shapes()
+        .get(usize::from(first))
+        .is_some_and(|lens| lens & (1 << len) != 0)
+    {
         return false;
     }
     let mut buf = [0u8; 12];
@@ -228,38 +250,42 @@ pub(crate) fn parse_ordinal(s: &str) -> Option<(i8, usize)> {
 }
 
 pub(crate) fn parse_month(s: &str) -> Option<(u32, usize)> {
-    let matches: &[(&str, u32)] = &[
-        ("january", 1),
-        ("jan", 1),
-        ("february", 2),
-        ("feb", 2),
-        ("march", 3),
-        ("mar", 3),
-        ("april", 4),
-        ("apr", 4),
-        ("may", 5),
-        ("june", 6),
-        ("jun", 6),
-        ("july", 7),
-        ("jul", 7),
-        ("august", 8),
-        ("aug", 8),
-        ("september", 9),
-        ("sept", 9),
-        ("sep", 9),
-        ("october", 10),
-        ("oct", 10),
-        ("november", 11),
-        ("nov", 11),
-        ("december", 12),
-        ("dec", 12),
-    ];
-    for &(word, m) in matches {
-        if let Some(len) = strip_word_prefix(s, word) {
-            return Some((m, len));
-        }
+    // A month name followed by a word boundary is exactly the whole leading alphanumeric run,
+    // so one lowercase comparison replaces trying every name as a prefix.
+    let mut buf = [0u8; 9];
+    let word = lowercase_leading_word(s, &mut buf)?;
+    let month = match word {
+        "january" | "jan" => 1,
+        "february" | "feb" => 2,
+        "march" | "mar" => 3,
+        "april" | "apr" => 4,
+        "may" => 5,
+        "june" | "jun" => 6,
+        "july" | "jul" => 7,
+        "august" | "aug" => 8,
+        "september" | "sept" | "sep" => 9,
+        "october" | "oct" => 10,
+        "november" | "nov" => 11,
+        "december" | "dec" => 12,
+        _ => return None,
+    };
+    Some((month, word.len()))
+}
+
+/// ASCII-lowercases the leading alphanumeric run of `s` into `buf`, returning it if it is
+/// non-empty and fits (longer runs can't equal any of the short keywords matched against it).
+fn lowercase_leading_word<'b>(s: &str, buf: &'b mut [u8]) -> Option<&'b str> {
+    let len = s
+        .bytes()
+        .position(|b| !b.is_ascii_alphanumeric())
+        .unwrap_or(s.len());
+    if len == 0 || len > buf.len() {
+        return None;
     }
-    None
+    for (dst, src) in buf.iter_mut().zip(&s.as_bytes()[..len]) {
+        *dst = src.to_ascii_lowercase();
+    }
+    std::str::from_utf8(&buf[..len]).ok()
 }
 
 /// Parses an optional four-digit year preceded by whitespace (e.g. `" 2026"`). Shorter digit runs
@@ -790,6 +816,9 @@ fn parse_trailing_time(remaining: &str, end_idx: usize, date: &mut Date) -> usiz
 pub(crate) struct DateLexOptions<'d> {
     /// Reference "now" for relative expressions; the system clock is read when absent.
     pub anchor: Option<&'d Date>,
+    /// When there is no anchor: a per-evaluation cell holding the lazily resolved "now" (in
+    /// the given default timezone), so the clock is read at most once and only if needed.
+    pub lazy_now: Option<(&'d std::cell::OnceCell<Date>, Option<&'d TimeZone>)>,
     /// Read ambiguous `NN-NN-YYYY` dates as month-day.
     pub month_first: bool,
     /// The previous token is a number or quantity.
@@ -826,6 +855,8 @@ pub(crate) fn try_parse_date_literal_with_anchor(
     let fallback;
     let ref_date = if let Some(a) = opts.anchor {
         a
+    } else if let Some((cell, tz)) = opts.lazy_now {
+        cell.get_or_init(|| Date::reference_now(None, tz))
     } else {
         fallback = Date::now();
         &fallback
@@ -907,6 +938,59 @@ mod tests {
     fn first_word_table_is_sorted() {
         assert!(DATE_PHRASE_FIRST_WORDS.windows(2).all(|w| w[0] < w[1]));
         assert!(DATE_PHRASE_FIRST_WORDS.iter().all(|w| w.len() <= 12));
+    }
+
+    #[test]
+    fn parse_month_matches_prefix_loop_reference() {
+        const NAMES: &[(&str, u32)] = &[
+            ("january", 1),
+            ("jan", 1),
+            ("february", 2),
+            ("feb", 2),
+            ("march", 3),
+            ("mar", 3),
+            ("april", 4),
+            ("apr", 4),
+            ("may", 5),
+            ("june", 6),
+            ("jun", 6),
+            ("july", 7),
+            ("jul", 7),
+            ("august", 8),
+            ("aug", 8),
+            ("september", 9),
+            ("sept", 9),
+            ("sep", 9),
+            ("october", 10),
+            ("oct", 10),
+            ("november", 11),
+            ("nov", 11),
+            ("december", 12),
+            ("dec", 12),
+        ];
+        let reference = |s: &str| {
+            NAMES
+                .iter()
+                .find_map(|&(w, m)| strip_word_prefix(s, w).map(|len| (m, len)))
+        };
+        let mut inputs: Vec<String> = Vec::new();
+        for &(name, _) in NAMES {
+            for suffix in ["", " 2026", ",", "s", "2", "é", "-", ".", "uary", "x y"] {
+                inputs.push(format!("{name}{suffix}"));
+                inputs.push(format!("{}{suffix}", name.to_uppercase()));
+                let mut cap = name.to_string();
+                cap[..1].make_ascii_uppercase();
+                inputs.push(format!("{cap}{suffix}"));
+            }
+        }
+        for other in [
+            "", " may", "m", "ma", "km", "deg", "decade", "marathon", "of", "12", "maý",
+        ] {
+            inputs.push(other.to_string());
+        }
+        for s in &inputs {
+            assert_eq!(parse_month(s), reference(s), "parse_month({s:?})");
+        }
     }
 
     #[test]

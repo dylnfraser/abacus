@@ -4,7 +4,7 @@ use crate::{
         date_literal::{DateLexOptions, try_parse_date_literal_with_anchor},
         implicit::resolve_tokens,
         number::parse_number_token,
-        registry::token_registry::{MatchedOpKind, TokenRegistry},
+        registry::token_registry::{MatchedOpKind, TokenRegistry, is_word_char},
         tokens::Token,
     },
 };
@@ -314,6 +314,127 @@ pub fn tokenize_string_with_anchor<'a>(
     )
 }
 
+/// `str::strip_prefix` for the short operator patterns: compares bytes inline and stops at the
+/// first mismatch (usually the second byte), avoiding an out-of-line `memcmp` per candidate.
+#[inline]
+fn strip_prefix_inline<'s>(s: &'s str, pattern: &str) -> Option<&'s str> {
+    let (sb, pb) = (s.as_bytes(), pattern.as_bytes());
+    if sb.len() < pb.len() || !sb.iter().zip(pb).all(|(a, b)| a == b) {
+        return None;
+    }
+    // `pattern` is a whole `str` matching a prefix of `s`, so this is a char boundary.
+    Some(&s[pb.len()..])
+}
+
+#[derive(Clone, Copy)]
+enum OpMap {
+    Func,
+    Binary,
+    Unary,
+}
+
+/// Which of the registry's operator maps an identifier is registered in, looked up once.
+/// Plain words are answered from the operator index's word table (the same keys, hashed with
+/// the fast hasher); anything else falls back to the public maps.
+struct RegisteredOps<'r> {
+    sym: &'r str,
+    token_registry: &'r TokenRegistry,
+    /// `Some` when `sym` is a plain word (then this is its complete list of kinds).
+    word_kinds: Option<&'r [MatchedOpKind]>,
+}
+
+impl<'r> RegisteredOps<'r> {
+    fn lookup(
+        op_index: &'r crate::evaluation::tokenizer::registry::token_registry::OperatorIndex,
+        token_registry: &'r TokenRegistry,
+        sym: &'r str,
+    ) -> Self {
+        let word_kinds =
+            crate::evaluation::tokenizer::registry::token_registry::is_word_pattern(sym)
+                .then(|| op_index.word_kinds(sym));
+        Self {
+            sym,
+            token_registry,
+            word_kinds,
+        }
+    }
+
+    /// The emitted name/alias if `sym` is registered in `map`.
+    fn find(&self, map: OpMap) -> Option<&'static str> {
+        if let Some(kinds) = self.word_kinds {
+            return kinds.iter().find_map(|kind| match (map, *kind) {
+                (OpMap::Func, MatchedOpKind::Func(name))
+                | (OpMap::Binary, MatchedOpKind::Binary(name))
+                | (OpMap::Unary, MatchedOpKind::Unary(name)) => Some(name),
+                _ => None,
+            });
+        }
+        let reg = self.token_registry;
+        match map {
+            OpMap::Func => reg.function_operators.get(self.sym).map(|op| op.name),
+            OpMap::Binary => reg.binary_operators.get(self.sym).map(|op| op.alias),
+            OpMap::Unary => reg.unary_operators.get(self.sym).map(|op| op.alias),
+        }
+    }
+}
+
+/// Applies the context rules for an operator `pattern` found at the start of the input, with
+/// `rest` the text after it and `prev` the last emitted token. Returns `false` when this
+/// candidate must be skipped in favour of a shorter one (or none).
+fn accept_operator_candidate(
+    pattern: &str,
+    kind: MatchedOpKind,
+    rest: &str,
+    prev: Option<&Token<'_>>,
+    unit_registry: &UnitRegistry,
+) -> bool {
+    let next_char = rest.chars().next();
+    let last_char = pattern.chars().last();
+    match kind {
+        MatchedOpKind::Binary(_) => {
+            if pattern == "%" && !percent_is_modulo(rest) {
+                return false;
+            }
+            !(last_char.is_some_and(|lc| lc.is_alphanumeric() || lc == '_')
+                && next_char.is_some_and(is_word_char))
+        }
+        MatchedOpKind::Unary(op_alias) => {
+            // `++`/`--` directly after an operand are only postfix increment /
+            // decrement at the end of a (sub)expression; otherwise `3--2` and
+            // `2++3` are a binary operator followed by a unary sign.
+            if matches!(op_alias, "++" | "--")
+                && is_operand_token(prev)
+                && !rest
+                    .trim_start()
+                    .chars()
+                    .next()
+                    .is_none_or(|nc| matches!(nc, ')' | ']' | ','))
+            {
+                return false;
+            }
+            !(last_char.is_some_and(|lc| lc.is_alphanumeric() || lc == '_')
+                && next_char.is_some_and(is_word_char))
+        }
+        MatchedOpKind::Func(_) => {
+            if unit_registry.contains(pattern) && !rest.trim_start().starts_with('(') {
+                return false;
+            }
+            !(last_char.is_some_and(|lc| lc.is_alphanumeric() || lc == '_' || lc == '-')
+                && next_char.is_some_and(|nc| is_word_char(nc) || nc == '-'))
+        }
+    }
+}
+
+/// Cheap pre-filter for [`crate::registry::units::MULTI_WORD_UNITS`]: every entry is an
+/// ASCII-alphabetic first word followed by a space (or `$`, as in `R$`), so a match is only
+/// possible when the leading letters of `s` are followed by one of those bytes.
+#[inline]
+fn could_start_multi_word_unit(s: &str) -> bool {
+    let b = s.as_bytes();
+    let word_len = b.iter().take_while(|c| c.is_ascii_alphabetic()).count();
+    matches!(b.get(word_len), Some(b' ' | b'$'))
+}
+
 /// Returns `true` if the digit run at the start of `s` may begin a date or time literal
 /// (`07-08-2026`, `15:30`, `3pm`, `3 PM`, `16th May`, `16 May 2010`).
 fn is_numeric_date_candidate(s: &str) -> bool {
@@ -353,9 +474,41 @@ pub fn tokenize_string_with_date_options<'a>(
     anchor_date: Option<&crate::Date>,
     date_month_first: bool,
 ) -> Result<Vec<Token<'a>>, AbacusError> {
-    let mut tokens = Vec::new();
+    tokenize_with_lazy_now(
+        token_registry,
+        unit_registry,
+        variables,
+        input_text,
+        implicit_multiplication,
+        number_scales,
+        anchor_date,
+        None,
+        date_month_first,
+    )
+}
+
+/// [`tokenize_string_with_date_options`], with an optional lazily resolved "now" used when no
+/// anchor is given (see [`DateLexOptions::lazy_now`]).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn tokenize_with_lazy_now<'a>(
+    token_registry: &TokenRegistry,
+    unit_registry: &UnitRegistry,
+    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
+    input_text: &'a str,
+    implicit_multiplication: bool,
+    number_scales: bool,
+    anchor_date: Option<&crate::Date>,
+    lazy_now: Option<(
+        &std::cell::OnceCell<crate::Date>,
+        Option<&crate::units::date::TimeZone>,
+    )>,
+    date_month_first: bool,
+) -> Result<Vec<Token<'a>>, AbacusError> {
+    // Every token spans at least one byte, so the input length bounds the token count; capping
+    // the initial reservation keeps huge inputs from over-allocating up front.
+    let mut tokens = Vec::with_capacity(input_text.len().min(256));
     let mut chars = input_text.char_indices().peekable();
-    let op_index = token_registry.operator_index();
+    let op_index = token_registry.operator_index_ref();
     // True while lexing the target of an `in`/`to`/`as` conversion, where unit names take
     // precedence over variables of the same name.
     let mut in_conversion_target = false;
@@ -376,6 +529,7 @@ pub fn tokenize_string_with_date_options<'a>(
                 &input_text[i..],
                 DateLexOptions {
                     anchor: anchor_date,
+                    lazy_now,
                     month_first: date_month_first,
                     after_quantity: matches!(tokens.last(), Some(Token::Float(_) | Token::Val(_))),
                 },
@@ -515,7 +669,7 @@ pub fn tokenize_string_with_date_options<'a>(
 
         // Multi-word unit symbols (e.g. "business days", "fl oz", "long ton", "R$"),
         // listed in `registry::units::MULTI_WORD_UNITS`.
-        if c.is_ascii_alphabetic() {
+        if c.is_ascii_alphabetic() && could_start_multi_word_unit(&input_text[i..]) {
             let remaining = &input_text[i..];
             let mut matched: Option<&'static str> = None;
             for &unit_name in crate::registry::units::MULTI_WORD_UNITS {
@@ -612,84 +766,43 @@ pub fn tokenize_string_with_date_options<'a>(
             }
         }
 
-        // Registered operator checks (prioritizing longer length operators like `++` over `+`)
-        if let Some(candidates) = op_index.candidates(c) {
+        // Registered operator checks (longest pattern first, e.g. `++` over `+`). Plain-word
+        // patterns can only match the whole leading word, so they are found with one map lookup;
+        // symbolic patterns are scanned, but only those longer than the leading word can match.
+        {
             let remaining = &input_text[i..];
+            let word_len = if is_word_char(c) {
+                remaining
+                    .find(|ch: char| !is_word_char(ch))
+                    .unwrap_or(remaining.len())
+            } else {
+                0
+            };
             let mut best_match: Option<(&str, MatchedOpKind)> = None;
 
-            for (pattern, kind) in candidates {
-                let (pattern, kind) = (&**pattern, *kind);
-                if let Some(rest) = remaining.strip_prefix(pattern) {
-                    match kind {
-                        MatchedOpKind::Binary(_) => {
-                            if pattern == "%" && !percent_is_modulo(rest) {
-                                continue;
-                            }
-                            if let Some(last_char) = pattern.chars().last()
-                                && (last_char.is_alphanumeric() || last_char == '_')
-                                && let Some(next_char) = rest.chars().next()
-                                && (next_char.is_alphanumeric()
-                                    || next_char == '_'
-                                    || next_char == '°'
-                                    || next_char == 'Å'
-                                    || next_char == 'Ω')
-                            {
-                                continue;
-                            }
-                        }
-                        MatchedOpKind::Unary(op_alias) => {
-                            // `++`/`--` directly after an operand are only postfix increment /
-                            // decrement at the end of a (sub)expression; otherwise `3--2` and
-                            // `2++3` are a binary operator followed by a unary sign.
-                            if matches!(op_alias, "++" | "--")
-                                && is_operand_token(tokens.last())
-                                && !rest
-                                    .trim_start()
-                                    .chars()
-                                    .next()
-                                    .is_none_or(|nc| matches!(nc, ')' | ']' | ','))
-                            {
-                                continue;
-                            }
-                            if let Some(last_char) = pattern.chars().last()
-                                && (last_char.is_alphanumeric() || last_char == '_')
-                                && let Some(next_char) = rest.chars().next()
-                                && (next_char.is_alphanumeric()
-                                    || next_char == '_'
-                                    || next_char == '°'
-                                    || next_char == 'Å'
-                                    || next_char == 'Ω')
-                            {
-                                continue;
-                            }
-                        }
-                        MatchedOpKind::Func(_) => {
-                            if unit_registry.contains(pattern) {
-                                let next_slice = rest.trim_start();
-                                if !next_slice.starts_with('(') {
-                                    continue;
-                                }
-                            }
-                            if let Some(last_char) = pattern.chars().last()
-                                && (last_char.is_alphanumeric()
-                                    || last_char == '_'
-                                    || last_char == '-')
-                                && let Some(next_char) = rest.chars().next()
-                                && (next_char.is_alphanumeric()
-                                    || next_char == '_'
-                                    || next_char == '-'
-                                    || next_char == '°'
-                                    || next_char == 'Å'
-                                    || next_char == 'Ω')
-                            {
-                                continue;
-                            }
-                        }
-                    }
-
-                    best_match = Some((pattern, kind));
+            for (pattern, kind) in op_index.symbolic_candidates(c) {
+                if pattern.len() <= word_len {
+                    // The first `word_len` bytes are all word characters, which a symbolic
+                    // pattern of that length or shorter cannot match.
                     break;
                 }
+                if let Some(rest) = strip_prefix_inline(remaining, pattern)
+                    && accept_operator_candidate(pattern, *kind, rest, tokens.last(), unit_registry)
+                {
+                    best_match = Some((pattern, *kind));
+                    break;
+                }
+            }
+
+            if best_match.is_none() && word_len > 0 {
+                let (word, rest) = remaining.split_at(word_len);
+                best_match = op_index
+                    .word_kinds(word)
+                    .iter()
+                    .find(|kind| {
+                        accept_operator_candidate(word, **kind, rest, tokens.last(), unit_registry)
+                    })
+                    .map(|kind| (word, *kind));
             }
 
             if let Some((alias, matched_op)) = best_match {
@@ -800,6 +913,7 @@ pub fn tokenize_string_with_date_options<'a>(
                 }
             }
             let sym = &input_text[start..end];
+            let registered = RegisteredOps::lookup(&op_index, token_registry, sym);
 
             if CONVERSION_KEYWORDS.contains(&sym) {
                 tokens.push(Token::ConversionOp);
@@ -852,19 +966,19 @@ pub fn tokenize_string_with_date_options<'a>(
                     tokens.push(Token::ConversionOp);
                     in_conversion_target = true;
                 }
-            } else if let Some(op) = token_registry.function_operators.get(sym) {
+            } else if let Some(name) = registered.find(OpMap::Func) {
                 let rest = input_text[end..].trim_start();
                 if rest.starts_with('(') || !unit_registry.contains(sym) {
-                    tokens.push(Token::Function(op.name));
+                    tokens.push(Token::Function(name));
                 } else {
                     tokens.push(Token::Unit(sym));
                 }
             } else if sym.eq_ignore_ascii_case("per") {
                 tokens.push(Token::BinaryOp("/"));
-            } else if let Some(op) = token_registry.binary_operators.get(sym) {
-                tokens.push(Token::BinaryOp(op.alias));
-            } else if let Some(op) = token_registry.unary_operators.get(sym) {
-                tokens.push(Token::UnaryOp(op.alias));
+            } else if let Some(alias) = registered.find(OpMap::Binary) {
+                tokens.push(Token::BinaryOp(alias));
+            } else if let Some(alias) = registered.find(OpMap::Unary) {
+                tokens.push(Token::UnaryOp(alias));
             } else if in_conversion_target && unit_registry.contains(sym) {
                 // Conversion targets are units even if a variable shadows the name.
                 tokens.push(Token::Unit(sym));

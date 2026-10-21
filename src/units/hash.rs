@@ -110,13 +110,19 @@ impl Hash {
     }
 
     fn render_with(&self, f: impl Fn(&Value) -> String) -> String {
+        use std::fmt::Write as _;
         let mut entries: Vec<_> = self.values.iter().collect();
-        entries.sort_by_key(|&(k, _)| k);
-        let formatted: Vec<String> = entries
-            .into_iter()
-            .map(|(k, v)| format!("{k}: {}", f(v)))
-            .collect();
-        format!("{{ {} }}", formatted.join(", "))
+        // Keys are unique, so an unstable sort gives the same order.
+        entries.sort_unstable_by_key(|&(k, _)| k);
+        let mut out = String::from("{ ");
+        for (i, (k, v)) in entries.into_iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            let _ = write!(out, "{k}: {}", f(v));
+        }
+        out.push_str(" }");
+        out
     }
 }
 
@@ -138,7 +144,8 @@ impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ ")?;
         let mut entries: Vec<_> = self.values.iter().collect();
-        entries.sort_by_key(|&(k, _)| k);
+        // Keys are unique, so an unstable sort gives the same order.
+        entries.sort_unstable_by_key(|&(k, _)| k);
         for (i, (k, v)) in entries.into_iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;

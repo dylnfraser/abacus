@@ -1,15 +1,15 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, PoisonError, RwLock},
-};
+#[cfg(feature = "currencies")]
+use std::collections::HashMap;
+use std::sync::{Arc, PoisonError, RwLock};
 
 #[cfg(feature = "units")]
 use crate::registry::units::metric_units::register_metric_units;
 use crate::{
     error::AbacusError,
+    registry::helpers::fx_hash::FxHashMap,
     units::{
         dimensions::{Dimensions, MAX_REPRESENTABLE_EXPONENT},
-        unit::{Unit, UnitExpr, format_exponent, parse_exponent},
+        unit::{ExponentDisplay, Unit, UnitExpr, parse_exponent},
         value::Value,
     },
 };
@@ -26,10 +26,26 @@ const PRIORITY_DERIVED_SYMBOLS: [&str; 15] = [
 /// Maximum number of generated `base^exp` units kept in the lookup cache.
 const MAX_CACHED_EXPONENT_UNITS: usize = 4_096;
 
+/// Unit lookups happen several times per token, so the internal maps use the fast Fx hasher.
+type UnitMap = FxHashMap<String, Arc<Unit>>;
+
+/// The standard unit table is immutable once built, so every [`UnitRegistry::standard`]
+/// shares one copy; mutations go through [`Arc::make_mut`] (copy-on-write).
+fn standard_unit_map() -> &'static Arc<UnitMap> {
+    static STANDARD: std::sync::OnceLock<Arc<UnitMap>> = std::sync::OnceLock::new();
+    STANDARD.get_or_init(|| {
+        #[cfg(feature = "units")]
+        let units: UnitMap = register_metric_units().into_iter().collect();
+        #[cfg(not(feature = "units"))]
+        let units = UnitMap::default();
+        Arc::new(units)
+    })
+}
+
 #[derive(Debug)]
 pub struct UnitRegistry {
-    units: HashMap<String, Arc<Unit>>,
-    cache: RwLock<HashMap<String, Arc<Unit>>>,
+    units: Arc<UnitMap>,
+    cache: RwLock<FxHashMap<String, Arc<Unit>>>,
     priority_derived_units: Vec<(Dimensions, Arc<Unit>)>,
     pub max_exponent: f64,
 }
@@ -44,8 +60,8 @@ impl UnitRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            units: HashMap::new(),
-            cache: RwLock::new(HashMap::new()),
+            units: Arc::new(UnitMap::default()),
+            cache: RwLock::new(FxHashMap::default()),
             priority_derived_units: Vec::new(),
             max_exponent: 1_000.0,
         }
@@ -53,18 +69,14 @@ impl UnitRegistry {
 
     #[must_use]
     pub fn standard() -> Self {
-        #[cfg(feature = "units")]
-        let units = register_metric_units();
-        #[cfg(not(feature = "units"))]
-        let units: HashMap<String, Arc<Unit>> = HashMap::new();
-
+        let units = Arc::clone(standard_unit_map());
         let priority_derived_units = PRIORITY_DERIVED_SYMBOLS
             .iter()
             .filter_map(|&s| units.get(s).map(|u| (u.dimensions, Arc::clone(u))))
             .collect();
         Self {
             units,
-            cache: RwLock::new(HashMap::new()),
+            cache: RwLock::new(FxHashMap::default()),
             priority_derived_units,
             max_exponent: 1_000.0,
         }
@@ -137,12 +149,18 @@ impl UnitRegistry {
             return Err(AbacusError::AffineUnitOperation("exponentiate"));
         }
 
-        let key = format!("{base_sym}^{}", format_exponent(exp));
+        // Build the normalized key on the stack; it is only copied to the heap on a cache miss.
+        let mut key = crate::units::value::StackStr::new();
+        let _ = std::fmt::Write::write_fmt(
+            &mut key,
+            format_args!("{base_sym}^{}", ExponentDisplay(exp)),
+        );
+        let key = key.as_str();
         if let Some(cached) = self
             .cache
             .read()
             .unwrap_or_else(PoisonError::into_inner)
-            .get(&key)
+            .get(key)
         {
             return Ok(Arc::clone(cached));
         }
@@ -162,7 +180,7 @@ impl UnitRegistry {
         if guard.len() >= MAX_CACHED_EXPONENT_UNITS {
             guard.clear();
         }
-        guard.insert(key, Arc::clone(&unit));
+        guard.insert(key.to_string(), Arc::clone(&unit));
 
         Ok(unit)
     }
@@ -185,14 +203,14 @@ impl UnitRegistry {
                     .push((unit.dimensions, Arc::clone(&unit)));
             }
         }
-        self.units.insert(key, unit);
+        Arc::make_mut(&mut self.units).insert(key, unit);
         self.clear_cache();
     }
 
     #[cfg(feature = "currencies")]
     pub fn update_currency_rates(&mut self, rates: &HashMap<String, f64>) {
         crate::registry::units::currency_units::update_currency_rates_in_map(
-            &mut self.units,
+            Arc::make_mut(&mut self.units),
             rates,
         );
         self.clear_cache();
@@ -208,10 +226,11 @@ impl UnitRegistry {
     #[cfg(feature = "currencies")]
     pub fn set_currencies_enabled(&mut self, enabled: bool) {
         if enabled {
-            crate::registry::units::currency_units::register_currency_units(&mut self.units);
+            crate::registry::units::currency_units::register_currency_units(Arc::make_mut(
+                &mut self.units,
+            ));
         } else {
-            self.units
-                .retain(|_, u| u.dimensions != Dimensions::CURRENCY);
+            Arc::make_mut(&mut self.units).retain(|_, u| u.dimensions != Dimensions::CURRENCY);
             self.priority_derived_units
                 .retain(|(dims, _)| *dims != Dimensions::CURRENCY);
         }

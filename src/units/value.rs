@@ -4,7 +4,7 @@ use crate::units::unit::UnitExpr;
 use crate::{error::AbacusError, units::unit::Unit};
 
 use std::{
-    fmt,
+    fmt::{self, Write as _},
     ops::{Add, Div, Mul, Sub},
     sync::Arc,
 };
@@ -147,7 +147,10 @@ impl Value {
 
     #[must_use]
     pub fn to_display(&self) -> String {
-        self.to_string()
+        // Format on the stack, then allocate the result once at its exact size.
+        let mut buf = StackStr::new();
+        let _ = write!(buf, "{self}");
+        buf.as_str().to_string()
     }
 
     #[must_use]
@@ -333,24 +336,31 @@ pub fn currency_decimal_places(unit_str: &str) -> usize {
 /// Helper to format a value with its unit.
 #[must_use]
 pub fn format_with_unit(amount: &str, unit: &str) -> String {
+    let mut s = String::with_capacity(amount.len() + unit.len() + 2);
+    let _ = write_with_unit(&mut s, amount, unit);
+    s
+}
+
+/// Writes `amount` with its `unit` as [`format_with_unit`] does, without allocating.
+fn write_with_unit<W: fmt::Write>(out: &mut W, amount: &str, unit: &str) -> fmt::Result {
     if unit.is_empty() {
-        amount.to_string()
+        out.write_str(amount)
     } else if is_prefix_symbol(unit) {
         if let Some(stripped) = amount.strip_prefix('-') {
-            format!("-{unit}{stripped}")
+            write!(out, "-{unit}{stripped}")
         } else {
-            format!("{unit}{amount}")
+            write!(out, "{unit}{amount}")
         }
     } else if unit == "%" {
-        format!("{amount}%")
+        write!(out, "{amount}%")
     } else if unit == "+%" {
         if amount.starts_with('-') {
-            format!("{amount}%")
+            write!(out, "{amount}%")
         } else {
-            format!("+{amount}%")
+            write!(out, "+{amount}%")
         }
     } else {
-        format!("{amount} {unit}")
+        write!(out, "{amount} {unit}")
     }
 }
 
@@ -377,22 +387,29 @@ pub fn format_number_exact(v: f64) -> String {
 }
 
 fn format_number_with(v: f64, denoise: bool) -> String {
+    let mut s = String::new();
+    let _ = write_number(&mut s, v, denoise);
+    s
+}
+
+/// Writes `v` as [`format_number`] / [`format_number_exact`] would, without allocating.
+fn write_number<W: fmt::Write>(out: &mut W, v: f64, denoise: bool) -> fmt::Result {
     if !v.is_finite() {
-        return v.to_string();
+        return write!(out, "{v}");
     }
     if v == 0.0 {
-        return "0".to_string();
+        return out.write_str("0");
     }
     let a = v.abs();
     let v = if denoise { denoised(v) } else { v };
     if !(1e-6..1e21).contains(&a) {
-        return format!("{v:e}");
+        return write!(out, "{v:e}");
     }
     let r = v.round();
     if (v - r).abs() <= 1e-12 * a {
-        format!("{r}")
+        write!(out, "{r}")
     } else {
-        v.to_string()
+        write!(out, "{v}")
     }
 }
 
@@ -404,14 +421,24 @@ fn format_number_with(v: f64, denoise: bool) -> String {
 /// (like `pi * 25`) almost never sits within 2 ulps of a 12-digit decimal, while accumulated
 /// rounding error on a short decimal (`0.1 + 0.2`, `5 lb in kg`) always does.
 fn denoised(v: f64) -> f64 {
-    let sci = format!("{v:e}");
-    let mantissa = sci.split('e').next().unwrap_or("");
+    let mut sci = StackStr::new();
+    let _ = write!(sci, "{v:e}");
+    let mantissa = sci.as_str().split('e').next().unwrap_or("");
     let sig_digits = mantissa.bytes().filter(u8::is_ascii_digit).count();
     if sig_digits < 16 {
         return v;
     }
     for precision in 0..NOISE_MAX_DIGITS {
-        let Ok(shorter) = format!("{v:.precision$e}").parse::<f64>() else {
+        // Cheap arithmetic screen: if a `precision + 1` digit decimal is within 2 ulps of `v`,
+        // `v * 10^k` is within a few ulps of an integer, so rounding arithmetically lands within
+        // a few ulps of `v` too. Candidates far outside that can't pass the exact check below.
+        let approx = round_f64_sig_figs(v, precision + 1);
+        if !approx.is_finite() || ulp_distance(approx, v) > NOISE_SCREEN_ULPS {
+            continue;
+        }
+        let mut buf = StackStr::new();
+        let _ = write!(buf, "{v:.precision$e}");
+        let Ok(shorter) = buf.as_str().parse::<f64>() else {
             return v;
         };
         if shorter.is_finite() && shorter.signum() == v.signum() && ulp_distance(shorter, v) <= 2 {
@@ -423,6 +450,53 @@ fn denoised(v: f64) -> f64 {
 
 /// Maximum significant digits of a "clean" decimal that float noise is snapped back to.
 const NOISE_MAX_DIGITS: usize = 12;
+
+/// Screening tolerance for [`denoised`]; generous compared to the few ulps of error in
+/// [`round_f64_sig_figs`], so it never rejects a candidate the exact check would accept.
+const NOISE_SCREEN_ULPS: u64 = 64;
+
+/// A small stack buffer implementing [`fmt::Write`], for formatting numbers and unit symbols
+/// without heap allocation. Content that doesn't fit spills to a `String`.
+pub(crate) struct StackStr {
+    buf: [u8; 64],
+    len: usize,
+    spill: Option<String>,
+}
+
+impl StackStr {
+    pub(crate) const fn new() -> Self {
+        Self {
+            buf: [0; 64],
+            len: 0,
+            spill: None,
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        match &self.spill {
+            Some(s) => s,
+            // Only whole `&str`s are ever copied in, so the bytes are valid UTF-8.
+            None => std::str::from_utf8(&self.buf[..self.len]).unwrap_or_default(),
+        }
+    }
+}
+
+impl fmt::Write for StackStr {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        if let Some(spill) = &mut self.spill {
+            spill.push_str(s);
+        } else if self.len + s.len() <= self.buf.len() {
+            self.buf[self.len..self.len + s.len()].copy_from_slice(s.as_bytes());
+            self.len += s.len();
+        } else {
+            let mut spill = String::with_capacity(self.len + s.len() + 16);
+            spill.push_str(self.as_str());
+            spill.push_str(s);
+            self.spill = Some(spill);
+        }
+        Ok(())
+    }
+}
 
 /// Number of representable doubles between two finite values of the same sign.
 fn ulp_distance(a: f64, b: f64) -> u64 {
@@ -587,19 +661,22 @@ impl fmt::Display for ExactDisplay<'_> {
 impl Value {
     fn fmt_with(&self, f: &mut fmt::Formatter<'_>, denoise: bool) -> fmt::Result {
         let value = self.amount();
-        let unit_str = self.unit.display.render();
+        let mut unit_buf = StackStr::new();
+        write!(unit_buf, "{}", self.unit.display)?;
+        let unit_str = unit_buf.as_str();
         let is_integer = value.is_finite() && (value - value.round()).abs() <= 1e-12 * value.abs();
-        let val_str = if !is_integer
+        let mut num = StackStr::new();
+        if !is_integer
             && value.is_finite()
             && value.abs() < 1e21
             && self.unit.dimensions == Dimensions::CURRENCY
         {
-            let dec = currency_decimal_places(&unit_str);
-            format!("{value:.dec$}")
+            let dec = currency_decimal_places(unit_str);
+            write!(num, "{value:.dec$}")?;
         } else {
-            format_number_with(value, denoise)
-        };
-        f.write_str(&format_with_unit(&val_str, &unit_str))
+            write_number(&mut num, value, denoise)?;
+        }
+        write_with_unit(f, num.as_str(), unit_str)
     }
 }
 
@@ -865,10 +942,12 @@ impl Div<&Value> for &Value {
 
         // A percentage divided by a dimensional quantity is a plain ratio per that unit
         // (`50% / 2 s` = 0.25 1/s), so drop the percent display.
+        let no_display;
         let lhs_display = if self.unit.is_percent() {
-            UnitExpr::dimensionless()
+            no_display = UnitExpr::dimensionless();
+            &no_display
         } else {
-            self.unit.display.clone()
+            &self.unit.display
         };
         let lhs_scalar = if self.unit.is_percent() {
             1.0
@@ -937,6 +1016,87 @@ mod tests {
             offset: 0f64,
             display: UnitExpr::single(display),
         })
+    }
+
+    /// The original (allocating, unscreened) noise-suppression rule, kept as a reference.
+    fn denoised_reference(v: f64) -> f64 {
+        let sci = format!("{v:e}");
+        let mantissa = sci.split('e').next().unwrap_or("");
+        if mantissa.bytes().filter(u8::is_ascii_digit).count() < 16 {
+            return v;
+        }
+        for precision in 0..NOISE_MAX_DIGITS {
+            let Ok(shorter) = format!("{v:.precision$e}").parse::<f64>() else {
+                return v;
+            };
+            if shorter.is_finite()
+                && shorter.signum() == v.signum()
+                && ulp_distance(shorter, v) <= 2
+            {
+                return shorter;
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn screened_denoise_matches_reference() {
+        // xorshift64 for reproducible pseudo-random doubles across the display range.
+        let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let (mut checked, mut snapped) = (0, 0);
+        for i in 0..200_000_u64 {
+            let r = next();
+            let v = match i % 4 {
+                // Arbitrary doubles in roughly [1e-7, 1e22].
+                0 => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let mantissa = (r >> 11) as f64 / (1u64 << 53) as f64 + 1.0;
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                    let exp = (r % 97) as i32 - 24;
+                    mantissa * 2f64.powi(exp)
+                }
+                // Short decimals with a few ulps of noise (the case denoising exists for).
+                1 | 2 => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let short = (r % 1_000_000_007) as f64 / 10f64.powi((r % 13) as i32);
+                    let mut x = short * 3.0 / 3.0 + 0.0;
+                    for _ in 0..(r >> 60) % 4 {
+                        x = x.next_up();
+                    }
+                    if r & 1 == 1 { -x } else { x }
+                }
+                // Products/quotients of short decimals (unit conversions).
+                _ => {
+                    #[allow(clippy::cast_precision_loss)]
+                    let a = (r % 100_000) as f64 / 1000.0;
+                    #[allow(clippy::cast_precision_loss)]
+                    let b = ((r >> 20) % 100_000 + 1) as f64 / 7.0;
+                    a * b / 3.0
+                }
+            };
+            if !v.is_finite() || v == 0.0 {
+                continue;
+            }
+            let expected = denoised_reference(v);
+            assert_eq!(
+                denoised(v).to_bits(),
+                expected.to_bits(),
+                "denoise mismatch for {v:e}"
+            );
+            checked += 1;
+            if expected.to_bits() != v.to_bits() {
+                snapped += 1;
+            }
+        }
+        assert!(checked > 150_000);
+        // Both the pass-through and the snapping paths must be exercised.
+        assert!(snapped > 10_000, "only {snapped} snapped values");
     }
 
     #[test]

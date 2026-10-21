@@ -829,7 +829,45 @@ impl Abacus {
     /// Applies output rounding and display settings to a result evaluated from `expr`
     /// (`expr` is only consulted when following input significant figures).
     #[must_use]
-    pub fn apply_output_settings(&self, mut res: EvalResult, expr: &str) -> EvalResult {
+    pub fn apply_output_settings(&self, res: EvalResult, expr: &str) -> EvalResult {
+        // With default settings only currency rounding applies; keep that path small and put
+        // the rarely used configuration handling out of line.
+        if self.default_interval_style.is_none()
+            && self.decimal_places.is_none()
+            && self.significant_figures.is_none()
+            && !self.follow_significant_figures
+            && self.unit_display_overrides.is_empty()
+        {
+            return Self::round_currency_default(res);
+        }
+        self.apply_configured_output_settings(res, expr)
+    }
+
+    /// Rounds currency results to their standard number of decimal places.
+    fn round_currency_default(res: EvalResult) -> EvalResult {
+        let currency_unit = match &res {
+            EvalResult::Scalar(v)
+                if v.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY =>
+            {
+                &v.unit
+            }
+            EvalResult::Interval(inv)
+                if inv.lo.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY =>
+            {
+                &inv.lo.unit
+            }
+            _ => return res,
+        };
+        let mut unit_str = crate::units::value::StackStr::new();
+        let _ =
+            std::fmt::Write::write_fmt(&mut unit_str, format_args!("{}", currency_unit.display));
+        let dec = crate::units::value::currency_decimal_places(unit_str.as_str());
+        res.round_to_decimals(dec)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn apply_configured_output_settings(&self, mut res: EvalResult, expr: &str) -> EvalResult {
         if let Some(style) = self.default_interval_style {
             res = res.with_interval_style(style);
         }
@@ -837,23 +875,7 @@ impl Abacus {
         if let Some(dec) = self.decimal_places {
             res = res.round_to_decimals(dec);
         } else if self.significant_figures.is_none() && !self.follow_significant_figures {
-            match &res {
-                EvalResult::Scalar(v)
-                    if v.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY =>
-                {
-                    let unit_str = v.unit.display.render();
-                    let dec = crate::units::value::currency_decimal_places(&unit_str);
-                    res = res.round_to_decimals(dec);
-                }
-                EvalResult::Interval(inv)
-                    if inv.lo.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY =>
-                {
-                    let unit_str = inv.lo.unit.display.render();
-                    let dec = crate::units::value::currency_decimal_places(&unit_str);
-                    res = res.round_to_decimals(dec);
-                }
-                _ => {}
-            }
+            res = Self::round_currency_default(res);
         }
 
         let effective_sig_figs = self.significant_figures.or_else(|| {

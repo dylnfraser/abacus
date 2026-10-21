@@ -13,8 +13,324 @@ pub struct Unit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnitExpr {
-    pub numerator: Vec<String>,
-    pub denominator: Vec<String>,
+    pub numerator: SymList,
+    pub denominator: SymList,
+}
+
+/// A list of unit symbols with inline storage for the overwhelmingly common zero- and
+/// one-symbol cases (`km`, `h`, `m/s`), so cloning and combining typical units never touches
+/// the heap. Derefs to `[Sym]`.
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "Vec<Sym>", into = "Vec<Sym>"))]
+pub enum SymList {
+    #[default]
+    Empty,
+    One(Sym),
+    Many(Vec<Sym>),
+}
+
+impl SymList {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self::Empty
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[Sym] {
+        self
+    }
+
+    /// Creates an empty list that can hold `n` symbols without reallocating.
+    #[must_use]
+    pub fn with_capacity(n: usize) -> Self {
+        if n <= 1 {
+            Self::Empty
+        } else {
+            Self::Many(Vec::with_capacity(n))
+        }
+    }
+
+    pub fn push(&mut self, sym: Sym) {
+        match std::mem::take(self) {
+            Self::Empty => *self = Self::One(sym),
+            Self::One(first) => *self = Self::Many(vec![first, sym]),
+            Self::Many(mut v) => {
+                if v.is_empty() {
+                    *self = Self::One(sym);
+                } else {
+                    v.push(sym);
+                    *self = Self::Many(v);
+                }
+            }
+        }
+    }
+
+    pub fn extend_from_slice(&mut self, syms: &[Sym]) {
+        match syms {
+            [] => {}
+            [only] => self.push(only.clone()),
+            _ => {
+                let mut v = self.take_vec(syms.len());
+                v.extend_from_slice(syms);
+                *self = Self::Many(v);
+            }
+        }
+    }
+
+    /// Removes and returns the symbol at `index`, shifting later symbols left.
+    ///
+    /// # Panics
+    /// If `index` is out of bounds.
+    pub fn remove(&mut self, index: usize) -> Sym {
+        match self {
+            Self::One(_) if index == 0 => match std::mem::take(self) {
+                Self::One(sym) => sym,
+                _ => unreachable!(),
+            },
+            Self::Many(v) => {
+                let sym = v.remove(index);
+                if v.len() == 1 {
+                    *self = Self::One(v.pop().expect("one element"));
+                }
+                sym
+            }
+            _ => panic!("SymList::remove index {index} out of bounds"),
+        }
+    }
+
+    pub fn retain(&mut self, mut keep: impl FnMut(&Sym) -> bool) {
+        match self {
+            Self::Empty => {}
+            Self::One(sym) => {
+                if !keep(sym) {
+                    *self = Self::Empty;
+                }
+            }
+            Self::Many(v) => {
+                v.retain(|s| keep(s));
+                if v.len() <= 1 {
+                    *self = v.pop().map_or(Self::Empty, Self::One);
+                }
+            }
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::Empty;
+    }
+
+    /// Moves the symbols into a `Vec` with room for `extra` more.
+    fn take_vec(&mut self, extra: usize) -> Vec<Sym> {
+        match std::mem::take(self) {
+            Self::Empty => Vec::with_capacity(extra),
+            Self::One(sym) => {
+                let mut v = Vec::with_capacity(1 + extra);
+                v.push(sym);
+                v
+            }
+            Self::Many(v) => v,
+        }
+    }
+
+    /// The concatenation of two lists, sharing symbols (no allocation unless the result has
+    /// two or more symbols).
+    #[must_use]
+    pub fn concat(a: &[Sym], b: &[Sym]) -> Self {
+        match (a, b) {
+            ([], []) => Self::Empty,
+            ([only], []) | ([], [only]) => Self::One(only.clone()),
+            _ => {
+                let mut v = Vec::with_capacity(a.len() + b.len());
+                v.extend_from_slice(a);
+                v.extend_from_slice(b);
+                Self::Many(v)
+            }
+        }
+    }
+}
+
+impl std::ops::Deref for SymList {
+    type Target = [Sym];
+    fn deref(&self) -> &[Sym] {
+        match self {
+            Self::Empty => &[],
+            Self::One(sym) => std::slice::from_ref(sym),
+            Self::Many(v) => v,
+        }
+    }
+}
+
+impl std::ops::DerefMut for SymList {
+    fn deref_mut(&mut self) -> &mut [Sym] {
+        match self {
+            Self::Empty => &mut [],
+            Self::One(sym) => std::slice::from_mut(sym),
+            Self::Many(v) => v,
+        }
+    }
+}
+
+impl PartialEq for SymList {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl Eq for SymList {}
+
+impl std::fmt::Debug for SymList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl From<Vec<Sym>> for SymList {
+    fn from(mut v: Vec<Sym>) -> Self {
+        match v.len() {
+            0 => Self::Empty,
+            1 => Self::One(v.pop().expect("one element")),
+            _ => Self::Many(v),
+        }
+    }
+}
+
+impl From<SymList> for Vec<Sym> {
+    fn from(list: SymList) -> Self {
+        match list {
+            SymList::Empty => Vec::new(),
+            SymList::One(sym) => vec![sym],
+            SymList::Many(v) => v,
+        }
+    }
+}
+
+impl From<Vec<String>> for SymList {
+    fn from(v: Vec<String>) -> Self {
+        v.into_iter().map(Sym::from).collect::<Vec<_>>().into()
+    }
+}
+
+impl FromIterator<Sym> for SymList {
+    fn from_iter<I: IntoIterator<Item = Sym>>(iter: I) -> Self {
+        iter.into_iter().collect::<Vec<_>>().into()
+    }
+}
+
+impl<'a> IntoIterator for &'a SymList {
+    type Item = &'a Sym;
+    type IntoIter = std::slice::Iter<'a, Sym>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// An immutable, cheaply clonable unit symbol (`m`, `km`, `m^0.5`).
+///
+/// Unit expressions are combined and simplified on every arithmetic operation; sharing the
+/// symbol text makes copying a symbol a reference-count increment instead of a heap
+/// allocation. Derefs to `str` and compares equal to `&str` / `String`.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct Sym(Arc<str>);
+
+impl Sym {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for Sym {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for Sym {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::borrow::Borrow<str> for Sym {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Sym {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&*self.0, f)
+    }
+}
+
+impl std::fmt::Display for Sym {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<&str> for Sym {
+    fn from(s: &str) -> Self {
+        Self(Arc::from(s))
+    }
+}
+
+impl From<&String> for Sym {
+    fn from(s: &String) -> Self {
+        Self(Arc::from(s.as_str()))
+    }
+}
+
+impl From<String> for Sym {
+    fn from(s: String) -> Self {
+        Self(Arc::from(s))
+    }
+}
+
+impl From<Sym> for String {
+    fn from(s: Sym) -> Self {
+        s.0.to_string()
+    }
+}
+
+impl PartialEq<str> for Sym {
+    fn eq(&self, other: &str) -> bool {
+        *self.0 == *other
+    }
+}
+
+impl PartialEq<&str> for Sym {
+    fn eq(&self, other: &&str) -> bool {
+        *self.0 == **other
+    }
+}
+
+impl PartialEq<String> for Sym {
+    fn eq(&self, other: &String) -> bool {
+        *self.0 == **other
+    }
+}
+
+impl PartialEq<Sym> for str {
+    fn eq(&self, other: &Sym) -> bool {
+        *self == *other.0
+    }
+}
+
+impl PartialEq<Sym> for &str {
+    fn eq(&self, other: &Sym) -> bool {
+        **self == *other.0
+    }
+}
+
+impl PartialEq<Sym> for String {
+    fn eq(&self, other: &Sym) -> bool {
+        **self == *other.0
+    }
 }
 
 /// Integer exponents up to this magnitude are stored as repeated symbols (`m*m*m`),
@@ -49,21 +365,31 @@ pub fn parse_exponent(s: &str) -> Option<f64> {
 /// and other small-denominator rationals as `(p/q)` (e.g. `(1/3)`).
 #[must_use]
 pub fn format_exponent(e: f64) -> String {
-    let rounded = e.round();
-    if (e - rounded).abs() < 1e-9 {
-        return format!("{rounded}");
-    }
-    let millis = e * 1000.0;
-    if (millis - millis.round()).abs() < 1e-9 {
-        return format!("{}", millis.round() / 1000.0);
-    }
-    for q in 2..=12_i32 {
-        let p = e * f64::from(q);
-        if (p - p.round()).abs() < 1e-9 {
-            return format!("({}/{q})", p.round());
+    ExponentDisplay(e).to_string()
+}
+
+/// Displays an exponent exactly as [`format_exponent`] formats it, without allocating.
+pub(crate) struct ExponentDisplay(pub f64);
+
+impl std::fmt::Display for ExponentDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let e = self.0;
+        let rounded = e.round();
+        if (e - rounded).abs() < 1e-9 {
+            return write!(f, "{rounded}");
         }
+        let millis = e * 1000.0;
+        if (millis - millis.round()).abs() < 1e-9 {
+            return write!(f, "{}", millis.round() / 1000.0);
+        }
+        for q in 2..=12_i32 {
+            let p = e * f64::from(q);
+            if (p - p.round()).abs() < 1e-9 {
+                return write!(f, "({}/{q})", p.round());
+            }
+        }
+        write!(f, "{e}")
     }
-    format!("{e}")
 }
 
 /// Splits `base^exp` into its base symbol and exponent; plain symbols have exponent 1.
@@ -81,47 +407,31 @@ impl UnitExpr {
     #[must_use]
     pub fn dimensionless() -> Self {
         Self {
-            numerator: Vec::new(),
-            denominator: Vec::new(),
+            numerator: SymList::Empty,
+            denominator: SymList::Empty,
         }
     }
 
-    pub fn single(unit: impl Into<String>) -> Self {
+    pub fn single(unit: impl Into<Sym>) -> Self {
         Self {
-            numerator: vec![unit.into()],
-            denominator: Vec::new(),
+            numerator: SymList::One(unit.into()),
+            denominator: SymList::Empty,
         }
     }
 
     #[must_use]
     pub fn multiply(&self, rhs: &Self) -> Self {
-        let mut numerator = Vec::with_capacity(self.numerator.len() + rhs.numerator.len());
-        numerator.extend_from_slice(&self.numerator);
-        numerator.extend_from_slice(&rhs.numerator);
-
-        let mut denominator = Vec::with_capacity(self.denominator.len() + rhs.denominator.len());
-        denominator.extend_from_slice(&self.denominator);
-        denominator.extend_from_slice(&rhs.denominator);
-
         Self {
-            numerator,
-            denominator,
+            numerator: SymList::concat(&self.numerator, &rhs.numerator),
+            denominator: SymList::concat(&self.denominator, &rhs.denominator),
         }
     }
 
     #[must_use]
     pub fn divide(&self, rhs: &Self) -> Self {
-        let mut numerator = Vec::with_capacity(self.numerator.len() + rhs.denominator.len());
-        numerator.extend_from_slice(&self.numerator);
-        numerator.extend_from_slice(&rhs.denominator);
-
-        let mut denominator = Vec::with_capacity(self.denominator.len() + rhs.numerator.len());
-        denominator.extend_from_slice(&self.denominator);
-        denominator.extend_from_slice(&rhs.numerator);
-
         Self {
-            numerator,
-            denominator,
+            numerator: SymList::concat(&self.numerator, &rhs.denominator),
+            denominator: SymList::concat(&self.denominator, &rhs.numerator),
         }
     }
 
@@ -171,12 +481,13 @@ impl UnitExpr {
             };
             let mag = e.abs();
             if (mag - mag.round()).abs() < 1e-9 && mag <= MAX_REPEATED_EXPONENT {
+                let sym = Sym::from(base);
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 for _ in 0..(mag.round() as usize) {
-                    target.push(base.to_string());
+                    target.push(sym.clone());
                 }
             } else {
-                target.push(format!("{base}^{}", format_exponent(mag)));
+                target.push(format!("{base}^{}", ExponentDisplay(mag)).into());
             }
         }
         expr
@@ -262,7 +573,7 @@ impl std::fmt::Display for UnitExpr {
 }
 
 /// Renders a list of unit symbols, collapsing repeats into exponents (`m*m` → `m^2`).
-struct UnitList<'a>(&'a [String]);
+struct UnitList<'a>(&'a [Sym]);
 
 impl std::fmt::Display for UnitList<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -474,7 +785,7 @@ fn relative_close(a: f64, b: f64, tol: f64) -> bool {
 /// temperatures, business days) and pairs whose scales differ by more than
 /// [`MAX_CONSOLIDATION_RATIO`] are left as written.
 fn consolidate_same_dimension(
-    list: &mut [String],
+    list: &mut [Sym],
     lookup: &impl Fn(&str) -> Option<Arc<Unit>>,
     scalar: &mut f64,
     in_denominator: bool,

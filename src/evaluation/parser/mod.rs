@@ -53,14 +53,16 @@ pub fn evaluate_with_variables(
     config: EvalConfig,
 ) -> Result<EvalResult, AbacusError> {
     let mut config = config;
-    // Resolve the reference "now" once per evaluation (and only if a date/time literal is possible).
-    if config.anchor_date.is_some() || input.bytes().any(|b| b.is_ascii_alphabetic() || b == b':') {
+    // The reference "now" is resolved at most once per evaluation: from the anchor if one is
+    // set, otherwise lazily (reading the clock) only when a date/time literal actually needs it.
+    if config.anchor_date.is_some() {
         config.anchor_date = Some(crate::Date::reference_now(
             config.anchor_date.as_ref(),
             config.default_timezone.as_ref(),
         ));
     }
-    let tokens = crate::evaluation::tokenizer::lexer::tokenize_string_with_date_options(
+    let lazy_now = std::cell::OnceCell::new();
+    let tokens = crate::evaluation::tokenizer::lexer::tokenize_with_lazy_now(
         token_registry,
         unit_registry,
         variables,
@@ -68,8 +70,13 @@ pub fn evaluate_with_variables(
         config.implicit_multiplication,
         config.number_scales,
         config.anchor_date.as_ref(),
+        Some((&lazy_now, config.default_timezone.as_ref())),
         config.date_format == crate::DateFormat::MMDDYYYY,
     )?;
+    // Share a "now" resolved while lexing with the parser, so both see the same instant.
+    if config.anchor_date.is_none() {
+        config.anchor_date = lazy_now.into_inner();
+    }
     let mut parser =
         Parser::new_with_variables(&tokens, token_registry, unit_registry, variables, config);
     let result = parser.parse()?;

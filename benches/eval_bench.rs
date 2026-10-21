@@ -79,11 +79,52 @@ fn bench_derived_units(c: &mut Criterion) {
     group.finish();
 }
 
+/// A representative mix of expressions, each evaluated and rendered (`eval` + `to_display`),
+/// covering units, conversions, intervals, functions, dates, currencies and compound units.
+const MIXED_EXPRESSIONS: &[(&str, &str)] = &[
+    ("plain", "1+1"),
+    ("derived_unit", "10 N * 5 m"),
+    ("conversion", "100 km/h in m/s"),
+    ("interval_division", "[9.8 m, 10.2 m] / [1.9 s, 2.1 s]"),
+    ("trig_degrees", "sqrt(2)*sin(30 deg)"),
+    ("stats_mean", "mean(1,2,3,4,5)"),
+    ("business_days", "2026-08-07 + 5 business days"),
+    ("currency", "$50 + €20 in USD"),
+    ("compound_measure", "5 ft 3 in to cm"),
+    ("regression", "linreg(1,2,3,4,10,20,30,40).slope"),
+];
+
+fn bench_mixed_expressions(c: &mut Criterion) {
+    let abacus = Abacus::standard();
+    let mut group = c.benchmark_group("eval_and_display");
+    for &(name, expr) in MIXED_EXPRESSIONS {
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                let res = abacus.eval(black_box(expr)).expect("evaluation succeeds");
+                black_box(res.to_display());
+            })
+        });
+    }
+    group.finish();
+}
+
+fn bench_construction(c: &mut Criterion) {
+    // Warm the shared standard tables so this measures per-instance construction.
+    black_box(Abacus::standard());
+    let mut group = c.benchmark_group("construction");
+    group.bench_function("abacus_standard", |b| {
+        b.iter(|| black_box(Abacus::standard()));
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_tokenizer,
     bench_basic_arithmetic,
     bench_complex_expressions,
-    bench_derived_units
+    bench_derived_units,
+    bench_mixed_expressions,
+    bench_construction
 );
 criterion_main!(benches);
