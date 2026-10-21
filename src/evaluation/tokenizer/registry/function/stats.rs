@@ -56,7 +56,9 @@ fn location_value(canonical: f64, unit: &Arc<Unit>) -> Value {
 
 fn sorted_canonicals(data: &[Value]) -> Vec<f64> {
     let mut values: Vec<f64> = data.iter().map(|v| v.canonical).collect();
-    values.sort_by(f64::total_cmp);
+    // `total_cmp` is a total order where only bitwise-identical floats compare equal, so an
+    // unstable sort gives the same result as a stable one with a much smaller instantiation.
+    values.sort_unstable_by(f64::total_cmp);
     values
 }
 
