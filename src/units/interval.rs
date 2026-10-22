@@ -390,7 +390,7 @@ impl Interval {
         let mut candidates = Vec::with_capacity(6);
         for &x in &[a, b] {
             for &y in &[c, d] {
-                let v = x.powf(y);
+                let v = arithmetic::real_powf(x, y);
                 candidates.push(if is_exact_power(x, y, v) {
                     Candidate::exact(v)
                 } else {

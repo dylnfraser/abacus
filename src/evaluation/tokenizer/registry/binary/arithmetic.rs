@@ -2,20 +2,67 @@ use std::sync::{Arc, OnceLock};
 
 use crate::{AbacusError, Value, evaluation::tokenizer::registry::binary::operators::BinaryOp};
 
+/// Rejects a result that overflowed to ±∞ from finite operands, matching how an out-of-range
+/// literal like `1e999` is rejected. Division by zero is not overflow and still yields ±∞.
+pub(crate) fn check_overflow(result: Value, a: f64, b: f64) -> Result<Value, AbacusError> {
+    if result.canonical.is_infinite() && a.is_finite() && b.is_finite() {
+        return Err(AbacusError::EvaluationError(
+            "result overflows the largest representable number (~1.8e308)".to_string(),
+        ));
+    }
+    Ok(result)
+}
+
 pub(crate) fn add(a: Value, b: Value) -> Result<Value, AbacusError> {
-    a + b
+    let (x, y) = (a.canonical, b.canonical);
+    check_overflow((a + b)?, x, y)
 }
 
 pub(crate) fn sub(a: Value, b: Value) -> Result<Value, AbacusError> {
-    a - b
+    let (x, y) = (a.canonical, b.canonical);
+    check_overflow((a - b)?, x, y)
 }
 
 pub(crate) fn mul(a: Value, b: Value) -> Result<Value, AbacusError> {
-    a * b
+    let (x, y) = (a.canonical, b.canonical);
+    check_overflow((a * b)?, x, y)
 }
 
 pub(crate) fn div(a: Value, b: Value) -> Result<Value, AbacusError> {
-    a / b
+    let (x, y) = (a.canonical, b.canonical);
+    let result = (a / b)?;
+    if y == 0.0 {
+        return Ok(result);
+    }
+    check_overflow(result, x, y)
+}
+
+/// `x^e` with a real result where one exists: a negative base raised to `p/q` with `q` odd
+/// (`1/3`, `2/3`, `-1/5`, …) is real — `(-8)^(1/3)` = -2 — whereas `powf` returns NaN.
+/// Even denominators (`(-8)^(1/2)`) have no real value and stay NaN.
+#[must_use]
+pub fn real_powf(x: f64, e: f64) -> f64 {
+    let r = x.powf(e);
+    if !r.is_nan() || x >= 0.0 || !e.is_finite() {
+        return r;
+    }
+    for q in (3..=99_u32).step_by(2) {
+        let p = e * f64::from(q);
+        let p_int = p.round();
+        if (p - p_int).abs() <= 1e-9 * p_int.abs().max(1.0) {
+            let magnitude = if q == 3 && p_int.abs() <= 64.0 {
+                (-x).cbrt().powi(p_int as i32)
+            } else {
+                (-x).powf(p_int / f64::from(q))
+            };
+            return if p_int.rem_euclid(2.0) == 0.0 {
+                magnitude
+            } else {
+                -magnitude
+            };
+        }
+    }
+    r
 }
 
 pub(crate) fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
@@ -26,7 +73,13 @@ pub(crate) fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
         return Err(AbacusError::AffineUnitOperation("exponentiate"));
     }
     let exp = b.canonical;
-    let canonical = a.canonical.powf(exp);
+    let canonical = real_powf(a.canonical, exp);
+    // `0^-1` is a division by zero (∞, as for `1/0`); anything else infinite is overflow.
+    if canonical.is_infinite() && a.canonical != 0.0 && a.canonical.is_finite() && exp.is_finite() {
+        return Err(AbacusError::EvaluationError(
+            "result overflows the largest representable number (~1.8e308)".to_string(),
+        ));
+    }
 
     // Percentages are plain ratios: (5%)^2 = 0.25%.
     if a.unit.is_percent() || a.unit.is_plain_number() {

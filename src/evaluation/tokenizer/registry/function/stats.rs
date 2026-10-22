@@ -94,14 +94,35 @@ fn max_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(location_value(max_val, first_unit))
 }
 
+/// Values on which to compute a spread, and the factor that converts a spread of them back to
+/// canonical units. Affine readings (°C, °F) are stored in kelvin on a large offset, so
+/// `20 °F` comes back as 19.99999999999995 °F; when every reading shares one affine unit the
+/// displayed amounts (float noise removed) are used instead, avoiding that cancellation error.
+fn spread_basis(args: &[Value]) -> (Vec<f64>, f64) {
+    if let Some(first) = args.first()
+        && first.unit.is_affine()
+        && args
+            .iter()
+            .all(|v| v.unit.scalar == first.unit.scalar && v.unit.offset == first.unit.offset)
+    {
+        let amounts = args
+            .iter()
+            .map(|v| crate::units::value::snap_float_noise(v.amount()))
+            .collect();
+        return (amounts, first.unit.scalar);
+    }
+    (args.iter().map(|v| v.canonical).collect(), 1.0)
+}
+
 fn range_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let (min_val, max_val) = args
+    let (values, scale) = spread_basis(args);
+    let (min_val, max_val) = values
         .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
-            (lo.min(v.canonical), hi.max(v.canonical))
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| {
+            (lo.min(v), hi.max(v))
         });
-    Ok(spread_value(max_val - min_val, first_unit))
+    Ok(spread_value((max_val - min_val) * scale, first_unit))
 }
 
 fn median_fn(args: &[Value]) -> Result<Value, AbacusError> {
@@ -173,28 +194,9 @@ pub fn compute_mean(args: &[Value]) -> f64 {
 #[must_use]
 pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
     let n = args.len() as f64;
-    // Affine readings (°C, °F) are stored in kelvin on a large offset, so `20 °F` comes back
-    // as 19.99999999999995 °F. When every reading shares one affine unit, compute on the
-    // amounts as displayed (float noise removed) and rescale, avoiding that cancellation error.
-    if let Some(first) = args.first()
-        && first.unit.is_affine()
-        && args
-            .iter()
-            .all(|v| v.unit.scalar == first.unit.scalar && v.unit.offset == first.unit.offset)
-    {
-        let amounts: Vec<f64> = args
-            .iter()
-            .map(|v| crate::units::value::snap_float_noise(v.amount()))
-            .collect();
-        let mean = amounts.iter().sum::<f64>() / n;
-        let var = amounts.iter().map(|a| (a - mean).powi(2)).sum::<f64>() / (n - ddof);
-        return var * first.unit.scalar * first.unit.scalar;
-    }
-    let mean = compute_mean(args);
-    args.iter()
-        .map(|v| (v.canonical - mean).powi(2))
-        .sum::<f64>()
-        / (n - ddof)
+    let (values, scale) = spread_basis(args);
+    let mean = values.iter().sum::<f64>() / n;
+    scale * scale * values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - ddof)
 }
 
 /// Computes Pearson correlation coefficient between two datasets.
@@ -331,9 +333,10 @@ fn percentile_fn(args: &[Value]) -> Result<Value, AbacusError> {
 /// iqr(data...) -> Q3 - Q1
 fn iqr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
-    let values = sorted_canonicals(args);
+    let (mut values, scale) = spread_basis(args);
+    values.sort_unstable_by(f64::total_cmp);
     let iqr = quantile_sorted(&values, 0.75) - quantile_sorted(&values, 0.25);
-    Ok(spread_value(iqr, first_unit))
+    Ok(spread_value(iqr * scale, first_unit))
 }
 
 /// `corr(x_range`, `y_range`) or corr(x1..xN, y1..yN)
@@ -424,9 +427,10 @@ fn kurt_fn(args: &[Value]) -> Result<Value, AbacusError> {
 fn mad_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
     let n = args.len() as f64;
-    let mean = compute_mean(args);
-    let mad_val = args.iter().map(|v| (v.canonical - mean).abs()).sum::<f64>() / n;
-    Ok(spread_value(mad_val, first_unit))
+    let (values, scale) = spread_basis(args);
+    let mean = values.iter().sum::<f64>() / n;
+    let mad_val = values.iter().map(|v| (v - mean).abs()).sum::<f64>() / n;
+    Ok(spread_value(mad_val * scale, first_unit))
 }
 
 fn rms_fn(args: &[Value]) -> Result<Value, AbacusError> {

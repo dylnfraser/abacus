@@ -61,6 +61,7 @@ const CANCELLATION_EPSILON: f64 = 4.0 * f64::EPSILON;
 /// (`9007199254740992 - 9007199254740991` = 1).
 fn snap_cancellation(result: f64, a: f64, b: f64) -> f64 {
     if result != 0.0
+        && result.is_finite()
         && !(a.fract() == 0.0 && b.fract() == 0.0)
         && result.abs() <= CANCELLATION_EPSILON * a.abs().max(b.abs())
     {
@@ -372,7 +373,7 @@ fn write_with_unit<W: fmt::Write>(out: &mut W, amount: &str, unit: &str) -> fmt:
 
 /// Formats a number for display.
 ///
-/// Values within `1e-12` (relative) of an integer print as that integer; magnitudes below
+/// Values within a few ulps of an integer print as that integer; magnitudes below
 /// `1e-6` or at/above `1e21` use scientific notation (`1.6e-19`, `1e300`); everything else
 /// uses the shortest round-trip decimal representation, except that float noise in the last
 /// bits is hidden: when the shortest representation needs 16+ significant digits and a
@@ -398,6 +399,13 @@ fn format_number_with(v: f64, denoise: bool) -> String {
     s
 }
 
+/// Whether `v` is an integer up to float noise (a few ulps). A fixed relative tolerance such
+/// as 1e-12 would be far too loose for large values: `9460730472580.8` is 8e-14 from an
+/// integer relatively, but its `.8` is a real digit.
+fn is_near_integer(v: f64) -> bool {
+    (v - v.round()).abs() <= 4.0 * f64::EPSILON * v.abs()
+}
+
 /// Writes `v` as [`format_number`] / [`format_number_exact`] would, without allocating.
 fn write_number<W: fmt::Write>(out: &mut W, v: f64, denoise: bool) -> fmt::Result {
     if !v.is_finite() {
@@ -412,7 +420,7 @@ fn write_number<W: fmt::Write>(out: &mut W, v: f64, denoise: bool) -> fmt::Resul
         return write!(out, "{v:e}");
     }
     let r = v.round();
-    if (v - r).abs() <= 1e-12 * a {
+    if is_near_integer(v) {
         write!(out, "{r}")
     } else {
         write!(out, "{v}")
@@ -674,7 +682,7 @@ impl Value {
         let mut unit_buf = StackStr::new();
         write!(unit_buf, "{}", self.unit.display)?;
         let unit_str = unit_buf.as_str();
-        let is_integer = value.is_finite() && (value - value.round()).abs() <= 1e-12 * value.abs();
+        let is_integer = value.is_finite() && is_near_integer(value);
         let mut num = StackStr::new();
         if !is_integer
             && value.is_finite()
@@ -803,6 +811,15 @@ impl Sub<&Value> for &Value {
                     return Err(AbacusError::IncompatibleDimensions);
                 }
                 let unit = temperature_delta_unit(&self.unit);
+                // Same affine unit: subtract the displayed amounts (float noise from the kelvin
+                // round trip removed) so `30 °F - 20 °F` is exactly 10 °R, not 10.00000000000008.
+                if self.unit.scalar == rhs.unit.scalar && self.unit.offset == rhs.unit.offset {
+                    let diff = snap_float_noise(self.amount()) - snap_float_noise(rhs.amount());
+                    return Ok(Value {
+                        canonical: diff * self.unit.scalar,
+                        unit,
+                    });
+                }
                 return Ok(Value {
                     canonical: snap_cancellation(
                         self.canonical - rhs.canonical,

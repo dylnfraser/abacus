@@ -161,19 +161,29 @@ fn match_tz_offset_literal(s: &str) -> Option<usize> {
 
 /// Decides whether a `%` (with `rest` being the text after it) is the modulo operator rather
 /// than the percent unit: it is modulo only when an operand follows (`10 % 3`, `10%(3)`) and
-/// the next word is not `of` (`50% of 200`). Whitespace around `%` never changes the meaning.
+/// the next word is not `of` (`50% of 200`). A signed operand counts only after a space
+/// (`5 % -3` is modulo; `10% - 3` and `10%-3` are a percentage minus 3).
 #[inline]
 pub(crate) fn percent_is_modulo(rest: &str) -> bool {
     let after = rest.trim_start();
     if match_phrase(after, "of") {
         return false;
     }
-    let mut it = after.chars();
-    match it.next() {
-        Some(c) if c.is_ascii_digit() || c == '(' => true,
-        Some('.') => it.next().is_some_and(|c| c.is_ascii_digit()),
-        _ => false,
+    let starts_operand = |s: &str| {
+        let mut it = s.chars();
+        match it.next() {
+            Some(c) if c.is_ascii_digit() || c == '(' => true,
+            Some('.') => it.next().is_some_and(|c| c.is_ascii_digit()),
+            _ => false,
+        }
+    };
+    if starts_operand(after) {
+        return true;
     }
+    // A signed operand after a space is a negative/positive divisor (`5 % -3`), whereas
+    // `10% - 3` and `10%-3` remain "percentage minus a number".
+    rest.starts_with(char::is_whitespace)
+        && after.strip_prefix(['-', '+']).is_some_and(starts_operand)
 }
 
 /// Returns true if `tok` ends an operand (so a following operator is infix/postfix).

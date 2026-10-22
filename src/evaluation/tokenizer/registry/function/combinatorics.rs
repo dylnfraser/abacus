@@ -1,9 +1,7 @@
 use crate::{
     AbacusError, Value,
     evaluation::tokenizer::registry::function::{
-        distributions::special::{factorial, n_cr},
-        math_helpers::integer_arg,
-        operators::FunctionOp,
+        distributions::special::factorial, math_helpers::integer_arg, operators::FunctionOp,
     },
 };
 
@@ -43,10 +41,54 @@ fn factorial_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(factorial(n)))
 }
 
+/// Binomial coefficient for the user-facing `nCr`: exact (u128) while it fits, otherwise a
+/// product of `k` ratios in double-double arithmetic so the result keeps full precision
+/// (the log-gamma route in `n_cr` is only good to ~1e-12 for large results). Since
+/// `C(n, k) ≥ 2^k` for `k ≤ n/2`, any `k > 1100` overflows, which bounds the loop.
+fn exact_n_cr(n: u64, k: u64) -> f64 {
+    if k > n {
+        return 0.0;
+    }
+    let k = k.min(n - k);
+    let mut exact: u128 = 1;
+    for i in 0..k {
+        // C(n, i) · (n − i) / (i + 1) = C(n, i + 1), always an integer.
+        match exact.checked_mul(u128::from(n - i)) {
+            Some(p) => exact = p / u128::from(i + 1),
+            None => return n_cr_double_double(n, k),
+        }
+    }
+    exact as f64
+}
+
+fn n_cr_double_double(n: u64, k: u64) -> f64 {
+    if k > 1100 {
+        return f64::INFINITY;
+    }
+    // (hi, lo) represents hi + lo. Each step divides by (i + 1) and then multiplies by (n − i)
+    // using error-free transformations (dividing first so the last step can't overflow early),
+    // which keeps the accumulated rounding error near one ulp.
+    let (mut hi, mut lo) = (1.0_f64, 0.0_f64);
+    for i in 0..k {
+        let d = (i + 1) as f64;
+        let q = hi / d;
+        let q_lo = ((-q).mul_add(d, hi) + lo) / d;
+        let m = (n - i) as f64;
+        let p = q * m;
+        let p_lo = q.mul_add(m, -p) + q_lo * m;
+        hi = p + p_lo;
+        lo = p_lo - (hi - p);
+        if !hi.is_finite() {
+            return f64::INFINITY;
+        }
+    }
+    hi + lo
+}
+
 /// nCr(n, r) or comb(n, r)
 fn n_cr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (n, r) = parse_n_r(args)?;
-    let c = n_cr(n, r);
+    let c = exact_n_cr(n, r);
     if c.is_infinite() {
         return Err(overflow("nCr"));
     }

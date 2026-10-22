@@ -501,14 +501,20 @@ impl<'a> Parser<'a> {
         rhs: EvalResult,
     ) -> Result<EvalResult, AbacusError> {
         // Fast-path scalar-to-scalar standard arithmetic
-        if let (EvalResult::Scalar(l), EvalResult::Scalar(r)) = (&lhs, &rhs) {
-            match name {
-                "+" => return (l + r).map(EvalResult::Scalar),
-                "-" => return (l - r).map(EvalResult::Scalar),
-                "*" => return (l * r).map(EvalResult::Scalar),
-                "/" => return (l / r).map(EvalResult::Scalar),
-                _ => {}
-            }
+        if matches!(name, "+" | "-" | "*" | "/")
+            && let (EvalResult::Scalar(l), EvalResult::Scalar(r)) = (&lhs, &rhs)
+        {
+            use crate::evaluation::tokenizer::registry::binary::arithmetic::check_overflow;
+            let (x, y) = (l.canonical, r.canonical);
+            let result = match name {
+                "+" => l + r,
+                "-" => l - r,
+                "*" => l * r,
+                // Division by zero yields ±∞ by design; only genuine overflow is an error.
+                _ if y == 0.0 => return (l / r).map(EvalResult::Scalar),
+                _ => l / r,
+            };
+            return check_overflow(result?, x, y).map(EvalResult::Scalar);
         }
 
         if name == "^" {

@@ -4,6 +4,29 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// `(1 + rate)^n`. When `1 + rate` is exactly representable (e.g. 0.5) `powf` is used as is;
+/// otherwise `exp(n·ln_1p(rate))` avoids amplifying the rounding of `1 + rate` by `n`.
+fn growth(rate: f64, n: f64) -> f64 {
+    if rate > -1.0 && (1.0 + rate) - 1.0 != rate {
+        (n * rate.ln_1p()).exp()
+    } else {
+        (1.0 + rate).powf(n)
+    }
+}
+
+/// Annuity factor `((1 + rate)^n − 1) / rate`. When `(1 + rate)^n` is close to 1, subtracting 1
+/// cancels catastrophically (`fv(1e-12, 360, -100)` came out as 36003.2 instead of
+/// 36000.000006), so that regime uses `exp_m1`.
+fn annuity_factor(rate: f64, n: f64) -> f64 {
+    if rate > -1.0 {
+        let x = n * rate.ln_1p();
+        if x.abs() < 1.0 {
+            return x.exp_m1() / rate;
+        }
+    }
+    (growth(rate, n) - 1.0) / rate
+}
+
 /// pmt(rate, nper, pv) or pmt(rate, nper, pv, fv)
 fn pmt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(&args[0..2])?;
@@ -26,8 +49,7 @@ fn pmt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let pmt_canonical = if rate == 0.0 {
         -(pv_val.canonical + fv_canonical) / nper
     } else {
-        let compound = (1.0 + rate).powf(nper);
-        -(rate * (pv_val.canonical * compound + fv_canonical)) / (compound - 1.0)
+        -(pv_val.canonical * growth(rate, nper) + fv_canonical) / annuity_factor(rate, nper)
     };
 
     Ok(Value {
@@ -55,8 +77,7 @@ fn fv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let fv_canonical = if rate == 0.0 {
         -(pv_canonical + pmt_val.canonical * nper)
     } else {
-        let compound = (1.0 + rate).powf(nper);
-        -pv_canonical * compound - pmt_val.canonical * ((compound - 1.0) / rate)
+        -pv_canonical * growth(rate, nper) - pmt_val.canonical * annuity_factor(rate, nper)
     };
 
     Ok(Value {
@@ -84,8 +105,7 @@ fn pv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let pv_canonical = if rate == 0.0 {
         -(fv_canonical + pmt_val.canonical * nper)
     } else {
-        let compound = (1.0 + rate).powf(nper);
-        (-fv_canonical - pmt_val.canonical * ((compound - 1.0) / rate)) / compound
+        (-fv_canonical - pmt_val.canonical * annuity_factor(rate, nper)) / growth(rate, nper)
     };
 
     Ok(Value {
@@ -109,7 +129,7 @@ fn npv_fn(args: &[Value]) -> Result<Value, AbacusError> {
             return Err(AbacusError::IncompatibleDimensions);
         }
         let t = (i + 1) as f64;
-        total_npv += cf.canonical / (1.0 + rate).powf(t);
+        total_npv += cf.canonical / growth(rate, t);
     }
 
     Ok(Value {
@@ -262,7 +282,7 @@ fn compound_fn(args: &[Value]) -> Result<Value, AbacusError> {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
 
-    let amount_canonical = principal.canonical * (1.0 + rate / n).powf(n * time);
+    let amount_canonical = principal.canonical * growth(rate / n, n * time);
 
     Ok(Value {
         canonical: amount_canonical,

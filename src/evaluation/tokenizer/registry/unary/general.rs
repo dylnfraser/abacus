@@ -54,6 +54,35 @@ fn sqrt(a: Value) -> Result<Value, AbacusError> {
     })
 }
 
+/// Real cube root; unlike `sqrt` it accepts negative values (`cbrt(-27)` = -3) and divides
+/// unit exponents by three (`cbrt(8 m^3)` = 2 m).
+fn cbrt(a: Value) -> Result<Value, AbacusError> {
+    if a.unit.is_affine() {
+        return Err(AbacusError::AffineUnitOperation("cbrt"));
+    }
+    if a.unit.is_plain_number() || a.unit.is_percent() {
+        return Ok(Value {
+            canonical: a.canonical.cbrt(),
+            unit: a.unit,
+        });
+    }
+    let new_dims = a
+        .unit
+        .dimensions
+        .checked_mul_f64(1.0 / 3.0)
+        .ok_or(AbacusError::ExponentLimitExceeded)?;
+    let new_unit = Arc::new(Unit {
+        scalar: a.unit.scalar.cbrt(),
+        offset: 0.0,
+        dimensions: new_dims,
+        display: a.unit.display.powf(1.0 / 3.0),
+    });
+    Ok(Value {
+        canonical: a.canonical.cbrt(),
+        unit: new_unit,
+    })
+}
+
 fn factorial(a: Value) -> Result<Value, AbacusError> {
     if !a.unit.is_dimensionless() {
         return Err(AbacusError::IncompatibleDimensions);
@@ -103,6 +132,12 @@ pub fn register_general() -> Vec<UnaryOp> {
         UnaryOp {
             alias: "sqrt",
             func: sqrt,
+            precedence: 2,
+            prefix: true,
+        },
+        UnaryOp {
+            alias: "cbrt",
+            func: cbrt,
             precedence: 2,
             prefix: true,
         },

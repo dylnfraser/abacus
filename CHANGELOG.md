@@ -85,6 +85,13 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 - Distinct whole numbers always display distinctly (`1e20 + 16384` no longer prints as `1e20`).
 - Dividing a temperature by zero is an error instead of `inf °C`.
 - `Date` equality, ordering and hashing use a total-order key: zoned dates compare by instant, and distinct floating (no-timezone) times never compare equal, even across a DST gap.
+- Long numbers no longer lose digits on display: values were snapped to the nearest integer within 1e-12 *relative*, so `9460730472580.8` printed as `9460730472581` (`1 ly in km`). The snap now only hides a few ulps of float noise.
+- `pmt`/`fv`/`pv`/`npv`/`compound` are accurate at small rates: `(1 + r)^n − 1` cancelled catastrophically, so `fv(1e-12, 360, -100)` was 36003.2 instead of 36000.000006. They now use `ln_1p`/`exp_m1` (worst error over a rate sweep: 2.7e-15).
+- `5 % -3` is modulo (−1) rather than "5% minus 3"; `10% - 3` and `10%-3` are still percentages.
+- `nCr` is exact while the result fits a u128 and correctly rounded beyond (double-double product); previously ~7e-13 error for results like `nCr(1000, 500)`.
+- Real odd roots of negative numbers: `(-8)^(1/3)` = −2, `(-8)^(2/3)` = 4 (also in intervals); new `cbrt` function (`cbrt(-27)` = −3, `cbrt(8 m^3)` = 2 m). Even roots of negatives remain NaN.
+- Arithmetic overflow from finite operands (`1e308 * 10`, `10^400`) is an error, matching out-of-range literals like `1e999`. Division by zero still yields ±∞, and `(1/0) + 1` is now `inf` (the cancellation snap had turned it into 0).
+- Same-unit temperature differences and spreads are exact: `30 °F - 20 °F` = 10 °R, `range`/`iqr`/`mad` of °F readings likewise.
 - Student's t with very large degrees of freedom (found by cargo-fuzz): `invt(2e-10, 1e30)` took ~10 s and returned `-8388608`; `tcdf`/`invt` now use Hill's normal-equivalent expansion above 1e4 df and match the normal limit, and `tpdf` avoids log-gamma cancellation (`tpdf(1e30, 0)` = 1/√(2π)).
 - The incomplete-beta/gamma iteration budget is capped so hopeless inputs (`fcdf(1e30, 1e30, 1)`) fail in ~0.1 s instead of ~1 s.
 - `std`/`var` (and the CIs and t-tests built on them) of °C/°F readings keep full precision: `std(20 °F, 30 °F)` = 7.0710678118654755 °R.
