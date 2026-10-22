@@ -76,6 +76,10 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 - The release profile uses `opt-level = 3` (the `release-small` profile keeps `opt-level = "z"`). `panic = "abort"` was removed.
 - `license = "MIT"` and a LICENSE file were added.
 
+### Known limitations
+
+- `fcdf`, `binomcdf`, `hypgeomcdf` and `poissoncdf` lose precision gradually for extremely large parameters (≳1e8): about 1e-12–1e-10 relative error around 1e8–1e12 and about 1e-8 at 1e15. Ordinary parameters are accurate to about 1e-13 or better. (For comparison, the `statrs` and `puruspe` crates return negative probabilities, zero or NaN in this regime.)
+
 ### Fixes
 
 **Code review follow-ups**

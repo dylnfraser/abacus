@@ -412,8 +412,9 @@ chisqcdf(1e6, 1e6)                 -> 0.5001880631966019
 
 - `std`/`var` are sample statistics; `std_p`/`var_p` are population statistics.
 - `iqr` and quantiles use linear interpolation (Excel `QUARTILE.INC`). `skew`/`kurt` are the sample-adjusted forms used by Excel's `SKEW`/`KURT`.
-- Spreads of temperatures (std, range, …) are temperature differences, so they are reported in K.
+- Spreads of temperatures (std, range, …) are temperature differences, so they are reported in K for °C readings and °R for °F readings (matching `30 °F - 20 °F` = `10 °R`).
 - Integer-valued parameters (counts, `n`, factorial/nCr arguments) must be whole numbers; non-integers are errors, not silently rounded.
+- **Accuracy:** distribution functions are accurate to about 1e-13 relative or better for ordinary parameters. With extremely large parameters, the CDFs built on the incomplete beta/gamma functions (`fcdf`, `binomcdf`, `hypgeomcdf`, `poissoncdf`) lose precision gradually: errors are about 1e-13 up to ~1e6, about 1e-12–1e-10 around 1e8–1e12, and about 1e-8 at 1e15 (e.g. `binomcdf(1e15, 0.5, 5e14)`). Student's t (`tcdf`, `invt`, `tpdf`) and `chisqcdf` stay accurate at any degrees of freedom (worst observed: ~3e-13 for `chisqcdf` near 1e9). Inputs that cannot be evaluated return an error rather than a wrong value.
 
 ### Hypothesis Testing & Confidence Intervals
 

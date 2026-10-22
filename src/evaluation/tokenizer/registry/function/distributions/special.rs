@@ -472,6 +472,11 @@ fn beta_cf(a: f64, b: f64, x: f64) -> Option<f64> {
 }
 
 /// Regularized incomplete beta function `I_x(a, b)`. `None` if it fails to converge.
+///
+/// Accuracy: ~1e-13 relative or better while `a` and `b` are below ~1e6. The continued
+/// fraction accumulates rounding error for larger parameters (~1e-12–1e-10 around 1e8–1e12,
+/// ~1e-8 at 1e15). A port of TOMS 708 (DiDonato & Morris, as used by R's `pbeta`) would fix
+/// this regime; it was judged not worth the risk for parameters this extreme.
 #[must_use]
 pub fn beta_inc(a: f64, b: f64, x: f64) -> Option<f64> {
     beta_inc_xy(a, b, x, 1.0 - x)
