@@ -251,11 +251,10 @@ impl Abacus {
         self.generation = self.generation.wrapping_add(1);
     }
 
-    /// Defines or updates a variable. Only a new name changes how expressions are read.
+    /// Defines or updates a variable. (Compiled expressions track the variable names they
+    /// depend on themselves, so this needn't invalidate them.)
     fn insert_variable(&mut self, name: String, value: EvalResult) {
-        if self.variables.insert(name, value).is_none() {
-            self.changed();
-        }
+        self.variables.insert(name, value);
     }
 
     /// Initialize an `Abacus` instance populated with standard physical units, operator registries, and mathematical constants (`pi`, `e`, `tau`, `phi`).
@@ -636,6 +635,7 @@ impl Abacus {
                 lazy_now: Some((&lazy_now, self.default_timezone.as_ref())),
                 date_month_first: self.date_format == DateFormat::MMDDYYYY,
             },
+            None,
         )
         .map(|lexed| lexed.tokens)
         .map_err(|(error, _)| error)
@@ -689,23 +689,17 @@ impl Abacus {
 
     /// Remove a defined variable.
     pub fn remove_variable(&mut self, name: &str) -> Option<EvalResult> {
-        let removed = self.variables.remove(name);
-        if removed.is_some() {
-            self.changed();
-        }
-        removed
+        self.variables.remove(name)
     }
 
     /// Clear all defined variables.
     pub fn clear_variables(&mut self) {
         self.variables.clear();
-        self.changed();
     }
 
     /// Reset variables back to standard mathematical constants (`pi`, `e`, `tau`, `phi`).
     pub fn reset_standard_variables(&mut self) {
         self.variables = Self::standard_variables();
-        self.changed();
     }
 
     /// Returns the standard common speed unit display overrides ("mi/h" -> "mph", "km/h" -> "kmph").
@@ -887,11 +881,12 @@ impl Abacus {
     /// assert_eq!(ys, ["1", "2", "5", "10"]);
     /// ```
     ///
-    /// Which names are variables and which units exist is decided when compiling; if the engine
-    /// has changed in a way that affects that since (new variable names, units, operators or
-    /// settings), or the expression contains date literals (which depend on the current date),
-    /// [`Abacus::eval_compiled`] re-reads the source, so the result is always the same as
-    /// [`Abacus::eval`] would give.
+    /// Which names are variables and which units exist is decided when compiling. Changing a
+    /// variable's value never requires re-reading the source; [`Abacus::eval_compiled`] only
+    /// re-reads it when the engine has changed in a way that could read it differently (a
+    /// variable now shadows, or no longer shadows, a unit name the expression uses; or units,
+    /// operators or input settings changed), or when it contains date literals (which depend
+    /// on the current date). The result is always the same as [`Abacus::eval`] would give.
     pub fn compile(&self, expr: &str) -> Result<Expr, Diagnostic> {
         let config = EvalConfig::from(self);
         let lazy_now = std::cell::OnceCell::new();
@@ -902,6 +897,7 @@ impl Abacus {
             expr,
             &config,
             &lazy_now,
+            true,
         )
         .map_err(|located| diagnostic(located, expr))?;
         Ok(Expr {
@@ -924,6 +920,11 @@ impl Abacus {
         if expr.engine_id != self.engine_id
             || expr.generation != self.generation
             || expr.compiled.has_dates
+            || expr
+                .compiled
+                .variable_lookups
+                .iter()
+                .any(|(name, was)| self.variables.contains_key(&**name) != *was)
         {
             return self.eval_unformatted(&expr.source);
         }

@@ -27,6 +27,9 @@ pub(crate) struct Compiled {
     explicit_conversion: bool,
     /// The expression contains date literals, which are resolved while lexing.
     pub has_dates: bool,
+    /// Names whose reading depended on whether they were variables, and whether they were
+    /// (recorded only when compiling with `record_lookups`).
+    pub variable_lookups: Box<[(Box<str>, bool)]>,
 }
 
 /// Lexes and parses `input`. A "now" needed while lexing date literals is resolved through
@@ -38,7 +41,9 @@ pub(crate) fn compile(
     input: &str,
     config: &EvalConfig,
     lazy_now: &std::cell::OnceCell<crate::Date>,
+    record_lookups: bool,
 ) -> Result<Compiled, Located> {
+    let mut lookups = Vec::new();
     let lexed = lex(
         token_registry,
         unit_registry,
@@ -51,6 +56,7 @@ pub(crate) fn compile(
             lazy_now: Some((lazy_now, config.default_timezone.as_ref())),
             date_month_first: config.date_format == crate::DateFormat::MMDDYYYY,
         },
+        record_lookups.then_some(&mut lookups),
     )
     .map_err(|(error, span)| Located::new(error, Some(span), None))?;
     let mut parser = Parser::new(
@@ -63,11 +69,17 @@ pub(crate) fn compile(
     let root = parser.parse()?;
     let explicit_conversion = parser.has_explicit_conversion;
     let has_dates = parser.has_dates;
+    lookups.sort_unstable();
+    lookups.dedup();
     Ok(Compiled {
         ast: parser.into_ast(),
         root,
         explicit_conversion,
         has_dates,
+        variable_lookups: lookups
+            .into_iter()
+            .map(|(name, found)| (name.into(), found))
+            .collect(),
     })
 }
 
@@ -116,6 +128,7 @@ pub(crate) fn evaluate_located(
         input,
         &config,
         &lazy_now,
+        false,
     )?;
     // Share a "now" resolved while lexing with the evaluator, so both see the same instant.
     if config.anchor_date.is_none() {

@@ -1,9 +1,7 @@
 use crate::{
     AbacusError, UnitRegistry, Value,
     evaluation::tokenizer::{lexer::percent_is_modulo, tokens::Token},
-    units::eval_result::EvalResult,
 };
-use std::collections::HashMap;
 
 /// Characters that may continue a unit suffix glued to a number (`5km`, `20°C`, `3$`).
 fn is_unit_suffix_char(c: char) -> bool {
@@ -14,12 +12,12 @@ fn is_unit_suffix_char(c: char) -> bool {
 
 /// Parses a numeric literal at the start of `input` (which starts with a digit, or `.` and a
 /// digit), folding an unspaced unit suffix (`5km`) into a `Token::Val`. Returns the token and
-/// the number of bytes consumed. A suffix that names a variable in `variables` is left for the
-/// lexer so that variables shadow units identically in `2h` and `2 h`.
+/// the number of bytes consumed. A suffix for which `is_variable` holds is left for the lexer
+/// so that variables shadow units identically in `2h` and `2 h`.
 pub(crate) fn parse_number_token<'a>(
     input: &'a str,
     unit_registry: &UnitRegistry,
-    variables: Option<&HashMap<String, EvalResult>>,
+    mut is_variable: impl FnMut(&'a str) -> bool,
     number_scales: bool,
 ) -> Result<(Token<'a>, usize), AbacusError> {
     let b = input.as_bytes();
@@ -123,7 +121,7 @@ pub(crate) fn parse_number_token<'a>(
             }
         }
         let unit_candidate = &rest[..unit_end];
-        if variables.is_some_and(|v| v.contains_key(unit_candidate)) {
+        if is_variable(unit_candidate) {
             return Ok((Token::Float(val), end));
         }
         if number_scales

@@ -418,12 +418,17 @@ pub(crate) struct Lexed<'a> {
 
 /// Tokenizes `input_text`, recording the span of every token. Errors carry the span of the
 /// input being lexed when they occurred.
+///
+/// When `variable_lookups` is given, every name whose reading depended on whether it is a
+/// variable is appended to it, with the answer, so a caller can tell later whether the same
+/// input would still be read the same way.
 pub(crate) fn lex<'a>(
     token_registry: &TokenRegistry,
     unit_registry: &UnitRegistry,
     variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
     input_text: &'a str,
     options: LexOptions<'_>,
+    variable_lookups: Option<&mut Vec<(&'a str, bool)>>,
 ) -> Result<Lexed<'a>, (AbacusError, Span)> {
     // Every token spans at least one byte, so the input length bounds the token count; capping
     // the initial reservation keeps huge inputs from over-allocating up front.
@@ -440,6 +445,8 @@ pub(crate) fn lex<'a>(
         variables,
         options,
         word_lookup: None,
+        record_lookups: variable_lookups.is_some(),
+        lookups: Vec::new(),
     };
     while let Some(c) = lexer.peek_char() {
         if c.is_whitespace() {
@@ -465,7 +472,15 @@ pub(crate) fn lex<'a>(
         }
     }
 
-    let Lexer { tokens, spans, .. } = lexer;
+    let Lexer {
+        tokens,
+        spans,
+        lookups,
+        ..
+    } = lexer;
+    if let Some(out) = variable_lookups {
+        out.extend(lookups);
+    }
     resolve_tokens(
         Lexed { tokens, spans },
         unit_registry,
@@ -492,6 +507,10 @@ struct Lexer<'a, 'r> {
     /// The operator kinds of the plain word at byte `.0` (of length `.1`), as looked up by
     /// [`Lexer::registered_operator`], so [`Lexer::classify_word`] needn't hash it again.
     word_lookup: Option<(usize, usize, &'r [MatchedOpKind])>,
+    /// Whether to record [`Lexer::lookups`].
+    record_lookups: bool,
+    /// Names looked up as variables, and whether they were (see [`lex`]).
+    lookups: Vec<(&'a str, bool)>,
 }
 
 /// A lexing rule's result: the token and how many bytes of input it consumed.
@@ -508,6 +527,15 @@ impl<'a> Lexer<'a, '_> {
 
     fn last(&self) -> Option<&Token<'a>> {
         self.tokens.last()
+    }
+
+    /// Whether `name` is a variable, which then takes precedence over a unit of that name.
+    fn is_variable(&mut self, name: &'a str) -> bool {
+        let found = self.variables.is_some_and(|v| v.contains_key(name));
+        if self.record_lookups {
+            self.lookups.push((name, found));
+        }
+        found
     }
 
     /// Lexes one token starting with `c` at the cursor. Rules are tried in this order, and the
@@ -784,22 +812,15 @@ impl<'a> Lexer<'a, '_> {
 
     /// A number, with an unspaced unit or scale word folded in (`5km`, `3million`).
     fn number(&mut self) -> Result<Lexeme<'a>, AbacusError> {
-        let shadowing = if self.in_conversion_target {
-            None
-        } else {
-            self.variables
-        };
-        parse_number_token(
-            self.rest(),
-            self.unit_registry,
-            shadowing,
-            self.options.number_scales,
-        )
+        let (rest, units, scales) = (self.rest(), self.unit_registry, self.options.number_scales);
+        // Conversion targets are units even if a variable shadows the name.
+        let shadowing = !self.in_conversion_target;
+        parse_number_token(rest, units, |name| shadowing && self.is_variable(name), scales)
     }
 
     /// The length of the identifier at the cursor, including a unit exponent (`m^2`, `s^-1`)
     /// when the base is a unit rather than a constant or variable.
-    fn word_len(&self) -> usize {
+    fn word_len(&mut self) -> usize {
         let rest = self.rest();
         let vars_shadow = !self.in_conversion_target;
         let mut end = 0;
@@ -811,7 +832,7 @@ impl<'a> Lexer<'a, '_> {
             } else if ch == '^' {
                 let base = &rest[..end];
                 if is_standard_constant(base)
-                    || (vars_shadow && self.variables.is_some_and(|v| v.contains_key(base)))
+                    || (vars_shadow && self.is_variable(base))
                     || !self.unit_registry.contains(base)
                 {
                     break;
@@ -886,7 +907,7 @@ impl<'a> Lexer<'a, '_> {
             // Conversion targets are units even if a variable shadows the name.
             return Ok(Token::Unit(sym));
         }
-        if is_standard_constant(sym) || self.variables.is_some_and(|v| v.contains_key(sym)) {
+        if is_standard_constant(sym) || self.is_variable(sym) {
             return Ok(Token::Ident(sym));
         }
         if let Some(tok) = resolve_indefinite_article(sym, after, self.last(), self.unit_registry) {
@@ -952,7 +973,7 @@ mod tests {
             lazy_now: None,
             date_month_first: false,
         };
-        lex(token_registry, unit_registry, None, input, options)
+        lex(token_registry, unit_registry, None, input, options, None)
             .map(|lexed| lexed.tokens)
             .map_err(|(error, _)| error)
     }

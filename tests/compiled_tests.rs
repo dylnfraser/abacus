@@ -75,6 +75,30 @@ fn stale_compiled_expressions_are_reread() {
 }
 
 #[test]
+fn compiled_expressions_track_the_names_they_use() {
+    let mut calc = Abacus::standard();
+    let glued = calc.compile("2h + 1 h").unwrap();
+    let power = calc.compile("m^2").unwrap();
+    // Unrelated variables don't change how either is read.
+    calc.set_variable("unrelated", 1.0);
+    assert_eq!(calc.eval_compiled(&glued).unwrap().to_display(), "3 h");
+    // A variable shadowing a unit the expression uses does, glued to a number or not ...
+    calc.set_variable("h", 3.0);
+    assert_eq!(
+        calc.eval_compiled(&glued).map(|r| r.to_display()),
+        calc.eval("2h + 1 h").map(|r| r.to_display())
+    );
+    calc.set_variable("m", 4.0);
+    assert_eq!(calc.eval_compiled(&power).unwrap().to_display(), "16");
+    // ... and so does removing it again.
+    calc.remove_variable("m");
+    assert_eq!(calc.eval_compiled(&power).unwrap().to_display(), "1 m^2");
+    // Conversion targets are units regardless.
+    let target = calc.compile("7200 s in h").unwrap();
+    assert_eq!(calc.eval_compiled(&target).unwrap().to_display(), "2 h");
+}
+
+#[test]
 fn compiled_dates_follow_the_reference_time() {
     let mut calc = anchored();
     let expr = calc.compile("today + 1 day").unwrap();
