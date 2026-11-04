@@ -518,7 +518,7 @@ pub(crate) fn tokenize_with_lazy_now<'a>(
     // the initial reservation keeps huge inputs from over-allocating up front.
     let mut tokens = Vec::with_capacity(input_text.len().min(256));
     let mut chars = input_text.char_indices().peekable();
-    let op_index = token_registry.operator_index_ref();
+    let op_index = token_registry.operator_index();
     // True while lexing the target of an `in`/`to`/`as` conversion, where unit names take
     // precedence over variables of the same name.
     let mut in_conversion_target = false;
@@ -923,7 +923,7 @@ pub(crate) fn tokenize_with_lazy_now<'a>(
                 }
             }
             let sym = &input_text[start..end];
-            let registered = RegisteredOps::lookup(&op_index, token_registry, sym);
+            let registered = RegisteredOps::lookup(op_index, token_registry, sym);
 
             if CONVERSION_KEYWORDS.contains(&sym) {
                 tokens.push(Token::ConversionOp);

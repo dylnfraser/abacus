@@ -16,7 +16,6 @@
 use abacus::{
     Abacus, AbacusError, BinaryOp, Date, Token, TokenRegistry, UnitRegistry, Value, eval,
 };
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn display(expr: &str) -> String {
@@ -55,17 +54,10 @@ fn operator_index_is_invalidated_on_registration() {
     });
     assert_eq!(calc.eval("1 @@ 2").unwrap().to_display(), "13");
 
-    // Direct mutation of the public map is detected as well.
-    calc.tokens.binary_operators.insert(
-        "##".to_string(),
-        Arc::new(BinaryOp {
-            alias: "##",
-            func: add_ten,
-            precedence: 0,
-            right_associative: false,
-        }),
-    );
-    assert_eq!(calc.eval("1 ## 2").unwrap().to_display(), "13");
+    // Removing it updates the lexer index too.
+    assert!(calc.tokens.remove_binary_operator("@@").is_some());
+    assert!(calc.tokens.binary_operator("@@").is_none());
+    assert!(calc.eval("1 @@ 2").is_err());
 }
 
 #[test]

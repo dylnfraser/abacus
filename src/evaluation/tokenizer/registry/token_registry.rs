@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::registry::helpers::fx_hash::FxHashMap;
 
@@ -26,17 +23,15 @@ use crate::evaluation::tokenizer::registry::function::{
     stats::register_stats,
 };
 
+/// Operators and functions known to the lexer and parser. Add entries with the `register_*`
+/// methods, which keep the lexer's operator index up to date.
 #[derive(Debug, Default)]
 pub struct TokenRegistry {
-    pub binary_operators: HashMap<String, Arc<BinaryOp>>,
-    pub unary_operators: HashMap<String, Arc<UnaryOp>>,
-    pub function_operators: HashMap<String, Arc<FunctionOp>>,
-    /// Lazily-built operator index used by the lexer. Cleared by the `register_*` methods and
-    /// rebuilt automatically if the operator maps are mutated directly (detected by size change).
-    index_cache: RwLock<Option<Arc<OperatorIndex>>>,
-    /// Lock-free copy of the index for the common case where the maps are only changed
-    /// through the `register_*` methods (which reset it).
-    index: std::sync::OnceLock<Arc<OperatorIndex>>,
+    pub(crate) binary_operators: HashMap<String, Arc<BinaryOp>>,
+    pub(crate) unary_operators: HashMap<String, Arc<UnaryOp>>,
+    pub(crate) function_operators: HashMap<String, Arc<FunctionOp>>,
+    /// Lexer index over all patterns, built on first use and reset by the `register_*` methods.
+    index: std::sync::OnceLock<OperatorIndex>,
 }
 
 /// Operator patterns grouped by first character, longest pattern first.
@@ -48,7 +43,6 @@ pub struct OperatorIndex {
     symbolic_by_first_char: FxHashMap<char, Vec<(Box<str>, MatchedOpKind)>>,
     /// Plain-word patterns (see [`is_word_pattern`]) mapped to their kinds in tie-break order.
     words: FxHashMap<Box<str>, Vec<MatchedOpKind>>,
-    signature: (usize, usize, usize),
 }
 
 /// Characters that continue an identifier for operator word-boundary purposes.
@@ -67,22 +61,6 @@ pub(crate) fn is_word_pattern(pattern: &str) -> bool {
             .chars()
             .last()
             .is_some_and(|c| c.is_alphanumeric() || c == '_')
-}
-
-/// A borrowed or shared [`OperatorIndex`] (see [`TokenRegistry::operator_index_ref`]).
-pub(crate) enum IndexRef<'r> {
-    Borrowed(&'r OperatorIndex),
-    Shared(Arc<OperatorIndex>),
-}
-
-impl std::ops::Deref for IndexRef<'_> {
-    type Target = OperatorIndex;
-    fn deref(&self) -> &OperatorIndex {
-        match self {
-            Self::Borrowed(index) => index,
-            Self::Shared(index) => index,
-        }
-    }
 }
 
 impl OperatorIndex {
@@ -155,7 +133,6 @@ impl TokenRegistry {
         functions.extend(register_date_functions());
 
         Self {
-            index_cache: RwLock::new(None),
             index: std::sync::OnceLock::new(),
             // Shared built-in instances: their identity is how built-ins are recognised
             // (see `arithmetic::standard_binary_ops`).
@@ -200,57 +177,52 @@ impl TokenRegistry {
 
     fn invalidate_index(&mut self) {
         self.index = std::sync::OnceLock::new();
-        *self
-            .index_cache
-            .get_mut()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    /// Borrows the operator index without locking (the lexer calls this once per input).
-    ///
-    /// The index is built once and reset by the `register_*` methods. If the public maps were
-    /// mutated directly (detected by a size change), falls back to [`Self::operator_index`].
-    pub(crate) fn operator_index_ref(&self) -> IndexRef<'_> {
-        let index = self.index.get_or_init(|| Arc::new(self.build_index()));
-        if index.signature == self.signature() {
-            IndexRef::Borrowed(index)
-        } else {
-            IndexRef::Shared(self.operator_index())
-        }
+    /// The lexer's operator index, built on first use.
+    pub(crate) fn operator_index(&self) -> &OperatorIndex {
+        self.index.get_or_init(|| self.build_index())
     }
 
-    fn signature(&self) -> (usize, usize, usize) {
-        (
-            self.binary_operators.len(),
-            self.unary_operators.len(),
-            self.function_operators.len(),
-        )
-    }
-
-    /// Returns the cached operator index, building it on first use.
+    /// The binary operator registered under `alias`.
     #[must_use]
-    pub fn operator_index(&self) -> Arc<OperatorIndex> {
-        let signature = self.signature();
-        if let Some(index) = self.index.get()
-            && index.signature == signature
-        {
-            return Arc::clone(index);
-        }
-        if let Some(index) = self
-            .index_cache
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            && index.signature == signature
-        {
-            return Arc::clone(index);
-        }
-        let index = Arc::new(self.build_index());
-        *self
-            .index_cache
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::clone(&index));
-        index
+    pub fn binary_operator(&self, alias: &str) -> Option<&Arc<BinaryOp>> {
+        self.binary_operators.get(alias)
+    }
+
+    /// The unary operator registered under `alias`.
+    #[must_use]
+    pub fn unary_operator(&self, alias: &str) -> Option<&Arc<UnaryOp>> {
+        self.unary_operators.get(alias)
+    }
+
+    /// The function registered under `name`.
+    #[must_use]
+    pub fn function(&self, name: &str) -> Option<&Arc<FunctionOp>> {
+        self.function_operators.get(name)
+    }
+
+    /// Removes the binary operator registered under `alias`.
+    pub fn remove_binary_operator(&mut self, alias: &str) -> Option<Arc<BinaryOp>> {
+        self.invalidate_index();
+        self.binary_operators.remove(alias)
+    }
+
+    /// Removes the unary operator registered under `alias`.
+    pub fn remove_unary_operator(&mut self, alias: &str) -> Option<Arc<UnaryOp>> {
+        self.invalidate_index();
+        self.unary_operators.remove(alias)
+    }
+
+    /// Removes the function registered under `name`.
+    pub fn remove_function(&mut self, name: &str) -> Option<Arc<FunctionOp>> {
+        self.invalidate_index();
+        self.function_operators.remove(name)
+    }
+
+    /// Names of all registered functions, in no particular order.
+    pub fn function_names(&self) -> impl Iterator<Item = &str> {
+        self.function_operators.keys().map(String::as_str)
     }
 
     fn build_index(&self) -> OperatorIndex {
@@ -306,38 +278,7 @@ impl TokenRegistry {
             by_first_char: map,
             symbolic_by_first_char,
             words,
-            signature: self.signature(),
         }
-    }
-
-    /// Indexes all registered operators by their first character, sorted by descending pattern length.
-    #[must_use]
-    #[deprecated(note = "use `operator_index()`, which is cached")]
-    pub fn operators_by_first_char(&self) -> HashMap<char, Vec<(&str, MatchedOpKind)>> {
-        let mut map: HashMap<char, Vec<(&str, MatchedOpKind)>> = HashMap::new();
-        let index = self.build_index();
-        for (c, candidates) in index.by_first_char {
-            for (pattern, kind) in candidates {
-                let key = self
-                    .binary_operators
-                    .get_key_value(&*pattern)
-                    .map(|(k, _)| k.as_str())
-                    .or_else(|| {
-                        self.unary_operators
-                            .get_key_value(&*pattern)
-                            .map(|(k, _)| k.as_str())
-                    })
-                    .or_else(|| {
-                        self.function_operators
-                            .get_key_value(&*pattern)
-                            .map(|(k, _)| k.as_str())
-                    });
-                if let Some(key) = key {
-                    map.entry(c).or_default().push((key, kind));
-                }
-            }
-        }
-        map
     }
 }
 
