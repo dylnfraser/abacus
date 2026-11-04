@@ -219,6 +219,17 @@ impl TokenRegistry {
         self.function_operators.keys().map(String::as_str)
     }
 
+    /// Aliases of all registered unary operators (`sqrt`, `!`, `-`, …), in no particular order.
+    pub fn unary_operator_names(&self) -> impl Iterator<Item = &str> {
+        self.unary_operators.keys().map(String::as_str)
+    }
+
+    /// Aliases of all registered binary operators (`+`, `mod`, `per`, …), in no particular
+    /// order.
+    pub fn binary_operator_names(&self) -> impl Iterator<Item = &str> {
+        self.binary_operators.keys().map(String::as_str)
+    }
+
     fn build_index(&self) -> OperatorIndex {
         let mut map: HashMap<char, Vec<(Box<str>, MatchedOpKind)>> = HashMap::new();
         let entries = self

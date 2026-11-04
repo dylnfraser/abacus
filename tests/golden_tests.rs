@@ -80,6 +80,11 @@ fn golden_results_are_unchanged() {
         failures.is_empty(),
         "{} of {count} golden expressions changed (rerun with ABACUS_BLESS=1 if intended):\n{}",
         failures.len(),
-        failures.iter().take(20).cloned().collect::<Vec<_>>().join("\n")
+        failures
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

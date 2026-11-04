@@ -119,6 +119,12 @@ impl UnitRegistry {
         self.parse_exponent_unit(symbol).ok()
     }
 
+    /// The registered unit symbols and names (`m`, `meter`, `km`, …), in no particular order.
+    /// Powers like `m^2` are understood without being registered.
+    pub fn symbols(&self) -> impl Iterator<Item = &str> {
+        self.units.keys().map(String::as_str)
+    }
+
     pub fn contains(&self, symbol: &str) -> bool {
         self.units.contains_key(symbol) || self.parse_exponent_unit(symbol).is_ok()
     }

@@ -620,8 +620,44 @@ pub fn default_currency_cache_path() -> std::path::PathBuf {
 }
 
 impl Abacus {
-    // Tokenize an expression into a vector of `Token`s
+    /// Splits an expression into the tokens the parser sees (after implicit multiplication and
+    /// unit folding, so `5 km` is one value token).
     pub fn tokenize<'a>(&self, expr: &'a str) -> Result<Vec<Token<'a>>, AbacusError> {
+        self.lex(expr)
+            .map(|lexed| lexed.tokens)
+            .map_err(|(error, _)| error)
+    }
+
+    /// [`Abacus::tokenize`], with the span of the source each token came from (an inserted
+    /// implicit `*` has an empty span). Useful for syntax highlighting:
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "units")] {
+    /// use abacus::{Abacus, Token};
+    ///
+    /// let calc = Abacus::standard();
+    /// let src = "2 mean(9 m, 3 m)";
+    /// let tokens = calc.tokenize_spanned(src).unwrap();
+    /// // `2`, an implicit `*` (with an empty span), then `mean`.
+    /// assert!(matches!(tokens[1], (Token::BinaryOp("*"), span) if span.start == span.end));
+    /// assert!(matches!(tokens[2], (Token::Function("mean"), span) if span.text(src) == "mean"));
+    /// let err = calc.tokenize_spanned("1 + foo").unwrap_err();
+    /// assert_eq!(err.span().map(|s| s.text(err.source())), Some("foo"));
+    /// # }
+    /// ```
+    pub fn tokenize_spanned<'a>(
+        &self,
+        expr: &'a str,
+    ) -> Result<Vec<(Token<'a>, Span)>, Diagnostic> {
+        self.lex(expr)
+            .map(|lexed| lexed.tokens.into_iter().zip(lexed.spans).collect())
+            .map_err(|(error, span)| Diagnostic::new(error, Some(span), expr))
+    }
+
+    fn lex<'a>(
+        &self,
+        expr: &'a str,
+    ) -> Result<crate::evaluation::tokenizer::lexer::Lexed<'a>, (AbacusError, Span)> {
         let lazy_now = std::cell::OnceCell::new();
         crate::evaluation::tokenizer::lexer::lex(
             crate::evaluation::tokenizer::lexer::Lexed::default(),
@@ -638,8 +674,6 @@ impl Abacus {
             },
             None,
         )
-        .map(|lexed| lexed.tokens)
-        .map_err(|(error, _)| error)
     }
 
     /// Define a variable on this `Abacus` instance (builder pattern).

@@ -15,7 +15,7 @@ impl Rng {
         let seed = std::env::var("ABACUS_PROPTEST_SEED")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0x5eed_ab ^ 0x9e37_79b9_7f4a_7c15);
+            .unwrap_or(0x9e37_79b9_7f4a_7c15);
         Rng((seed ^ stream.wrapping_mul(0x2545_f491_4f6c_dd1d)) | 1)
     }
 
@@ -77,7 +77,7 @@ fn unit(calc: &Abacus, symbol: &str) -> std::sync::Arc<abacus::Unit> {
 
 fn random_value(rng: &mut Rng, calc: &Abacus) -> Value {
     let group = rng.pick(UNIT_GROUPS);
-    let unit = unit(&calc, rng.pick(group));
+    let unit = unit(calc, rng.pick(group));
     Value::new(rng.magnitude(), unit)
 }
 
@@ -177,7 +177,10 @@ fn conversions_round_trip() {
             back.amount(),
             there.amount()
         );
-        assert!(there.approx_eq(&start, 1e-12), "conversion keeps the quantity");
+        assert!(
+            there.approx_eq(&start, 1e-12),
+            "conversion keeps the quantity"
+        );
     }
 }
 
@@ -240,7 +243,10 @@ fn display_reads_back_as_the_same_value() {
             assert_eq!(shown, second.to_display(), "from {x} {unit}");
         } else {
             // Scaling to and from the unit's SI magnitude can move the last binary digit.
-            assert!(second.approx_eq(&first, 1e-14), "{shown} reads back as {second}");
+            assert!(
+                second.approx_eq(&first, 1e-14),
+                "{shown} reads back as {second}"
+            );
         }
     }
 }
@@ -297,9 +303,49 @@ fn compiled_expressions_match_eval_as_variables_change() {
 #[test]
 fn diagnostic_spans_lie_within_the_source() {
     const PIECES: &[&str] = &[
-        "1", "2.5", "1e3", " ", "+", "-", "*", "/", "^", "(", ")", "[", "]", ",", "..", "m", "km",
-        "s", "h", "kg", "x", "sin", "sqrt", "mean", "in", "to", "%", "!", "$", "€", "°", "é", "π",
-        "#", "@", "of", "ago", "days", "2026-01-01", "pm", "deg", "foo", ".slope",
+        "1",
+        "2.5",
+        "1e3",
+        " ",
+        "+",
+        "-",
+        "*",
+        "/",
+        "^",
+        "(",
+        ")",
+        "[",
+        "]",
+        ",",
+        "..",
+        "m",
+        "km",
+        "s",
+        "h",
+        "kg",
+        "x",
+        "sin",
+        "sqrt",
+        "mean",
+        "in",
+        "to",
+        "%",
+        "!",
+        "$",
+        "€",
+        "°",
+        "é",
+        "π",
+        "#",
+        "@",
+        "of",
+        "ago",
+        "days",
+        "2026-01-01",
+        "pm",
+        "deg",
+        "foo",
+        ".slope",
     ];
     let calc = calc();
     let mut rng = Rng::new(9);

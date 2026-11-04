@@ -85,7 +85,7 @@ for t in [0.0, 1.0, 2.0] {
 }
 ```
 
-A compiled expression always gives the same result as `eval` on its source: if the engine changed in a way that affects how the text is read (new variable names, units, operators or settings), or the expression contains date literals, it is re-read from the source.
+A compiled expression always gives the same result as `eval` on its source. It is re-read from the source only when the engine changed in a way that affects how the text is read (a variable now shadows, or stops shadowing, a unit name the expression uses; or units, operators or input settings changed), or when it contains date literals. Changing variable values, or defining unrelated ones, never forces a re-read.
 
 `eval_detailed` (and `eval_mut_detailed`) return a `Diagnostic` that locates the error; its `Display` points at it:
 
@@ -578,7 +578,21 @@ $ abacus --notation eng --date-format iso "45000 m" "07-08-2026 + 1 day"
 cargo run --bin repl --features=repl
 ```
 
-The REPL supports persistent history, syntax highlighting in TTYs, and variable assignment (`x = 5 m`). Commands: `help` / `.help`, `clear` / `.clear`, `exit` / `quit`. Ctrl-C clears the current line; Ctrl-D exits.
+The REPL takes the same options as `abacus` (`repl --degrees --decimals 3`) and keeps persistent history. Highlighting and Tab completion come from the engine itself, so a name is coloured as a unit, variable or function exactly as it will be read, and unknown names are underlined while you type. `ans` is the last result.
+
+```text
+› x = 5 m
+5 m
+› x + 3 s
+    ^
+error: cannot perform operation on incompatible dimensions
+note: m + s
+› :set decimals 2
+› ans / 3
+1.67 m
+```
+
+Commands: `:set` (show options) and `:set NAME VALUE` (`angle`, `decimals`, `sig-figs`, `notation`, `timezone`, `date-format`, `strict`, `implicit`, `exact`), `:vars [all]`, `:unset NAME`, `:reset`, `:clear`, `:help`, `:quit`. Ctrl-C clears the current line; Ctrl-D exits. Set `NO_COLOR` to turn colours off.
 
 ---
 
