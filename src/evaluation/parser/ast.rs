@@ -9,7 +9,10 @@ use std::sync::Arc;
 
 use crate::{
     AbacusError, BinaryOp, Date, FunctionOp, TimeZone, UnaryOp, Unit, Value,
-    evaluation::tokenizer::tokens::Span,
+    evaluation::tokenizer::{
+        lexer::Lexed,
+        tokens::{Span, Token},
+    },
 };
 
 /// Index of a node in [`Ast::nodes`].
@@ -38,75 +41,83 @@ pub(crate) struct Ast {
 }
 
 /// Buffers kept between evaluations on one thread, so that evaluating an expression doesn't
-/// allocate for its tree once a few expressions have been seen.
+/// allocate for its tokens and tree once a few expressions have been seen. Taken whole at the
+/// start of an evaluation and put back at the end (one thread-local access each).
 #[derive(Default)]
-struct Spare {
-    ast: Option<Ast>,
-    leds: Vec<Led>,
-    args: Vec<Arg>,
+pub(crate) struct Buffers {
+    pub ast: Ast,
+    pub leds: Vec<Led>,
+    pub args: Vec<Arg>,
+    /// Always empty; `'static` only so it can be stored (see [`Buffers::lexed`]).
+    tokens: Vec<Token<'static>>,
+    spans: Vec<Span>,
 }
 
 /// Buffers larger than this (in elements) are freed rather than kept.
 const MAX_SPARE_CAPACITY: usize = 4096;
 
 thread_local! {
-    static SPARE: std::cell::RefCell<Spare> = std::cell::RefCell::new(Spare::default());
+    static SPARE: std::cell::Cell<Buffers> = std::cell::Cell::new(Buffers::default());
 }
 
-/// Empty scratch stacks for the parser (reused if available).
-pub(crate) fn take_scratch() -> (Vec<Led>, Vec<Arg>) {
-    SPARE
-        .try_with(|spare| {
-            let mut spare = spare.borrow_mut();
-            (
-                std::mem::take(&mut spare.leds),
-                std::mem::take(&mut spare.args),
-            )
-        })
-        .unwrap_or_default()
-}
-
-/// Returns the parser's scratch stacks for reuse.
-pub(crate) fn recycle_scratch(mut leds: Vec<Led>, mut args: Vec<Arg>) {
-    if leds.capacity() > MAX_SPARE_CAPACITY || args.capacity() > MAX_SPARE_CAPACITY {
-        return;
-    }
-    leds.clear();
-    args.clear();
-    let _ = SPARE.try_with(|spare| {
-        let mut spare = spare.borrow_mut();
-        spare.leds = leds;
-        spare.args = args;
-    });
-}
-
-impl Ast {
-    /// An empty tree with room for an expression of `tokens` tokens (every node and operation
-    /// consumes at least one token, so this avoids regrowing). Reuses a recycled tree's
-    /// buffers when one is available.
-    pub(crate) fn with_capacity(tokens: usize) -> Self {
-        let mut ast = SPARE
-            .try_with(|spare| spare.borrow_mut().ast.take())
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        ast.nodes.reserve(tokens);
-        ast.leds.reserve(tokens / 2 + 1);
-        ast
+impl Buffers {
+    /// This thread's spare buffers (empty ones if none are available).
+    pub(crate) fn take() -> Self {
+        SPARE.try_with(std::cell::Cell::take).unwrap_or_default()
     }
 
-    /// Empties the tree and keeps its buffers for the next [`Ast::with_capacity`].
+    /// Empties the buffers and keeps them for the next [`Buffers::take`] on this thread.
     pub(crate) fn recycle(mut self) {
-        if self.nodes.capacity() > MAX_SPARE_CAPACITY
-            || self.leds.capacity() > MAX_SPARE_CAPACITY
-            || self.args.capacity() > MAX_SPARE_CAPACITY
+        let fits = |len: usize| len <= MAX_SPARE_CAPACITY;
+        if !(fits(self.ast.nodes.capacity())
+            && fits(self.ast.leds.capacity())
+            && fits(self.ast.args.capacity())
+            && fits(self.leds.capacity())
+            && fits(self.args.capacity())
+            && fits(self.tokens.capacity())
+            && fits(self.spans.capacity()))
         {
             return;
         }
-        self.nodes.clear();
+        self.ast.nodes.clear();
+        self.ast.leds.clear();
+        self.ast.args.clear();
         self.leds.clear();
         self.args.clear();
-        let _ = SPARE.try_with(|spare| spare.borrow_mut().ast = Some(self));
+        self.spans.clear();
+        let _ = SPARE.try_with(|spare| spare.set(self));
+    }
+
+    /// Empty token and span buffers for the lexer.
+    pub(crate) fn lexed<'a>(&mut self) -> Lexed<'a> {
+        Lexed {
+            tokens: std::mem::take(&mut self.tokens),
+            spans: std::mem::take(&mut self.spans),
+        }
+    }
+
+    /// Keeps the lexer's buffers once their tokens are no longer needed.
+    pub(crate) fn keep_lexed(&mut self, lexed: Lexed<'_>) {
+        let Lexed { mut tokens, spans } = lexed;
+        tokens.clear();
+        // Re-typing an empty vector to `'static` reuses its allocation (same layout).
+        self.tokens = tokens.into_iter().map(|_| unreachable!()).collect();
+        self.spans = spans;
+    }
+}
+
+impl Ast {
+    /// Makes room for an expression of `tokens` tokens (every node and operation consumes at
+    /// least one token, so this avoids regrowing).
+    pub(crate) fn reserve_for(&mut self, tokens: usize) {
+        self.nodes.reserve(tokens);
+        self.leds.reserve(tokens / 2 + 1);
+    }
+
+    pub(crate) fn shrink_to_fit(&mut self) {
+        self.nodes.shrink_to_fit();
+        self.leds.shrink_to_fit();
+        self.args.shrink_to_fit();
     }
 
     pub(crate) fn node(&self, id: NodeId) -> &Node {
@@ -140,7 +151,12 @@ impl Ast {
     fn move_into<T>(dst: &mut Vec<T>, scratch: &mut Vec<T>, mark: usize) -> Slice {
         let start = u32::try_from(dst.len()).expect("expression too large");
         let len = u32::try_from(scratch.len() - mark).expect("expression too large");
-        dst.extend(scratch.drain(mark..));
+        if mark == 0 && dst.is_empty() {
+            // Typically the only (or outermost) chain: hand over the whole buffer.
+            std::mem::swap(dst, scratch);
+        } else {
+            dst.extend(scratch.drain(mark..));
+        }
         Slice { start, len }
     }
 
@@ -346,11 +362,34 @@ pub(crate) struct Located(Box<LocatedError>);
 pub(crate) struct LocatedError {
     pub error: AbacusError,
     pub span: Option<Span>,
-    pub note: Option<String>,
+    pub note: Option<UnitsNote>,
+}
+
+/// The units on either side of an operator that rejected them, rendered as a note (`m + s`)
+/// only when a diagnostic is actually shown.
+#[derive(Debug, Clone)]
+pub(crate) struct UnitsNote {
+    pub lhs: Arc<crate::Unit>,
+    pub op: &'static str,
+    pub rhs: Arc<crate::Unit>,
+}
+
+impl UnitsNote {
+    pub(crate) fn render(&self) -> String {
+        let name = |u: &crate::Unit| {
+            let s = u.display.render();
+            if s.is_empty() {
+                "a number".to_string()
+            } else {
+                s
+            }
+        };
+        format!("{} {} {}", name(&self.lhs), self.op, name(&self.rhs))
+    }
 }
 
 impl Located {
-    pub(crate) fn new(error: AbacusError, span: Option<Span>, note: Option<String>) -> Self {
+    pub(crate) fn new(error: AbacusError, span: Option<Span>, note: Option<UnitsNote>) -> Self {
         Self(Box::new(LocatedError { error, span, note }))
     }
 

@@ -12,7 +12,11 @@ use std::collections::HashMap;
 use crate::{
     TokenRegistry, UnitRegistry,
     evaluation::{
-        parser::{ast::Located, eval::Evaluator, pratt::Parser},
+        parser::{
+            ast::{Buffers, Located},
+            eval::Evaluator,
+            pratt::Parser,
+        },
         tokenizer::lexer::{LexOptions, lex},
     },
     units::eval_result::EvalResult,
@@ -34,7 +38,39 @@ pub(crate) struct Compiled {
 
 /// Lexes and parses `input`. A "now" needed while lexing date literals is resolved through
 /// `lazy_now` (when no anchor is configured), so the caller can evaluate with the same instant.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compile(
+    token_registry: &TokenRegistry,
+    unit_registry: &UnitRegistry,
+    variables: Option<&HashMap<String, EvalResult>>,
+    input: &str,
+    config: &EvalConfig,
+    lazy_now: &std::cell::OnceCell<crate::Date>,
+    record_lookups: bool,
+) -> Result<Compiled, Located> {
+    let mut buffers = Buffers::take();
+    let compiled = compile_with(
+        &mut buffers,
+        token_registry,
+        unit_registry,
+        variables,
+        input,
+        config,
+        lazy_now,
+        record_lookups,
+    );
+    buffers.recycle();
+    // The tree outlives this call, so don't keep spare capacity from the buffer pool.
+    compiled.map(|mut compiled| {
+        compiled.ast.shrink_to_fit();
+        compiled
+    })
+}
+
+/// [`compile`] using (and returning scratch space to) `buffers`.
+#[allow(clippy::too_many_arguments)]
+fn compile_with(
+    buffers: &mut Buffers,
     token_registry: &TokenRegistry,
     unit_registry: &UnitRegistry,
     variables: Option<&HashMap<String, EvalResult>>,
@@ -45,6 +81,7 @@ pub(crate) fn compile(
 ) -> Result<Compiled, Located> {
     let mut lookups = Vec::new();
     let lexed = lex(
+        buffers.lexed(),
         token_registry,
         unit_registry,
         variables,
@@ -65,21 +102,29 @@ pub(crate) fn compile(
         token_registry,
         unit_registry,
         config.max_recursion_depth,
+        buffers,
     );
-    let root = parser.parse()?;
+    let root = parser.parse();
     let explicit_conversion = parser.has_explicit_conversion;
     let has_dates = parser.has_dates;
-    lookups.sort_unstable();
-    lookups.dedup();
-    Ok(Compiled {
-        ast: parser.into_ast(),
-        root,
-        explicit_conversion,
-        has_dates,
-        variable_lookups: lookups
+    let ast = parser.into_ast(buffers);
+    let variable_lookups = if lookups.is_empty() {
+        Box::default()
+    } else {
+        lookups.sort_unstable();
+        lookups.dedup();
+        lookups
             .into_iter()
             .map(|(name, found)| (name.into(), found))
-            .collect(),
+            .collect()
+    };
+    buffers.keep_lexed(lexed);
+    Ok(Compiled {
+        ast,
+        root: root?,
+        explicit_conversion,
+        has_dates,
+        variable_lookups,
     })
 }
 
@@ -121,7 +166,9 @@ pub(crate) fn evaluate_located(
         ));
     }
     let lazy_now = std::cell::OnceCell::new();
-    let compiled = compile(
+    let mut buffers = Buffers::take();
+    let compiled = match compile_with(
+        &mut buffers,
         token_registry,
         unit_registry,
         variables,
@@ -129,12 +176,19 @@ pub(crate) fn evaluate_located(
         &config,
         &lazy_now,
         false,
-    )?;
+    ) {
+        Ok(compiled) => compiled,
+        Err(located) => {
+            buffers.recycle();
+            return Err(located);
+        }
+    };
     // Share a "now" resolved while lexing with the evaluator, so both see the same instant.
     if config.anchor_date.is_none() {
         config.anchor_date = lazy_now.into_inner();
     }
     let result = run(&compiled, unit_registry, variables, &config);
-    compiled.ast.recycle();
+    buffers.ast = compiled.ast;
+    buffers.recycle();
     result
 }

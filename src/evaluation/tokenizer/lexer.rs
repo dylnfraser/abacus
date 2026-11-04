@@ -411,6 +411,7 @@ pub(crate) struct LexOptions<'o> {
 }
 
 /// Tokens with the byte span of the source each one came from (`spans[i]` is `tokens[i]`'s).
+#[derive(Default)]
 pub(crate) struct Lexed<'a> {
     pub tokens: Vec<Token<'a>>,
     pub spans: Vec<Span>,
@@ -422,7 +423,10 @@ pub(crate) struct Lexed<'a> {
 /// When `variable_lookups` is given, every name whose reading depended on whether it is a
 /// variable is appended to it, with the answer, so a caller can tell later whether the same
 /// input would still be read the same way.
+///
+/// The tokens are written into `buffers`, which should be empty (reusing their allocations).
 pub(crate) fn lex<'a>(
+    buffers: Lexed<'a>,
     token_registry: &TokenRegistry,
     unit_registry: &UnitRegistry,
     variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
@@ -433,11 +437,18 @@ pub(crate) fn lex<'a>(
     // Every token spans at least one byte, so the input length bounds the token count; capping
     // the initial reservation keeps huge inputs from over-allocating up front.
     let capacity = input_text.len().min(256);
+    let Lexed {
+        mut tokens,
+        mut spans,
+    } = buffers;
+    debug_assert!(tokens.is_empty() && spans.is_empty());
+    tokens.reserve(capacity);
+    spans.reserve(capacity);
     let mut lexer = Lexer {
         input: input_text,
         pos: 0,
-        tokens: Vec::with_capacity(capacity),
-        spans: Vec::with_capacity(capacity),
+        tokens,
+        spans,
         in_conversion_target: false,
         token_registry,
         unit_registry,
@@ -815,7 +826,12 @@ impl<'a> Lexer<'a, '_> {
         let (rest, units, scales) = (self.rest(), self.unit_registry, self.options.number_scales);
         // Conversion targets are units even if a variable shadows the name.
         let shadowing = !self.in_conversion_target;
-        parse_number_token(rest, units, |name| shadowing && self.is_variable(name), scales)
+        parse_number_token(
+            rest,
+            units,
+            |name| shadowing && self.is_variable(name),
+            scales,
+        )
     }
 
     /// The length of the identifier at the cursor, including a unit exponent (`m^2`, `s^-1`)
@@ -973,9 +989,17 @@ mod tests {
             lazy_now: None,
             date_month_first: false,
         };
-        lex(token_registry, unit_registry, None, input, options, None)
-            .map(|lexed| lexed.tokens)
-            .map_err(|(error, _)| error)
+        lex(
+            Lexed::default(),
+            token_registry,
+            unit_registry,
+            None,
+            input,
+            options,
+            None,
+        )
+        .map(|lexed| lexed.tokens)
+        .map_err(|(error, _)| error)
     }
 
     #[cfg(feature = "units")]

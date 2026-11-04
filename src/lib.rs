@@ -624,6 +624,7 @@ impl Abacus {
     pub fn tokenize<'a>(&self, expr: &'a str) -> Result<Vec<Token<'a>>, AbacusError> {
         let lazy_now = std::cell::OnceCell::new();
         crate::evaluation::tokenizer::lexer::lex(
+            crate::evaluation::tokenizer::lexer::Lexed::default(),
             &self.tokens,
             &self.units,
             Some(&self.variables),
@@ -801,7 +802,8 @@ impl Abacus {
                     let span = inner
                         .span
                         .map(|s| Span::new(s.start + offset, s.end + offset));
-                    Diagnostic::new(inner.error, span, expr).with_note(inner.note)
+                    Diagnostic::new(inner.error, span, expr)
+                        .with_note(inner.note.map(|note| note.render()))
                 })?;
                 self.insert_variable(ident.to_string(), raw.clone());
                 return Ok(self.apply_output_settings(raw, rhs));
@@ -1149,7 +1151,7 @@ impl std::fmt::Display for Expr {
 
 fn diagnostic(located: crate::evaluation::parser::ast::Located, source: &str) -> Diagnostic {
     let inner = located.into_inner();
-    Diagnostic::new(inner.error, inner.span, source).with_note(inner.note)
+    Diagnostic::new(inner.error, inner.span, source).with_note(inner.note.map(|note| note.render()))
 }
 
 /// The process-wide standard `Abacus` instance used by [`eval`] and [`Abacus::shared`].

@@ -8,7 +8,7 @@ use crate::{
         parser::{
             ast::{
                 After, Arg, Ast, At, Convert, Kind, Led, LedKind, Located, NodeId, RelPrefix,
-                Slice, Target,
+                Slice, Target, UnitsNote,
             },
             config::EvalConfig,
             pratt::{STACK_BUDGET_BYTES, stack_position},
@@ -74,6 +74,12 @@ impl<'a> Evaluator<'a> {
     /// Evaluates `node`, attaching its span to errors that don't have a more precise one.
     pub(crate) fn eval(&mut self, id: NodeId) -> Result<EvalResult, Located> {
         let node = self.ast.node(id);
+        // Leaves can't recurse, so they skip the stack check.
+        match &node.kind {
+            Kind::Number(n) => return Ok(EvalResult::Scalar(Value::dimensionless(*n))),
+            Kind::Value(v) => return Ok(EvalResult::Scalar(v.clone())),
+            _ => {}
+        }
         let here = stack_position();
         if self.stack_base == 0 {
             self.stack_base = here;
@@ -698,17 +704,11 @@ fn property(
 }
 
 /// Adds a note naming both sides' units to a dimension mismatch (`m + s`).
-fn units_note(error: AbacusError, op: &BinaryOp, lhs: &Unit, rhs: &Unit) -> Located {
-    let note = matches!(error, AbacusError::IncompatibleDimensions).then(|| {
-        let name = |u: &Unit| {
-            let s = u.display.render();
-            if s.is_empty() {
-                "a number".to_string()
-            } else {
-                s
-            }
-        };
-        format!("{} {} {}", name(lhs), op.alias, name(rhs))
+fn units_note(error: AbacusError, op: &BinaryOp, lhs: &Arc<Unit>, rhs: &Arc<Unit>) -> Located {
+    let note = matches!(error, AbacusError::IncompatibleDimensions).then(|| UnitsNote {
+        lhs: Arc::clone(lhs),
+        op: op.alias,
+        rhs: Arc::clone(rhs),
     });
     Located::new(error, None, note)
 }

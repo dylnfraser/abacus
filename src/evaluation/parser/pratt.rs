@@ -9,7 +9,8 @@ use crate::{
     AbacusError, Token, TokenRegistry, UnitRegistry,
     evaluation::{
         parser::ast::{
-            After, Arg, Ast, At, Convert, Kind, Led, LedKind, Located, NodeId, RelPrefix, Target,
+            After, Arg, Ast, At, Buffers, Convert, Kind, Led, LedKind, Located, NodeId, RelPrefix,
+            Target,
         },
         tokenizer::{registry::binary::operators::BinaryOp, tokens::Span},
     },
@@ -76,9 +77,11 @@ impl<'a> Parser<'a> {
         token_registry: &'a TokenRegistry,
         unit_registry: &'a UnitRegistry,
         max_depth: usize,
+        buffers: &mut Buffers,
     ) -> Self {
         debug_assert_eq!(tokens.len(), spans.len());
-        let (led_scratch, arg_scratch) = crate::evaluation::parser::ast::take_scratch();
+        let mut ast = std::mem::take(&mut buffers.ast);
+        ast.reserve_for(tokens.len());
         Self {
             tokens,
             spans,
@@ -91,15 +94,16 @@ impl<'a> Parser<'a> {
             function_arg_depth: 0,
             has_explicit_conversion: false,
             has_dates: false,
-            ast: Ast::with_capacity(tokens.len()),
-            led_scratch,
-            arg_scratch,
+            ast,
+            led_scratch: std::mem::take(&mut buffers.leds),
+            arg_scratch: std::mem::take(&mut buffers.args),
         }
     }
 
-    /// The tree built by [`Self::parse`].
-    pub(crate) fn into_ast(self) -> Ast {
-        crate::evaluation::parser::ast::recycle_scratch(self.led_scratch, self.arg_scratch);
+    /// The tree built by [`Self::parse`]; the scratch stacks go back to `buffers`.
+    pub(crate) fn into_ast(self, buffers: &mut Buffers) -> Ast {
+        buffers.leds = self.led_scratch;
+        buffers.args = self.arg_scratch;
         self.ast
     }
 
