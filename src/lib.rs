@@ -23,8 +23,9 @@ pub use units::{
 };
 
 pub use evaluation::tokenizer::registry::{
-    binary::operators::BinaryOp, function::operators::FunctionOp,
-    function::operators::FunctionTarget, token_registry::TokenRegistry, unary::operators::UnaryOp,
+    binary::operators::BinaryOp, function::operators::FunctionContext,
+    function::operators::FunctionOp, function::operators::FunctionTarget,
+    token_registry::TokenRegistry, unary::operators::UnaryOp,
 };
 
 pub use evaluation::tokenizer::sig_figs::{

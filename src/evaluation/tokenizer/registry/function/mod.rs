@@ -12,4 +12,4 @@ pub mod stats;
 pub mod trig;
 
 pub use math_helpers::check_dimensionless;
-pub use operators::{FunctionOp, FunctionTarget};
+pub use operators::{ContextFn, FunctionContext, FunctionOp, FunctionTarget};

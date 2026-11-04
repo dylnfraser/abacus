@@ -28,11 +28,9 @@ fn sqrt(a: Value) -> Result<Value, AbacusError> {
     if a.canonical < 0.0 {
         return Err(negative_sqrt_error());
     }
-    if a.unit.is_plain_number() || a.unit.is_percent() {
-        return Ok(Value {
-            canonical: a.canonical.sqrt(),
-            unit: a.unit,
-        });
+    // Dimensionless quantities (`million`, `25%`) have no unit to take the root of.
+    if a.unit.is_dimensionless() {
+        return Ok(Value::dimensionless(a.canonical.sqrt()));
     }
 
     let new_dims = a

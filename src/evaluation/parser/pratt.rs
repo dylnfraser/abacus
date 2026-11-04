@@ -502,16 +502,26 @@ impl<'a> Parser<'a> {
         lhs: EvalResult,
         rhs: EvalResult,
     ) -> Result<EvalResult, AbacusError> {
-        // Fast-path scalar-to-scalar standard arithmetic
-        if matches!(name, "+" | "-" | "*" | "/")
+        use crate::evaluation::tokenizer::registry::binary::arithmetic::{
+            OpKind, check_overflow, op_kind,
+        };
+        let op = self
+            .token_registry
+            .binary_operators
+            .get(name)
+            .ok_or_else(|| AbacusError::UnexpectedToken(name.to_string()))?;
+        let kind = op_kind(op);
+
+        // Fast path for built-in scalar arithmetic (custom operators never take it, even if
+        // registered under `+`).
+        if let Some(kind @ (OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div)) = kind
             && let (EvalResult::Scalar(l), EvalResult::Scalar(r)) = (&lhs, &rhs)
         {
-            use crate::evaluation::tokenizer::registry::binary::arithmetic::check_overflow;
             let (x, y) = (l.canonical, r.canonical);
-            let result = match name {
-                "+" => l + r,
-                "-" => l - r,
-                "*" => l * r,
+            let result = match kind {
+                OpKind::Add => l + r,
+                OpKind::Sub => l - r,
+                OpKind::Mul => l * r,
                 // Division by zero yields ±∞ by design; only genuine overflow is an error.
                 _ if y == 0.0 => return (l / r).map(EvalResult::Scalar),
                 _ => l / r,
@@ -519,7 +529,7 @@ impl<'a> Parser<'a> {
             return check_overflow(result?, x, y).map(EvalResult::Scalar);
         }
 
-        if name == "^" {
+        if kind == Some(OpKind::Pow) {
             match &rhs {
                 EvalResult::Scalar(r) if r.canonical.abs() > self.config.max_exponent => {
                     return Err(AbacusError::ExponentLimitExceeded);
@@ -534,11 +544,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let op = self
-            .token_registry
-            .binary_operators
-            .get(name)
-            .ok_or_else(|| AbacusError::UnexpectedToken(name.to_string()))?;
         lhs.apply_binary_with_weekend(op, rhs, self.config.weekend)
     }
 

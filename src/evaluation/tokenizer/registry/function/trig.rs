@@ -1,6 +1,6 @@
 use crate::{
-    AbacusError, Unit, Value,
-    evaluation::tokenizer::registry::function::operators::FunctionOp,
+    AbacusError, AngleMode, EvalResult, Unit, Value,
+    evaluation::tokenizer::registry::function::operators::{FunctionContext, FunctionOp},
     units::{dimensions::Dimensions, unit::UnitExpr},
 };
 use std::sync::Arc;
@@ -146,15 +146,56 @@ fn atanh_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(x.atanh()))
 }
 
+/// Reads a bare number (no unit written) as an angle in the configured angle mode.
+fn angle_arg(ctx: &FunctionContext<'_>, arg: &EvalResult) -> Result<Value, AbacusError> {
+    let mut v = arg.as_scalar()?.clone();
+    if v.unit.is_dimensionless() && v.unit.display.is_empty() {
+        v.canonical *= match ctx.angle_mode {
+            AngleMode::Degrees => std::f64::consts::PI / 180.0,
+            AngleMode::Gradians => std::f64::consts::PI / 200.0,
+            AngleMode::Radians => 1.0,
+        };
+    }
+    Ok(v)
+}
+
+/// A trig function whose argument honours the angle mode.
+fn forward(name: &'static str, f: fn(&[Value]) -> Result<Value, AbacusError>) -> FunctionOp {
+    FunctionOp::with_context(name, 1, 1, move |ctx, args| {
+        f(&[angle_arg(ctx, &args[0])?]).map(EvalResult::Scalar)
+    })
+}
+
+/// An inverse trig function whose result is expressed in the angle mode's unit.
+fn inverse(
+    name: &'static str,
+    arity: usize,
+    f: fn(&[Value]) -> Result<Value, AbacusError>,
+) -> FunctionOp {
+    FunctionOp::with_context(name, arity, arity, move |ctx, args| {
+        let values = args
+            .iter()
+            .map(|a| a.as_scalar().cloned())
+            .collect::<Result<Vec<_>, _>>()?;
+        let rad = f(&values)?;
+        let unit = match ctx.angle_mode {
+            AngleMode::Degrees => "deg",
+            AngleMode::Gradians => "grad",
+            AngleMode::Radians => return Ok(EvalResult::Scalar(rad)),
+        };
+        Ok(EvalResult::Scalar(rad.convert_to(ctx.units.unit(unit)?)?))
+    })
+}
+
 pub fn register_trig() -> Vec<FunctionOp> {
     vec![
-        FunctionOp::scalar("sin", 1, 1, sin_fn),
-        FunctionOp::scalar("cos", 1, 1, cos_fn),
-        FunctionOp::scalar("tan", 1, 1, tan_fn),
-        FunctionOp::scalar("asin", 1, 1, asin_fn),
-        FunctionOp::scalar("acos", 1, 1, acos_fn),
-        FunctionOp::scalar("atan", 1, 1, atan_fn),
-        FunctionOp::scalar("atan2", 2, 2, atan2_fn),
+        forward("sin", sin_fn),
+        forward("cos", cos_fn),
+        forward("tan", tan_fn),
+        inverse("asin", 1, asin_fn),
+        inverse("acos", 1, acos_fn),
+        inverse("atan", 1, atan_fn),
+        inverse("atan2", 2, atan2_fn),
         FunctionOp::scalar("sinh", 1, 1, sinh_fn),
         FunctionOp::scalar("cosh", 1, 1, cosh_fn),
         FunctionOp::scalar("tanh", 1, 1, tanh_fn),

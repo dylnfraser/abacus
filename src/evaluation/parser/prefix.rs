@@ -194,15 +194,6 @@ impl<'a> Parser<'a> {
                 let name = *name;
                 let bp = self.prefix_bp(name);
                 let operand = self.parse_expr(bp)?;
-                if name == "sqrt"
-                    && let EvalResult::Scalar(ref v) = operand
-                    && v.unit.is_dimensionless()
-                {
-                    if v.canonical < 0.0 {
-                        return Err(crate::evaluation::tokenizer::registry::unary::general::negative_sqrt_error());
-                    }
-                    return Ok(EvalResult::Scalar(Value::dimensionless(v.canonical.sqrt())));
-                }
                 let op = self
                     .token_registry
                     .unary_operators

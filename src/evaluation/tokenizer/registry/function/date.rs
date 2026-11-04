@@ -1,6 +1,6 @@
 use crate::{
     AbacusError, Date, EvalResult, Value,
-    evaluation::tokenizer::registry::function::operators::FunctionOp,
+    evaluation::tokenizer::registry::function::operators::{FunctionContext, FunctionOp},
 };
 
 /// Extracts a dimensionless whole number within `range` for argument `name` of `date()`.
@@ -94,14 +94,31 @@ fn day_of_week_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
 fn day_of_year_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
     date_prop_helper(args, "day_of_year")
 }
-fn is_weekend_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
-    date_prop_helper(args, "is_weekend")
-}
-fn is_workday_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
-    date_prop_helper(args, "is_workday")
+fn is_weekend_fn(
+    ctx: &FunctionContext<'_>,
+    args: &[EvalResult],
+) -> Result<EvalResult, AbacusError> {
+    match &args[0] {
+        EvalResult::Date(d) => Ok(bool_result(d.is_weekend_with(ctx.weekend))),
+        _ => date_prop_helper(args, "is_weekend"),
+    }
 }
 
-fn workdays_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
+fn is_workday_fn(
+    ctx: &FunctionContext<'_>,
+    args: &[EvalResult],
+) -> Result<EvalResult, AbacusError> {
+    match &args[0] {
+        EvalResult::Date(d) => Ok(bool_result(d.is_business_day_with(ctx.weekend))),
+        _ => date_prop_helper(args, "is_workday"),
+    }
+}
+
+fn bool_result(b: bool) -> EvalResult {
+    EvalResult::Scalar(Value::dimensionless(if b { 1.0 } else { 0.0 }))
+}
+
+fn workdays_fn(ctx: &FunctionContext<'_>, args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
     if args.len() != 2 {
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
@@ -111,7 +128,7 @@ fn workdays_fn(args: &[EvalResult]) -> Result<EvalResult, AbacusError> {
                 dimensions::Dimensions,
                 unit::{Unit, UnitExpr},
             };
-            let bdays = d1.business_days_between(d2) as f64;
+            let bdays = d1.business_days_between_with(d2, ctx.weekend) as f64;
             let unit = std::sync::Arc::new(Unit {
                 scalar: 86400.0,
                 offset: 0.0,
@@ -205,11 +222,11 @@ pub fn register_date_functions() -> Vec<FunctionOp> {
         FunctionOp::general("day_of_week", 1, 1, day_of_week_fn),
         FunctionOp::general("weekday", 1, 1, day_of_week_fn),
         FunctionOp::general("day_of_year", 1, 1, day_of_year_fn),
-        FunctionOp::general("is_weekend", 1, 1, is_weekend_fn),
-        FunctionOp::general("is_workday", 1, 1, is_workday_fn),
-        FunctionOp::general("is_business_day", 1, 1, is_workday_fn),
-        FunctionOp::general("workdays", 2, 2, workdays_fn),
-        FunctionOp::general("business_days", 2, 2, workdays_fn),
+        FunctionOp::with_context("is_weekend", 1, 1, is_weekend_fn),
+        FunctionOp::with_context("is_workday", 1, 1, is_workday_fn),
+        FunctionOp::with_context("is_business_day", 1, 1, is_workday_fn),
+        FunctionOp::with_context("workdays", 2, 2, workdays_fn),
+        FunctionOp::with_context("business_days", 2, 2, workdays_fn),
         FunctionOp::general("format_date", 1, 2, format_date_fn),
         FunctionOp::general("format_iso", 1, 1, format_iso_fn),
         FunctionOp::general("format_dmy", 1, 1, format_dmy_fn),

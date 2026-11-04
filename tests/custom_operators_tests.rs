@@ -155,3 +155,74 @@ fn test_register_custom_unary_operator() {
 
     assert_eq!(calc.eval("~ 5").unwrap().to_display(), "15");
 }
+
+// ── Function context ──
+
+#[cfg(feature = "units")]
+#[test]
+fn overriding_a_builtin_function_gets_raw_arguments() {
+    // Angle-mode handling belongs to the built-in `sin`, not to the name.
+    fn identity(args: &[Value]) -> Result<Value, AbacusError> {
+        Ok(Value::dimensionless(args[0].canonical))
+    }
+    let mut calc = Abacus::standard().with_angle_mode(abacus::AngleMode::Degrees);
+    assert_eq!(calc.eval("sin(90)").unwrap().to_display(), "1");
+    calc.register_function_token(FunctionOp::scalar("sin", 1, 1, identity));
+    assert_eq!(calc.eval("sin(90)").unwrap().to_display(), "90");
+}
+
+#[test]
+fn context_functions_see_engine_settings_and_capture_state() {
+    let offset = 10.0;
+    let mut calc = Abacus::standard().with_angle_mode(abacus::AngleMode::Gradians);
+    calc.register_function_token(FunctionOp::with_context("probe", 1, 1, move |ctx, args| {
+        let mode = match ctx.angle_mode {
+            abacus::AngleMode::Gradians => 1.0,
+            _ => 0.0,
+        };
+        let x = args[0].as_scalar()?.canonical;
+        Ok(EvalResult::Scalar(Value::dimensionless(x + offset + mode)))
+    }));
+    assert_eq!(calc.eval("probe(1)").unwrap().to_display(), "12");
+}
+
+#[cfg(feature = "date")]
+#[test]
+fn business_day_functions_use_the_configured_weekend() {
+    let gulf = Abacus::standard().with_weekend(abacus::WeekendDays::FridaySaturday);
+    // 2026-08-07 is a Friday, 2026-08-09 a Sunday.
+    assert_eq!(
+        gulf.eval("is_workday(2026-08-07)").unwrap().to_display(),
+        "0"
+    );
+    assert_eq!(
+        gulf.eval("is_weekend(2026-08-09)").unwrap().to_display(),
+        "0"
+    );
+    assert_eq!(
+        gulf.eval("workdays(2026-08-06, 2026-08-09)")
+            .unwrap()
+            .to_display(),
+        "1 workdays"
+    );
+    // The same functions applied without an engine use the default Saturday/Sunday weekend.
+    let calc = Abacus::standard();
+    let friday = calc.eval("2026-08-07").unwrap();
+    let op = calc.tokens().function("is_workday").unwrap();
+    assert_eq!(op.apply(&[friday]).unwrap().to_display(), "1");
+}
+
+#[test]
+fn overriding_builtin_arithmetic_is_honoured() {
+    fn concat_digits(a: Value, b: Value) -> Result<Value, AbacusError> {
+        Ok(Value::dimensionless(a.canonical * 10.0 + b.canonical))
+    }
+    let mut calc = Abacus::standard();
+    calc.register_binop_token(BinaryOp {
+        alias: "+",
+        func: concat_digits,
+        precedence: 0,
+        right_associative: false,
+    });
+    assert_eq!(calc.eval("1 + 2").unwrap().to_display(), "12");
+}
