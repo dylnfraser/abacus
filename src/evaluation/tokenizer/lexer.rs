@@ -283,10 +283,11 @@ impl<'r> RegisteredOps<'r> {
         op_index: &'r crate::evaluation::tokenizer::registry::token_registry::OperatorIndex,
         token_registry: &'r TokenRegistry,
         sym: &'r str,
+        cached: Option<&'r [MatchedOpKind]>,
     ) -> Self {
         let word_kinds =
             crate::evaluation::tokenizer::registry::token_registry::is_word_pattern(sym)
-                .then(|| op_index.word_kinds(sym));
+                .then(|| cached.unwrap_or_else(|| op_index.word_kinds(sym)));
         Self {
             sym,
             token_registry,
@@ -424,567 +425,511 @@ pub(crate) fn lex<'a>(
     input_text: &'a str,
     options: LexOptions<'_>,
 ) -> Result<Lexed<'a>, (AbacusError, Span)> {
-    let LexOptions {
-        implicit_multiplication,
-        number_scales,
-        anchor_date,
-        lazy_now,
-        date_month_first,
-    } = options;
     // Every token spans at least one byte, so the input length bounds the token count; capping
     // the initial reservation keeps huge inputs from over-allocating up front.
-    let mut tokens = Vec::with_capacity(input_text.len().min(256));
-    let mut chars = input_text.char_indices().peekable();
-    let op_index = token_registry.operator_index();
-    // True while lexing the target of an `in`/`to`/`as` conversion, where unit names take
-    // precedence over variables of the same name.
-    let mut in_conversion_target = false;
-    let mut spans: Vec<Span> = Vec::with_capacity(tokens.capacity());
-    // Start of the input consumed by the current loop iteration. Each iteration pushes at most
-    // one token, whose span ends where the next iteration starts.
-    let mut tok_start = 0usize;
-
-    let lexed = (|| -> Result<(), AbacusError> {
-        while let Some(&(i, c)) = chars.peek() {
-            while spans.len() < tokens.len() {
-                spans.push(Span::new(tok_start, i));
-            }
-            tok_start = i;
-            if c.is_whitespace() {
-                chars.next();
-                continue;
-            }
-
-            // Date literals (e.g. today, tomorrow, yesterday, now, @2026-08-07@, 07-08-2026, 12:00, 1:00 PM, 3 PM, 16 May)
-            let is_date_candidate = c == '@'
-                || (c.is_ascii_digit() && is_numeric_date_candidate(&input_text[i..]))
-                || c.is_ascii_alphabetic();
-
-            if is_date_candidate
-                && let Some((date, consumed_bytes)) = try_parse_date_literal_with_anchor(
-                    &input_text[i..],
-                    DateLexOptions {
-                        anchor: anchor_date,
-                        lazy_now,
-                        month_first: date_month_first,
-                        after_quantity: matches!(
-                            tokens.last(),
-                            Some(Token::Float(_) | Token::Val(_))
-                        ),
-                    },
-                )?
-            {
-                tokens.push(Token::Date(date));
-                let target_idx = i + consumed_bytes;
-                while let Some(&(idx, _)) = chars.peek() {
-                    if idx < target_idx {
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-                continue;
-            }
-
-            // Timezone offset literals (e.g. +02:00, -04:00, +05:30), only directly after a date/time
-            // or as a conversion target, so `10 -1:30` stays arithmetic.
-            if (c == '+' || c == '-')
-                && matches!(tokens.last(), Some(Token::Date(_) | Token::ConversionOp))
-                && let Some(len) = match_tz_offset_literal(&input_text[i..])
-            {
-                tokens.push(Token::Unit(&input_text[i..i + len]));
-                let target_idx = i + len;
-                while let Some(&(idx, _)) = chars.peek() {
-                    if idx < target_idx {
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-                continue;
-            }
-
-            // Percent change expressions (e.g. "% change from", "percent change from")
-            if c == '%' || c == 'p' || c == 'P' {
-                let remaining = &input_text[i..];
-                if let Some(len) = match_percent_change_from(remaining) {
-                    tokens.push(Token::PercentChangeFrom);
-                    let target_idx = i + len;
-                    while let Some(&(idx, _)) = chars.peek() {
-                        if idx < target_idx {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Percentage descriptor tags (e.g. "18% tip", "15% tax", "20% discount", "10% fee")
-            if c.is_ascii_alphabetic() {
-                let is_prev_pct = match tokens.last() {
-                    Some(Token::Unit(u)) => *u == "%" || *u == "percent" || *u == "pct",
-                    Some(Token::Val(v)) => v.unit.is_percent(),
-                    _ => false,
-                };
-                if is_prev_pct {
-                    let remaining = &input_text[i..];
-                    if let Some((tag, len)) = match_percent_tag(remaining) {
-                        tokens.push(Token::PercentTag(tag));
-                        let target_idx = i + len;
-                        while let Some(&(idx, _)) = chars.peek() {
-                            if idx < target_idx {
-                                chars.next();
-                            } else {
-                                break;
-                            }
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            // Conversational "off" (e.g. "20% off $120" or "$100 - 20% off")
-            if (c == 'o' || c == 'O') && starts_with_ci(&input_text[i..], "off") {
-                let remaining = &input_text[i..];
-                let next_char = remaining[3..].chars().next();
-                if next_char.is_none_or(|nc| !nc.is_alphanumeric() && nc != '_') {
-                    let after_off = remaining[3..].trim_start();
-                    let starts_expr = !after_off.is_empty()
-                        && !after_off.starts_with(')')
-                        && !after_off.starts_with(']')
-                        && !after_off.starts_with(',');
-                    if starts_expr {
-                        tokens.push(Token::BinaryOp("off"));
-                    } else {
-                        tokens.push(Token::PercentTag("off"));
-                    }
-                    let target_idx = i + 3;
-                    while let Some(&(idx, _)) = chars.peek() {
-                        if idx < target_idx {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Conversational binary operators (e.g. "more than", "less than", "out of")
-            if c == 'm' || c == 'M' || c == 'l' || c == 'L' || c == 'o' || c == 'O' {
-                let remaining = &input_text[i..];
-                if let Some((op_name, len)) = match_conversational_binary_op(remaining) {
-                    tokens.push(Token::BinaryOp(op_name));
-                    let target_idx = i + len;
-                    while let Some(&(idx, _)) = chars.peek() {
-                        if idx < target_idx {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Relative time operators (e.g. "ago", "from now", "before", "after")
-            if c.is_ascii_alphabetic() {
-                let remaining = &input_text[i..];
-                if let Some((op_name, len)) = match_rel_time_op(remaining) {
-                    tokens.push(Token::RelTimeOp(op_name));
-                    let target_idx = i + len;
-                    while let Some(&(idx, _)) = chars.peek() {
-                        if idx < target_idx {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Multi-word unit symbols (e.g. "business days", "fl oz", "long ton", "R$"),
-            // listed in `registry::units::MULTI_WORD_UNITS`.
-            if c.is_ascii_alphabetic() && could_start_multi_word_unit(&input_text[i..]) {
-                let remaining = &input_text[i..];
-                let mut matched: Option<&'static str> = None;
-                for &unit_name in crate::registry::units::MULTI_WORD_UNITS {
-                    let name = unit_name.as_bytes();
-                    if remaining.len() >= name.len()
-                        && name[0].eq_ignore_ascii_case(&(c as u8))
-                        && remaining.as_bytes()[..name.len()].eq_ignore_ascii_case(name)
-                    {
-                        // Names ending in a symbol (e.g. "R$") may be glued to a number ("R$5").
-                        let needs_boundary = name[name.len() - 1].is_ascii_alphanumeric();
-                        let next_char = remaining[name.len()..].chars().next();
-                        if (!needs_boundary
-                            || next_char.is_none_or(|nc| !nc.is_alphanumeric() && nc != '_'))
-                            && unit_registry.contains(unit_name)
-                        {
-                            matched = Some(unit_name);
-                            break;
-                        }
-                    }
-                }
-                if let Some(unit_name) = matched {
-                    let matched_len = unit_name.len();
-                    tokens.push(Token::Unit(unit_name));
-                    let target_idx = i + matched_len;
-                    while let Some(&(idx, _)) = chars.peek() {
-                        if idx < target_idx {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-            }
-
-            // Grouping Parentheses and Delimiters
-            if c == '(' {
-                tokens.push(Token::OpenParen);
-                chars.next();
-                continue;
-            }
-
-            if c == ')' {
-                tokens.push(Token::CloseParen);
-                in_conversion_target = false;
-                chars.next();
-                continue;
-            }
-
-            if c == ',' {
-                tokens.push(Token::Comma);
-                in_conversion_target = false;
-                chars.next();
-                continue;
-            }
-
-            if c == '[' {
-                tokens.push(Token::OpenBracket);
-                chars.next();
-                continue;
-            }
-
-            if c == ']' {
-                tokens.push(Token::CloseBracket);
-                in_conversion_target = false;
-                chars.next();
-                continue;
-            }
-
-            if c == '.' {
-                let mut dot_lookahead = chars.clone();
-                dot_lookahead.next(); // skip '.'
-                if let Some(&(_, '.')) = dot_lookahead.peek() {
-                    tokens.push(Token::Range);
-                    chars.next();
-                    chars.next();
-                    continue;
-                } else if let Some(&(next_idx, next_c)) = dot_lookahead.peek()
-                    && (next_c.is_alphabetic() || next_c == '_')
-                {
-                    chars.next(); // consume '.'
-                    let start = next_idx;
-                    let mut end = start;
-                    while let Some(&(idx, sym_c)) = chars.peek() {
-                        if sym_c.is_alphanumeric() || sym_c == '_' {
-                            end = idx + sym_c.len_utf8();
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    tokens.push(Token::DotProperty(&input_text[start..end]));
-                    continue;
-                }
-            }
-
-            // Registered operator checks (longest pattern first, e.g. `++` over `+`). Plain-word
-            // patterns can only match the whole leading word, so they are found with one map lookup;
-            // symbolic patterns are scanned, but only those longer than the leading word can match.
-            {
-                let remaining = &input_text[i..];
-                let word_len = if is_word_char(c) {
-                    remaining
-                        .find(|ch: char| !is_word_char(ch))
-                        .unwrap_or(remaining.len())
-                } else {
-                    0
-                };
-                let mut best_match: Option<(&str, MatchedOpKind)> = None;
-
-                for (pattern, kind) in op_index.symbolic_candidates(c) {
-                    if pattern.len() <= word_len {
-                        // The first `word_len` bytes are all word characters, which a symbolic
-                        // pattern of that length or shorter cannot match.
-                        break;
-                    }
-                    if let Some(rest) = strip_prefix_inline(remaining, pattern)
-                        && accept_operator_candidate(
-                            pattern,
-                            *kind,
-                            rest,
-                            tokens.last(),
-                            unit_registry,
-                        )
-                    {
-                        best_match = Some((pattern, *kind));
-                        break;
-                    }
-                }
-
-                if best_match.is_none() && word_len > 0 {
-                    let (word, rest) = remaining.split_at(word_len);
-                    best_match = op_index
-                        .word_kinds(word)
-                        .iter()
-                        .find(|kind| {
-                            accept_operator_candidate(
-                                word,
-                                **kind,
-                                rest,
-                                tokens.last(),
-                                unit_registry,
-                            )
-                        })
-                        .map(|kind| (word, *kind));
-                }
-
-                if let Some((alias, matched_op)) = best_match {
-                    let char_count = alias.chars().count();
-                    for _ in 0..char_count {
-                        chars.next();
-                    }
-                    match matched_op {
-                        MatchedOpKind::Binary(op_alias) => tokens.push(Token::BinaryOp(op_alias)),
-                        MatchedOpKind::Unary(op_alias) => tokens.push(Token::UnaryOp(op_alias)),
-                        MatchedOpKind::Func(fn_name) => tokens.push(Token::Function(fn_name)),
-                    }
-                    continue;
-                }
-            }
-
-            // Numbers (digit or starting with '.' followed by a digit)
-            if c.is_ascii_digit()
-                || (c == '.'
-                    && chars
-                        .clone()
-                        .nth(1)
-                        .is_some_and(|(_, next_c)| next_c.is_ascii_digit()))
-            {
-                let shadowing_vars = if in_conversion_target {
-                    None
-                } else {
-                    variables
-                };
-                let num_token = parse_number_token(
-                    input_text,
-                    i,
-                    &mut chars,
-                    unit_registry,
-                    shadowing_vars,
-                    number_scales,
-                )?;
-                tokens.push(num_token);
-                continue;
-            }
-
-            // Currency symbols (e.g. $, €, £, ¥)
-            if crate::evaluation::tokenizer::implicit::is_currency_symbol(c) {
-                chars.next();
-                let sym = &input_text[i..i + c.len_utf8()];
-                if unit_registry.contains(sym) {
-                    tokens.push(Token::Unit(sym));
-                    continue;
-                } else {
-                    return Err(AbacusError::UnknownUnit(sym.to_string()));
-                }
-            }
-
-            // Identifiers (units, conversion operators, named unary ops like sqrt)
-            // A bare `%` (percent unit) is always a single-character symbol so `20%of 50` works.
-            if c == '%' {
-                chars.next();
-                let sym = &input_text[i..i + 1];
-                if unit_registry.contains(sym) {
-                    tokens.push(Token::Unit(sym));
-                } else if let Some(op) = token_registry.binary_operators.get(sym) {
-                    tokens.push(Token::BinaryOp(op.alias));
-                } else {
-                    return Err(AbacusError::UnknownUnit(sym.to_string()));
-                }
-                continue;
-            }
-
-            if c.is_alphabetic() || c == '_' || c == '°' || c == 'Å' || c == 'Ω' {
-                let start = i;
-                let mut end = i;
-                let vars_shadow = !in_conversion_target;
-                while let Some(&(idx, sym_c)) = chars.peek() {
-                    if sym_c.is_alphanumeric()
-                        || sym_c == '_'
-                        || sym_c == '°'
-                        || sym_c == 'Å'
-                        || sym_c == 'Ω'
-                    {
-                        end = idx + sym_c.len_utf8();
-                        chars.next();
-                    } else if sym_c == '^' {
-                        let base_sym = &input_text[start..end];
-                        if is_standard_constant(base_sym)
-                            || (vars_shadow && variables.is_some_and(|v| v.contains_key(base_sym)))
-                            || !unit_registry.contains(base_sym)
-                        {
-                            break;
-                        }
-                        end = idx + sym_c.len_utf8();
-                        chars.next();
-                        if let Some(&(sign_idx, sign_c)) = chars.peek()
-                            && (sign_c == '+' || sign_c == '-')
-                        {
-                            end = sign_idx + sign_c.len_utf8();
-                            chars.next();
-                        }
-                        while let Some(&(digit_idx, digit_c)) = chars.peek() {
-                            if digit_c.is_ascii_digit() || digit_c == '.' {
-                                end = digit_idx + digit_c.len_utf8();
-                                chars.next();
-                            } else {
-                                break;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                let sym = &input_text[start..end];
-                let registered = RegisteredOps::lookup(op_index, token_registry, sym);
-
-                if CONVERSION_KEYWORDS.contains(&sym) {
-                    tokens.push(Token::ConversionOp);
-                    in_conversion_target = true;
-                } else if sym == "in" {
-                    let rest_trimmed = input_text[end..].trim_start();
-                    let has_no_target = rest_trimmed.is_empty()
-                        || rest_trimmed.starts_with(|c: char| {
-                            matches!(
-                                c,
-                                ')' | ']'
-                                    | ','
-                                    | ';'
-                                    | '+'
-                                    | '-'
-                                    | '*'
-                                    | '/'
-                                    | '^'
-                                    | '='
-                                    | '<'
-                                    | '>'
-                                    | '!'
-                            )
-                        });
-
-                    let next_word = leading_word(rest_trimmed);
-                    let is_followed_by_conversion_kw =
-                        next_word == "to" || next_word == "as" || next_word == "in";
-
-                    let is_unit = match tokens.last() {
-                        Some(Token::ConversionOp) => true,
-                        Some(Token::Float(_)) => is_followed_by_conversion_kw || has_no_target,
-                        Some(
-                            Token::BinaryOp(_)
-                            | Token::UnaryOp(_)
-                            | Token::OpenParen
-                            | Token::OpenBracket
-                            | Token::Comma,
-                        )
-                        | None => is_followed_by_conversion_kw || has_no_target,
-                        // After a unit/value (e.g. `5 in in`, `5 m in`), `in` is the conversion
-                        // keyword; a missing target is then reported instead of silently
-                        // multiplying by inches.
-                        _ => false,
-                    };
-
-                    if is_unit {
-                        tokens.push(Token::Unit(sym));
-                    } else {
-                        tokens.push(Token::ConversionOp);
-                        in_conversion_target = true;
-                    }
-                } else if let Some(name) = registered.find(OpMap::Func) {
-                    let rest = input_text[end..].trim_start();
-                    if rest.starts_with('(') || !unit_registry.contains(sym) {
-                        tokens.push(Token::Function(name));
-                    } else {
-                        tokens.push(Token::Unit(sym));
-                    }
-                } else if sym.eq_ignore_ascii_case("per") {
-                    tokens.push(Token::BinaryOp("/"));
-                } else if let Some(alias) = registered.find(OpMap::Binary) {
-                    tokens.push(Token::BinaryOp(alias));
-                } else if let Some(alias) = registered.find(OpMap::Unary) {
-                    tokens.push(Token::UnaryOp(alias));
-                } else if in_conversion_target && unit_registry.contains(sym) {
-                    // Conversion targets are units even if a variable shadows the name.
-                    tokens.push(Token::Unit(sym));
-                } else if is_standard_constant(sym)
-                    || variables.is_some_and(|v| v.contains_key(sym))
-                {
-                    tokens.push(Token::Ident(sym));
-                } else if let Some(tok) = resolve_indefinite_article(
-                    sym,
-                    &input_text[end..],
-                    tokens.last(),
-                    unit_registry,
-                ) {
-                    tokens.push(tok);
-                } else if unit_registry.contains(sym) {
-                    tokens.push(Token::Unit(sym));
-                } else if sym.contains('^') {
-                    unit_registry.unit(sym)?;
-                    tokens.push(Token::Unit(sym));
-                } else if input_text[end..].trim_start().starts_with('(') {
-                    return Err(AbacusError::UnknownFunction(sym.to_string()));
-                } else {
-                    return Err(AbacusError::UnknownUnit(sym.to_string()));
-                }
-
-                continue;
-            }
-
-            return Err(AbacusError::UnexpectedCharacter(c));
+    let capacity = input_text.len().min(256);
+    let mut lexer = Lexer {
+        input: input_text,
+        pos: 0,
+        tokens: Vec::with_capacity(capacity),
+        spans: Vec::with_capacity(capacity),
+        in_conversion_target: false,
+        token_registry,
+        unit_registry,
+        op_index: token_registry.operator_index(),
+        variables,
+        options,
+        word_lookup: None,
+    };
+    while let Some(c) = lexer.peek_char() {
+        if c.is_whitespace() {
+            lexer.pos += c.len_utf8();
+            continue;
         }
-        Ok(())
-    })();
-
-    if let Err(error) = lexed {
-        let end = chars.peek().map_or(input_text.len(), |&(idx, _)| idx);
-        let end = end.max(
-            tok_start
-                + input_text[tok_start..]
-                    .chars()
-                    .next()
-                    .map_or(0, char::len_utf8),
-        );
-        return Err((error, Span::new(tok_start, end.min(input_text.len()))));
+        let start = lexer.pos;
+        match lexer.next_token(c) {
+            Ok((token, len)) => {
+                lexer.pos = start + len;
+                lexer.tokens.push(token);
+                lexer.spans.push(Span::new(start, lexer.pos));
+            }
+            Err(error) => {
+                // Point at the word (or character) being lexed.
+                let rest = &input_text[start..];
+                let word = rest
+                    .find(|ch: char| !is_word_char(ch))
+                    .unwrap_or(rest.len())
+                    .max(c.len_utf8());
+                return Err((error, Span::new(start, start + word)));
+            }
+        }
     }
-    while spans.len() < tokens.len() {
-        spans.push(Span::new(tok_start, input_text.len()));
-    }
 
+    let Lexer { tokens, spans, .. } = lexer;
     resolve_tokens(
         Lexed { tokens, spans },
         unit_registry,
         token_registry,
-        implicit_multiplication,
-        number_scales,
+        options.implicit_multiplication,
+        options.number_scales,
     )
+}
+
+/// Lexer state: a byte cursor into the input and the tokens produced so far.
+struct Lexer<'a, 'r> {
+    input: &'a str,
+    pos: usize,
+    tokens: Vec<Token<'a>>,
+    spans: Vec<Span>,
+    /// True while lexing the target of an `in`/`to`/`as` conversion, where unit names take
+    /// precedence over variables of the same name.
+    in_conversion_target: bool,
+    token_registry: &'r TokenRegistry,
+    unit_registry: &'r UnitRegistry,
+    op_index: &'r crate::evaluation::tokenizer::registry::token_registry::OperatorIndex,
+    variables: Option<&'r std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
+    options: LexOptions<'r>,
+    /// The operator kinds of the plain word at byte `.0` (of length `.1`), as looked up by
+    /// [`Lexer::registered_operator`], so [`Lexer::classify_word`] needn't hash it again.
+    word_lookup: Option<(usize, usize, &'r [MatchedOpKind])>,
+}
+
+/// A lexing rule's result: the token and how many bytes of input it consumed.
+type Lexeme<'a> = (Token<'a>, usize);
+
+impl<'a> Lexer<'a, '_> {
+    fn rest(&self) -> &'a str {
+        &self.input[self.pos..]
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        self.rest().chars().next()
+    }
+
+    fn last(&self) -> Option<&Token<'a>> {
+        self.tokens.last()
+    }
+
+    /// Lexes one token starting with `c` at the cursor. Rules are tried in this order, and the
+    /// first that matches wins; the order is what resolves overlaps (a date literal before a
+    /// number, a phrase like `% change from` before `%`, an operator word before a unit):
+    ///
+    /// 1. date and time literals            7. relative time (`ago`, `from now`, `until`)
+    /// 2. timezone offsets after a date     8. multi-word units (`fl oz`, `business days`)
+    /// 3. `% change from` and friends       9. `..` and `.property`
+    /// 4. percentage tags (`18% tip`)      10. registered operators and functions
+    /// 5. `off` (`20% off $120`)           11. numbers, currency symbols, `%`, words
+    /// 6. `more than`, `less than`, `out of`
+    ///
+    /// Punctuation (`( ) [ ] ,`) is checked first: none of these rules can match it.
+    fn next_token(&mut self, c: char) -> Result<Lexeme<'a>, AbacusError> {
+        // Punctuation can't start any earlier rule's match, so skip straight to it.
+        if let Some(lexeme) = self.punctuation(c)? {
+            return Ok(lexeme);
+        }
+        macro_rules! try_rule {
+            ($rule:ident) => {
+                if let Some(lexeme) = self.$rule(c)? {
+                    return Ok(lexeme);
+                }
+            };
+        }
+        try_rule!(date_literal);
+        try_rule!(timezone_offset);
+        try_rule!(percent_change);
+        try_rule!(percent_tag);
+        try_rule!(off);
+        try_rule!(conversational_operator);
+        try_rule!(relative_time);
+        try_rule!(multi_word_unit);
+        try_rule!(dot);
+        try_rule!(registered_operator);
+        if c.is_ascii_digit()
+            || (c == '.' && self.rest()[1..].starts_with(|d: char| d.is_ascii_digit()))
+        {
+            return self.number();
+        }
+        if crate::evaluation::tokenizer::implicit::is_currency_symbol(c) {
+            let sym = &self.rest()[..c.len_utf8()];
+            return if self.unit_registry.contains(sym) {
+                Ok((Token::Unit(sym), sym.len()))
+            } else {
+                Err(AbacusError::UnknownUnit(sym.to_string()))
+            };
+        }
+        // A bare `%` (percent unit) is always a single-character symbol so `20%of 50` works.
+        if c == '%' {
+            let sym = &self.rest()[..1];
+            return if self.unit_registry.contains(sym) {
+                Ok((Token::Unit(sym), 1))
+            } else if let Some(op) = self.token_registry.binary_operators.get(sym) {
+                Ok((Token::BinaryOp(op.alias), 1))
+            } else {
+                Err(AbacusError::UnknownUnit(sym.to_string()))
+            };
+        }
+        if c.is_alphabetic() || matches!(c, '_' | '°' | 'Å' | 'Ω') {
+            return self.word();
+        }
+        Err(AbacusError::UnexpectedCharacter(c))
+    }
+
+    /// `today`, `tomorrow`, `@2026-08-07@`, `07-08-2026`, `12:00`, `1:00 PM`, `3 PM`, `16 May`, ...
+    #[inline]
+    fn date_literal(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        let rest = self.rest();
+        let candidate = c == '@'
+            || (c.is_ascii_digit() && is_numeric_date_candidate(rest))
+            || c.is_ascii_alphabetic();
+        if !candidate {
+            return Ok(None);
+        }
+        let opts = DateLexOptions {
+            anchor: self.options.anchor_date,
+            lazy_now: self.options.lazy_now,
+            month_first: self.options.date_month_first,
+            after_quantity: matches!(self.last(), Some(Token::Float(_) | Token::Val(_))),
+        };
+        Ok(try_parse_date_literal_with_anchor(rest, opts)?
+            .map(|(date, len)| (Token::Date(date), len)))
+    }
+
+    /// `+02:00`, `-04:00`, `+05:30`, only directly after a date/time or as a conversion
+    /// target, so `10 -1:30` stays arithmetic.
+    #[inline]
+    fn timezone_offset(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if !matches!(c, '+' | '-')
+            || !matches!(self.last(), Some(Token::Date(_) | Token::ConversionOp))
+        {
+            return Ok(None);
+        }
+        let rest = self.rest();
+        Ok(match_tz_offset_literal(rest).map(|len| (Token::Unit(&rest[..len]), len)))
+    }
+
+    /// `% change from`, `percent change from`, ...
+    #[inline]
+    fn percent_change(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if !matches!(c, '%' | 'p' | 'P') {
+            return Ok(None);
+        }
+        Ok(match_percent_change_from(self.rest()).map(|len| (Token::PercentChangeFrom, len)))
+    }
+
+    /// `18% tip`, `15% tax`, `20% discount`, `10% fee` (only right after a percentage).
+    #[inline]
+    fn percent_tag(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if !c.is_ascii_alphabetic() {
+            return Ok(None);
+        }
+        let after_percent = match self.last() {
+            Some(Token::Unit(u)) => matches!(*u, "%" | "percent" | "pct"),
+            Some(Token::Val(v)) => v.unit.is_percent(),
+            _ => false,
+        };
+        if !after_percent {
+            return Ok(None);
+        }
+        Ok(match_percent_tag(self.rest()).map(|(tag, len)| (Token::PercentTag(tag), len)))
+    }
+
+    /// `off`: an operator when an expression follows (`20% off $120`), else a percentage tag
+    /// (`$100 - 20% off`).
+    #[inline]
+    fn off(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        let rest = self.rest();
+        if !matches!(c, 'o' | 'O') || !starts_with_ci(rest, "off") || !at_word_boundary(&rest[3..])
+        {
+            return Ok(None);
+        }
+        let after = rest[3..].trim_start();
+        let starts_expr = !after.is_empty() && !after.starts_with([')', ']', ',']);
+        let token = if starts_expr {
+            Token::BinaryOp("off")
+        } else {
+            Token::PercentTag("off")
+        };
+        Ok(Some((token, 3)))
+    }
+
+    /// `more than`, `less than`, `out of`.
+    #[inline]
+    fn conversational_operator(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if !matches!(c, 'm' | 'M' | 'l' | 'L' | 'o' | 'O') {
+            return Ok(None);
+        }
+        Ok(match_conversational_binary_op(self.rest())
+            .map(|(alias, len)| (Token::BinaryOp(alias), len)))
+    }
+
+    /// `ago`, `from now`, `before`, `after`, `until`.
+    #[inline]
+    fn relative_time(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if !c.is_ascii_alphabetic() {
+            return Ok(None);
+        }
+        Ok(match_rel_time_op(self.rest()).map(|(op, len)| (Token::RelTimeOp(op), len)))
+    }
+
+    /// Unit names containing a space or symbol (`business days`, `fl oz`, `long ton`, `R$`),
+    /// listed in `registry::units::MULTI_WORD_UNITS`.
+    #[inline]
+    fn multi_word_unit(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        let rest = self.rest();
+        if !c.is_ascii_alphabetic() || !could_start_multi_word_unit(rest) {
+            return Ok(None);
+        }
+        for &unit_name in crate::registry::units::MULTI_WORD_UNITS {
+            let name = unit_name.as_bytes();
+            if rest.len() >= name.len()
+                && name[0].eq_ignore_ascii_case(&(c as u8))
+                && rest.as_bytes()[..name.len()].eq_ignore_ascii_case(name)
+            {
+                // Names ending in a symbol (e.g. "R$") may be glued to a number ("R$5").
+                let needs_boundary = name[name.len() - 1].is_ascii_alphanumeric();
+                if (!needs_boundary || at_word_boundary(&rest[name.len()..]))
+                    && self.unit_registry.contains(unit_name)
+                {
+                    return Ok(Some((Token::Unit(unit_name), unit_name.len())));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// `(`, `)`, `[`, `]`, `,`. Closing a group or starting the next argument ends a
+    /// conversion target.
+    #[inline]
+    fn punctuation(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        let token = match c {
+            '(' => Token::OpenParen,
+            ')' => Token::CloseParen,
+            '[' => Token::OpenBracket,
+            ']' => Token::CloseBracket,
+            ',' => Token::Comma,
+            _ => return Ok(None),
+        };
+        if matches!(c, ')' | ']' | ',') {
+            self.in_conversion_target = false;
+        }
+        Ok(Some((token, 1)))
+    }
+
+    /// `..` (range) and `.property` (`.slope`, `.year`).
+    #[inline]
+    fn dot(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        if c != '.' {
+            return Ok(None);
+        }
+        let after = &self.rest()[1..];
+        if after.starts_with('.') {
+            return Ok(Some((Token::Range, 2)));
+        }
+        if after.starts_with(|n: char| n.is_alphabetic() || n == '_') {
+            let len = after
+                .find(|n: char| !n.is_alphanumeric() && n != '_')
+                .unwrap_or(after.len());
+            return Ok(Some((Token::DotProperty(&after[..len]), 1 + len)));
+        }
+        Ok(None)
+    }
+
+    /// Registered operators and functions, longest pattern first (`++` over `+`). Plain-word
+    /// patterns can only match the whole leading word, so they are found with one map lookup;
+    /// symbolic patterns are scanned, but only those longer than the leading word can match.
+    fn registered_operator(&mut self, c: char) -> Result<Option<Lexeme<'a>>, AbacusError> {
+        let remaining = self.rest();
+        let word_len = if is_word_char(c) {
+            remaining
+                .find(|ch: char| !is_word_char(ch))
+                .unwrap_or(remaining.len())
+        } else {
+            0
+        };
+        let prev = self.last();
+        let mut best: Option<(&str, MatchedOpKind)> = None;
+        for (pattern, kind) in self.op_index.symbolic_candidates(c) {
+            if pattern.len() <= word_len {
+                // The first `word_len` bytes are all word characters, which a symbolic
+                // pattern of that length or shorter cannot match.
+                break;
+            }
+            if let Some(rest) = strip_prefix_inline(remaining, pattern)
+                && accept_operator_candidate(pattern, *kind, rest, prev, self.unit_registry)
+            {
+                best = Some((pattern, *kind));
+                break;
+            }
+        }
+        if best.is_none() && word_len > 0 {
+            let (word, rest) = remaining.split_at(word_len);
+            let kinds = self.op_index.word_kinds(word);
+            best = kinds
+                .iter()
+                .find(|kind| {
+                    accept_operator_candidate(word, **kind, rest, prev, self.unit_registry)
+                })
+                .map(|kind| (word, *kind));
+            self.word_lookup = Some((self.pos, word_len, kinds));
+        }
+        Ok(best.map(|(pattern, kind)| {
+            let token = match kind {
+                MatchedOpKind::Binary(alias) => Token::BinaryOp(alias),
+                MatchedOpKind::Unary(alias) => Token::UnaryOp(alias),
+                MatchedOpKind::Func(name) => Token::Function(name),
+            };
+            (token, pattern.len())
+        }))
+    }
+
+    /// A number, with an unspaced unit or scale word folded in (`5km`, `3million`).
+    fn number(&mut self) -> Result<Lexeme<'a>, AbacusError> {
+        let shadowing = if self.in_conversion_target {
+            None
+        } else {
+            self.variables
+        };
+        parse_number_token(
+            self.rest(),
+            self.unit_registry,
+            shadowing,
+            self.options.number_scales,
+        )
+    }
+
+    /// The length of the identifier at the cursor, including a unit exponent (`m^2`, `s^-1`)
+    /// when the base is a unit rather than a constant or variable.
+    fn word_len(&self) -> usize {
+        let rest = self.rest();
+        let vars_shadow = !self.in_conversion_target;
+        let mut end = 0;
+        let mut iter = rest.char_indices().peekable();
+        while let Some(&(idx, ch)) = iter.peek() {
+            if ch.is_alphanumeric() || matches!(ch, '_' | '°' | 'Å' | 'Ω') {
+                end = idx + ch.len_utf8();
+                iter.next();
+            } else if ch == '^' {
+                let base = &rest[..end];
+                if is_standard_constant(base)
+                    || (vars_shadow && self.variables.is_some_and(|v| v.contains_key(base)))
+                    || !self.unit_registry.contains(base)
+                {
+                    break;
+                }
+                end = idx + 1;
+                iter.next();
+                if let Some(&(sign_idx, sign @ ('+' | '-'))) = iter.peek() {
+                    end = sign_idx + sign.len_utf8();
+                    iter.next();
+                }
+                while let Some(&(digit_idx, d)) = iter.peek() {
+                    if d.is_ascii_digit() || d == '.' {
+                        end = digit_idx + 1;
+                        iter.next();
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        end
+    }
+
+    /// An identifier: a conversion keyword, function, operator word, constant, variable or unit.
+    fn word(&mut self) -> Result<Lexeme<'a>, AbacusError> {
+        let len = self.word_len();
+        let rest = self.rest();
+        let sym = &rest[..len];
+        let after = &rest[len..];
+        let token = self.classify_word(sym, after)?;
+        Ok((token, len))
+    }
+
+    fn classify_word(&mut self, sym: &'a str, after: &'a str) -> Result<Token<'a>, AbacusError> {
+        if CONVERSION_KEYWORDS.contains(&sym) {
+            self.in_conversion_target = true;
+            return Ok(Token::ConversionOp);
+        }
+        if sym == "in" {
+            return Ok(if self.in_is_unit(after) {
+                Token::Unit(sym)
+            } else {
+                self.in_conversion_target = true;
+                Token::ConversionOp
+            });
+        }
+        let cached = self
+            .word_lookup
+            .filter(|&(pos, len, _)| pos == self.pos && len == sym.len())
+            .map(|(_, _, kinds)| kinds);
+        let registered = RegisteredOps::lookup(self.op_index, self.token_registry, sym, cached);
+        if let Some(name) = registered.find(OpMap::Func) {
+            let followed_by_call = after.trim_start().starts_with('(');
+            return Ok(if followed_by_call || !self.unit_registry.contains(sym) {
+                Token::Function(name)
+            } else {
+                Token::Unit(sym)
+            });
+        }
+        if sym.eq_ignore_ascii_case("per") {
+            return Ok(Token::BinaryOp("/"));
+        }
+        if let Some(alias) = registered.find(OpMap::Binary) {
+            return Ok(Token::BinaryOp(alias));
+        }
+        if let Some(alias) = registered.find(OpMap::Unary) {
+            return Ok(Token::UnaryOp(alias));
+        }
+        if self.in_conversion_target && self.unit_registry.contains(sym) {
+            // Conversion targets are units even if a variable shadows the name.
+            return Ok(Token::Unit(sym));
+        }
+        if is_standard_constant(sym) || self.variables.is_some_and(|v| v.contains_key(sym)) {
+            return Ok(Token::Ident(sym));
+        }
+        if let Some(tok) = resolve_indefinite_article(sym, after, self.last(), self.unit_registry) {
+            return Ok(tok);
+        }
+        if self.unit_registry.contains(sym) {
+            return Ok(Token::Unit(sym));
+        }
+        if sym.contains('^') {
+            self.unit_registry.unit(sym)?;
+            return Ok(Token::Unit(sym));
+        }
+        if after.trim_start().starts_with('(') {
+            return Err(AbacusError::UnknownFunction(sym.to_string()));
+        }
+        Err(AbacusError::UnknownUnit(sym.to_string()))
+    }
+
+    /// Whether `in` (followed by `after`) is the inch rather than the conversion keyword.
+    fn in_is_unit(&self, after: &str) -> bool {
+        let rest = after.trim_start();
+        let has_no_target = rest.is_empty()
+            || rest.starts_with([
+                ')', ']', ',', ';', '+', '-', '*', '/', '^', '=', '<', '>', '!',
+            ]);
+        let next_word = leading_word(rest);
+        let followed_by_conversion_kw = matches!(next_word, "to" | "as" | "in");
+        match self.last() {
+            Some(Token::ConversionOp) => true,
+            Some(Token::Float(_)) => followed_by_conversion_kw || has_no_target,
+            Some(
+                Token::BinaryOp(_)
+                | Token::UnaryOp(_)
+                | Token::OpenParen
+                | Token::OpenBracket
+                | Token::Comma,
+            )
+            | None => followed_by_conversion_kw || has_no_target,
+            // After a unit/value (e.g. `5 in in`, `5 m in`), `in` is the conversion keyword; a
+            // missing target is then reported instead of silently multiplying by inches.
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]

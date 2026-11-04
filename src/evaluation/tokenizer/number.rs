@@ -4,74 +4,66 @@ use crate::{
     units::eval_result::EvalResult,
 };
 use std::collections::HashMap;
-use std::iter::Peekable;
-use std::str::CharIndices;
 
-/// Parses a numeric literal starting at `start`, folding an unspaced unit suffix (`5km`) into a
-/// `Token::Val`. A suffix that names a variable in `variables` is left for the lexer so that
-/// variables shadow units identically in `2h` and `2 h`.
+/// Characters that may continue a unit suffix glued to a number (`5km`, `20°C`, `3$`).
+fn is_unit_suffix_char(c: char) -> bool {
+    c.is_alphanumeric()
+        || matches!(c, '_' | '°' | 'Å' | 'Ω')
+        || crate::evaluation::tokenizer::implicit::is_currency_symbol(c)
+}
+
+/// Parses a numeric literal at the start of `input` (which starts with a digit, or `.` and a
+/// digit), folding an unspaced unit suffix (`5km`) into a `Token::Val`. Returns the token and
+/// the number of bytes consumed. A suffix that names a variable in `variables` is left for the
+/// lexer so that variables shadow units identically in `2h` and `2 h`.
 pub(crate) fn parse_number_token<'a>(
-    input_text: &'a str,
-    start: usize,
-    chars: &mut Peekable<CharIndices<'a>>,
+    input: &'a str,
     unit_registry: &UnitRegistry,
     variables: Option<&HashMap<String, EvalResult>>,
     number_scales: bool,
-) -> Result<Token<'a>, AbacusError> {
+) -> Result<(Token<'a>, usize), AbacusError> {
+    let b = input.as_bytes();
+    let at = |i: usize| b.get(i).copied();
+    let mut end = 0;
     let mut has_dot = false;
     let mut has_exp = false;
 
-    while let Some(&(_, num_c)) = chars.peek() {
-        if num_c.is_ascii_digit() {
-            chars.next();
-        } else if num_c == '.' && !has_dot && !has_exp {
-            let mut dot_lookahead = chars.clone();
-            dot_lookahead.next(); // skip past the '.'
-            match dot_lookahead.peek() {
-                Some(&(_, next_c)) if next_c.is_ascii_digit() => {
+    while let Some(c) = at(end) {
+        if c.is_ascii_digit() {
+            end += 1;
+        } else if c == b'.' && !has_dot && !has_exp {
+            match at(end + 1) {
+                Some(n) if n.is_ascii_digit() => {
                     has_dot = true;
-                    chars.next();
+                    end += 1;
                 }
-                Some(&(_, '.')) => {
-                    break; // range operator `..`
-                }
-                Some(&(_, next_c)) if next_c.is_alphabetic() || next_c == '_' => {
-                    break; // stop number here for property access e.g. .year
+                // `..` is the range operator.
+                Some(b'.') => break,
+                // A property access such as `.year` ends the number.
+                Some(_)
+                    if input[end + 1..].starts_with(|n: char| n.is_alphabetic() || n == '_') =>
+                {
+                    break;
                 }
                 _ => {
                     has_dot = true;
-                    chars.next();
+                    end += 1;
                 }
             }
-        } else if (num_c == 'e' || num_c == 'E') && !has_exp {
-            let mut exp_lookahead = chars.clone();
-            exp_lookahead.next(); // skip 'e' or 'E'
-            if let Some(&(_, sign_c)) = exp_lookahead.peek()
-                && (sign_c == '+' || sign_c == '-')
-            {
-                exp_lookahead.next();
+        } else if (c == b'e' || c == b'E') && !has_exp {
+            let mut look = end + 1;
+            if matches!(at(look), Some(b'+' | b'-')) {
+                look += 1;
             }
-            if let Some(&(_, digit_c)) = exp_lookahead.peek()
-                && digit_c.is_ascii_digit()
-            {
+            if at(look).is_some_and(|d| d.is_ascii_digit()) {
                 has_exp = true;
-                chars.next(); // consume 'e'/'E'
-                if let Some(&(_, sign_c)) = chars.peek()
-                    && (sign_c == '+' || sign_c == '-')
-                {
-                    chars.next(); // consume '+' or '-'
-                }
+                end = look;
                 continue;
             }
             // A dangling exponent marker (`1e`, `2E+`) is a malformed literal, not `1 * e`.
-            let after = exp_lookahead.peek().map(|&(_, c)| c);
+            let after = input[look..].chars().next();
             if after.is_none_or(|c| !c.is_alphanumeric() && c != '_') {
-                let end = exp_lookahead
-                    .peek()
-                    .map_or(input_text.len(), |&(idx, _)| idx);
-                return Err(AbacusError::InvalidNumber(
-                    input_text[start..end].to_string(),
-                ));
+                return Err(AbacusError::InvalidNumber(input[..look].to_string()));
             }
             break;
         } else {
@@ -79,7 +71,7 @@ pub(crate) fn parse_number_token<'a>(
         }
     }
 
-    let num_str = &input_text[start..chars.peek().map_or(input_text.len(), |&(idx, _)| idx)];
+    let num_str = &input[..end];
     let val = num_str
         .parse::<f64>()
         .map_err(|_| AbacusError::InvalidNumber(num_str.to_string()))?;
@@ -88,50 +80,40 @@ pub(crate) fn parse_number_token<'a>(
     }
 
     // `%` directly after a number is the percent unit unless an operand follows (modulo).
-    if let Some(&(pct_idx, '%')) = chars.peek() {
-        if percent_is_modulo(&input_text[pct_idx + 1..]) {
-            return Ok(Token::Float(val));
+    if at(end) == Some(b'%') {
+        if percent_is_modulo(&input[end + 1..]) {
+            return Ok((Token::Float(val), end));
         }
         if let Ok(unit) = unit_registry.unit("%") {
-            chars.next();
-            return Ok(Token::Val(Value::new(val, unit)));
+            return Ok((Token::Val(Value::new(val, unit)), end + 1));
         }
-        return Ok(Token::Float(val));
+        return Ok((Token::Float(val), end));
     }
 
-    // Check if immediately followed by an unspaced unit identifier (e.g. 5km, 10m, 1s^-1)
-    if let Some(&(unit_start, unit_c)) = chars.peek()
-        && (unit_c.is_alphabetic()
-            || unit_c == '°'
-            || unit_c == 'Å'
-            || unit_c == 'Ω'
-            || crate::evaluation::tokenizer::implicit::is_currency_symbol(unit_c))
-    {
-        let mut unit_end = unit_start;
-        let mut unit_chars = chars.clone();
-        while let Some((idx, sym_c)) = unit_chars.peek().copied() {
-            if sym_c.is_alphanumeric()
-                || sym_c == '_'
-                || sym_c == '°'
-                || sym_c == 'Å'
-                || sym_c == 'Ω'
-                || crate::evaluation::tokenizer::implicit::is_currency_symbol(sym_c)
-            {
-                unit_end = idx + sym_c.len_utf8();
-                unit_chars.next();
-            } else if sym_c == '^' {
-                unit_end = idx + sym_c.len_utf8();
-                unit_chars.next();
-                if let Some((sign_idx, sign_c)) = unit_chars.peek().copied()
-                    && (sign_c == '+' || sign_c == '-')
-                {
-                    unit_end = sign_idx + sign_c.len_utf8();
-                    unit_chars.next();
+    // An unspaced unit identifier (e.g. 5km, 10m, 1s^-1).
+    let rest = &input[end..];
+    if rest.starts_with(|c: char| {
+        c.is_alphabetic()
+            || matches!(c, '°' | 'Å' | 'Ω')
+            || crate::evaluation::tokenizer::implicit::is_currency_symbol(c)
+    }) {
+        let mut unit_end = 0;
+        let mut iter = rest.char_indices().peekable();
+        while let Some(&(idx, c)) = iter.peek() {
+            if is_unit_suffix_char(c) {
+                unit_end = idx + c.len_utf8();
+                iter.next();
+            } else if c == '^' {
+                unit_end = idx + 1;
+                iter.next();
+                if let Some(&(sign_idx, sign @ ('+' | '-'))) = iter.peek() {
+                    unit_end = sign_idx + sign.len_utf8();
+                    iter.next();
                 }
-                while let Some((digit_idx, digit_c)) = unit_chars.peek().copied() {
-                    if digit_c.is_ascii_digit() || digit_c == '.' {
-                        unit_end = digit_idx + digit_c.len_utf8();
-                        unit_chars.next();
+                while let Some(&(digit_idx, d)) = iter.peek() {
+                    if d.is_ascii_digit() || d == '.' {
+                        unit_end = digit_idx + 1;
+                        iter.next();
                     } else {
                         break;
                     }
@@ -140,22 +122,20 @@ pub(crate) fn parse_number_token<'a>(
                 break;
             }
         }
-        let unit_candidate = &input_text[unit_start..unit_end];
+        let unit_candidate = &rest[..unit_end];
         if variables.is_some_and(|v| v.contains_key(unit_candidate)) {
-            return Ok(Token::Float(val));
+            return Ok((Token::Float(val), end));
         }
         if number_scales
             && let Some(scale) =
                 crate::evaluation::tokenizer::implicit::number_scale_factor(unit_candidate)
         {
-            *chars = unit_chars;
-            return Ok(Token::Float(val * scale));
+            return Ok((Token::Float(val * scale), end + unit_end));
         }
         if let Ok(unit) = unit_registry.unit(unit_candidate) {
-            *chars = unit_chars;
-            return Ok(Token::Val(Value::new(val, unit)));
+            return Ok((Token::Val(Value::new(val, unit)), end + unit_end));
         }
     }
 
-    Ok(Token::Float(val))
+    Ok((Token::Float(val), end))
 }
