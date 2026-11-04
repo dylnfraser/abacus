@@ -1,6 +1,6 @@
 [package]
 name = "abacus"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Dylan Fraser"]
 description = "A fast, unit-aware mathematical evaluation engine and interval calculator with no required crate dependencies"
