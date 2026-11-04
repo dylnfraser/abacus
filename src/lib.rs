@@ -92,7 +92,15 @@ pub struct Abacus {
     unit_display_overrides: HashMap<String, String>,
     variables: HashMap<String, EvalResult>,
     anchor_date: Option<Date>,
+    /// Identifies this engine to the expressions it compiles (see [`Expr`]).
+    engine_id: u64,
+    /// Bumped whenever something that affects how expressions are read changes (units,
+    /// operators, variable names, settings), so stale compiled expressions are re-read.
+    generation: u64,
 }
+
+/// Source of [`Abacus::engine_id`]s.
+static NEXT_ENGINE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// Generates `with_*` / `set_*` / getter triples for plain `Copy` settings.
 macro_rules! settings {
@@ -102,12 +110,14 @@ macro_rules! settings {
             #[must_use]
             pub fn $with(mut self, value: $ty) -> Self {
                 self.$field = value;
+                self.changed();
                 self
             }
 
             $(#[$doc])*
             pub fn $set(&mut self, value: $ty) -> &mut Self {
                 self.$field = value;
+                self.changed();
                 self
             }
 
@@ -128,12 +138,14 @@ macro_rules! optional_settings {
             #[must_use]
             pub fn $with(mut self, value: impl Into<Option<$ty>>) -> Self {
                 self.$field = value.into();
+                self.changed();
                 self
             }
 
             $(#[$doc])*
             pub fn $set(&mut self, value: impl Into<Option<$ty>>) -> &mut Self {
                 self.$field = value.into();
+                self.changed();
                 self
             }
 
@@ -193,6 +205,20 @@ impl Abacus {
             unit_display_overrides: HashMap::new(),
             variables: HashMap::new(),
             anchor_date: None,
+            engine_id: NEXT_ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            generation: 0,
+        }
+    }
+
+    /// Records a change that may affect how expressions are read (see [`Expr`]).
+    fn changed(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+    }
+
+    /// Defines or updates a variable. Only a new name changes how expressions are read.
+    fn insert_variable(&mut self, name: String, value: EvalResult) {
+        if self.variables.insert(name, value).is_none() {
+            self.changed();
         }
     }
 
@@ -226,6 +252,7 @@ impl Abacus {
 
     /// Mutable access to the unit registry, e.g. to register units in bulk.
     pub fn units_mut(&mut self) -> &mut UnitRegistry {
+        self.changed();
         &mut self.units
     }
 
@@ -237,6 +264,7 @@ impl Abacus {
 
     /// Mutable access to the operator and function registry.
     pub fn tokens_mut(&mut self) -> &mut TokenRegistry {
+        self.changed();
         &mut self.tokens
     }
 
@@ -283,6 +311,7 @@ impl Abacus {
     /// Timezone for dates and times written without one.
     pub fn set_default_timezone(&mut self, tz: impl Into<Option<TimeZone>>) -> &mut Self {
         self.default_timezone = tz.into();
+        self.changed();
         self
     }
 
@@ -302,6 +331,7 @@ impl Abacus {
     /// Fixes the reference "now"; `None` goes back to the system clock.
     pub fn set_now(&mut self, now: impl Into<Option<Date>>) -> &mut Self {
         self.anchor_date = now.into();
+        self.changed();
         self
     }
 
@@ -324,6 +354,7 @@ impl Abacus {
     pub fn set_max_recursion_depth(&mut self, depth: usize) -> &mut Self {
         self.max_recursion_depth =
             depth.min(crate::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP);
+        self.changed();
         self
     }
 
@@ -344,6 +375,7 @@ impl Abacus {
     /// Largest exponent magnitude accepted (see [`Abacus::with_max_exponent`]).
     pub fn set_max_exponent(&mut self, max: f64) -> &mut Self {
         self.units.set_max_exponent(max);
+        self.changed();
         self
     }
 
@@ -362,6 +394,7 @@ impl Abacus {
 
     /// Enables or disables currency units (`$`, `EUR`, ...).
     pub fn set_currencies(&mut self, enabled: bool) -> &mut Self {
+        self.changed();
         #[cfg(feature = "currencies")]
         {
             self.units.set_currencies_enabled(enabled);
@@ -449,6 +482,7 @@ impl Abacus {
                 &self.cache_path_or_default(),
             )?;
             self.units.update_currency_rates(&rates);
+            self.changed();
             Ok(())
         }
         #[cfg(not(feature = "currencies"))]
@@ -468,6 +502,7 @@ impl Abacus {
                 &self.cache_path_or_default(),
             )?;
             self.units.update_currency_rates(&rates);
+            self.changed();
             Ok(())
         }
         #[cfg(not(feature = "currencies"))]
@@ -485,6 +520,7 @@ impl Abacus {
         {
             let rates = crate::registry::units::currency_units::parse_frankfurter_json(_json_str)?;
             self.units.update_currency_rates(&rates);
+            self.changed();
             if let Some(ref path) = self.currency_cache_path {
                 let _ =
                     crate::registry::units::currency_units::save_rates_to_cache(_json_str, path);
@@ -501,6 +537,7 @@ impl Abacus {
 
     /// Sets an exchange rate manually for a specific currency code (e.g. "EUR", 0.86281).
     pub fn set_currency_rate(&mut self, _code: &str, _rate_per_usd: f64) -> &mut Self {
+        self.changed();
         #[cfg(feature = "currencies")]
         {
             self.units.set_currency_rate(_code, _rate_per_usd);
@@ -560,7 +597,7 @@ impl Abacus {
     /// Define a variable on this `Abacus` instance (builder pattern).
     #[must_use]
     pub fn with_variable(mut self, name: impl Into<String>, value: impl Into<EvalResult>) -> Self {
-        self.variables.insert(name.into(), value.into());
+        self.insert_variable(name.into(), value.into());
         self
     }
 
@@ -570,7 +607,7 @@ impl Abacus {
         name: impl Into<String>,
         value: impl Into<EvalResult>,
     ) -> &mut Self {
-        self.variables.insert(name.into(), value.into());
+        self.insert_variable(name.into(), value.into());
         self
     }
 
@@ -581,7 +618,7 @@ impl Abacus {
         expr: &str,
     ) -> Result<EvalResult, AbacusError> {
         let raw = self.eval_unformatted(expr)?;
-        self.variables.insert(name.into(), raw.clone());
+        self.insert_variable(name.into(), raw.clone());
         Ok(self.apply_output_settings(raw, expr))
     }
 
@@ -605,17 +642,23 @@ impl Abacus {
 
     /// Remove a defined variable.
     pub fn remove_variable(&mut self, name: &str) -> Option<EvalResult> {
-        self.variables.remove(name)
+        let removed = self.variables.remove(name);
+        if removed.is_some() {
+            self.changed();
+        }
+        removed
     }
 
     /// Clear all defined variables.
     pub fn clear_variables(&mut self) {
         self.variables.clear();
+        self.changed();
     }
 
     /// Reset variables back to standard mathematical constants (`pi`, `e`, `tau`, `phi`).
     pub fn reset_standard_variables(&mut self) {
         self.variables = Self::standard_variables();
+        self.changed();
     }
 
     /// Returns the standard common speed unit display overrides ("mi/h" -> "mph", "km/h" -> "kmph").
@@ -695,6 +738,12 @@ impl Abacus {
     /// If the expression is an assignment, updates or creates the variable on `self` and returns its evaluated value.
     /// Otherwise, evaluates the expression normally.
     pub fn eval_mut(&mut self, expr: &str) -> Result<EvalResult, AbacusError> {
+        self.eval_mut_detailed(expr).map_err(Diagnostic::into_error)
+    }
+
+    /// [`Abacus::eval_mut`], reporting where in `expr` an error occurred (see
+    /// [`Abacus::eval_detailed`]).
+    pub fn eval_mut_detailed(&mut self, expr: &str) -> Result<EvalResult, Diagnostic> {
         let trimmed = expr.trim();
         // Check for simple assignment: <ident> = <rhs>
         if let Some((ident, rhs)) = trimmed.split_once('=') {
@@ -704,26 +753,65 @@ impl Abacus {
                 && ident.chars().all(|c| c.is_alphanumeric() || c == '_');
             if is_ident && !rhs.starts_with('=') {
                 // Store the full-precision value; only the returned copy is rounded for display.
-                let raw = self.eval_unformatted(rhs)?;
-                self.variables.insert(ident.to_string(), raw.clone());
+                let raw = self.eval_located(rhs).map_err(|located| {
+                    // Spans are relative to `rhs`; report them relative to `expr`.
+                    let offset = rhs.as_ptr() as usize - expr.as_ptr() as usize;
+                    let inner = located.into_inner();
+                    let span = inner
+                        .span
+                        .map(|s| Span::new(s.start + offset, s.end + offset));
+                    Diagnostic::new(inner.error, span, expr).with_note(inner.note)
+                })?;
+                self.insert_variable(ident.to_string(), raw.clone());
                 return Ok(self.apply_output_settings(raw, rhs));
             }
         }
-        self.eval(expr)
+        self.eval_detailed(expr)
     }
 
     /// Evaluates an expression without applying output settings (decimal places, significant
     /// figures, currency rounding, display overrides). Use this when the result feeds further
     /// computation; [`Abacus::eval`] is this plus [`Abacus::apply_output_settings`].
     pub fn eval_unformatted(&self, expr: &str) -> Result<EvalResult, AbacusError> {
-        let config = EvalConfig::from(self);
-        let mut res = crate::evaluation::parser::evaluate_with_variables(
+        self.eval_located(expr)
+            .map_err(|located| located.into_inner().error)
+    }
+
+    /// Evaluates an expression, reporting where in it an error occurred.
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "units")] {
+    /// use abacus::{Abacus, AbacusError};
+    ///
+    /// let err = Abacus::standard().eval_detailed("5 m + 3 s").unwrap_err();
+    /// assert_eq!(err.error(), &AbacusError::IncompatibleDimensions);
+    /// assert_eq!(err.span().map(|s| s.text(err.source())), Some("+"));
+    /// assert_eq!(err.note(), Some("m + s"));
+    /// # }
+    /// ```
+    pub fn eval_detailed(&self, expr: &str) -> Result<EvalResult, Diagnostic> {
+        let res = self
+            .eval_located(expr)
+            .map_err(|located| diagnostic(located, expr))?;
+        Ok(self.apply_output_settings(res, expr))
+    }
+
+    fn eval_located(
+        &self,
+        expr: &str,
+    ) -> Result<EvalResult, crate::evaluation::parser::ast::Located> {
+        let res = crate::evaluation::parser::evaluate_located(
             &self.tokens,
             &self.units,
             Some(&self.variables),
             expr,
-            config,
+            EvalConfig::from(self),
         )?;
+        Ok(self.finish_date(res))
+    }
+
+    /// Applies the engine's date format and timezone to a date result.
+    fn finish_date(&self, mut res: EvalResult) -> EvalResult {
         if let EvalResult::Date(ref mut d) = res {
             if !d.has_explicit_format() {
                 d.format = self.date_format;
@@ -732,7 +820,81 @@ impl Abacus {
                 d.timezone = self.default_timezone.clone();
             }
         }
-        Ok(res)
+        res
+    }
+
+    /// Parses an expression once so it can be evaluated many times with
+    /// [`Abacus::eval_compiled`], e.g. while variables change:
+    ///
+    /// ```rust
+    /// use abacus::Abacus;
+    ///
+    /// let mut calc = Abacus::standard().with_variable("x", 0.0);
+    /// let expr = calc.compile("x^2 + 1").unwrap();
+    /// let ys: Vec<String> = (0..4)
+    ///     .map(|x| {
+    ///         calc.set_variable("x", f64::from(x));
+    ///         calc.eval_compiled(&expr).unwrap().to_display()
+    ///     })
+    ///     .collect();
+    /// assert_eq!(ys, ["1", "2", "5", "10"]);
+    /// ```
+    ///
+    /// Which names are variables and which units exist is decided when compiling; if the engine
+    /// has changed in a way that affects that since (new variable names, units, operators or
+    /// settings), or the expression contains date literals (which depend on the current date),
+    /// [`Abacus::eval_compiled`] re-reads the source, so the result is always the same as
+    /// [`Abacus::eval`] would give.
+    pub fn compile(&self, expr: &str) -> Result<Expr, Diagnostic> {
+        let config = EvalConfig::from(self);
+        let lazy_now = std::cell::OnceCell::new();
+        let compiled = crate::evaluation::parser::compile(
+            &self.tokens,
+            &self.units,
+            Some(&self.variables),
+            expr,
+            &config,
+            &lazy_now,
+        )
+        .map_err(|located| diagnostic(located, expr))?;
+        Ok(Expr {
+            source: expr.into(),
+            compiled: Arc::new(compiled),
+            engine_id: self.engine_id,
+            generation: self.generation,
+        })
+    }
+
+    /// Evaluates a compiled expression with the engine's current variables and settings and
+    /// applies its output settings, exactly as [`Abacus::eval`] does for the source text.
+    pub fn eval_compiled(&self, expr: &Expr) -> Result<EvalResult, AbacusError> {
+        let res = self.eval_compiled_unformatted(expr)?;
+        Ok(self.apply_output_settings(res, &expr.source))
+    }
+
+    /// [`Abacus::eval_compiled`] without output settings (see [`Abacus::eval_unformatted`]).
+    pub fn eval_compiled_unformatted(&self, expr: &Expr) -> Result<EvalResult, AbacusError> {
+        if expr.engine_id != self.engine_id
+            || expr.generation != self.generation
+            || expr.compiled.has_dates
+        {
+            return self.eval_unformatted(&expr.source);
+        }
+        let mut config = EvalConfig::from(self);
+        if config.anchor_date.is_some() {
+            config.anchor_date = Some(Date::reference_now(
+                config.anchor_date.as_ref(),
+                config.default_timezone.as_ref(),
+            ));
+        }
+        let res = crate::evaluation::parser::run(
+            &expr.compiled,
+            &self.units,
+            Some(&self.variables),
+            &config,
+        )
+        .map_err(|located| located.into_inner().error)?;
+        Ok(self.finish_date(res))
     }
 
     /// Evaluates an expression and applies this instance's output settings: decimal places,
@@ -887,18 +1049,22 @@ impl Abacus {
 
     // Registry functions for units & tokens
     pub fn register_unit(&mut self, alias: &str, unit: Unit) {
+        self.changed();
         self.units.insert_unit(alias, Arc::from(unit));
     }
 
     pub fn register_binop_token(&mut self, op: BinaryOp) {
+        self.changed();
         self.tokens.register_binary_operator(op.alias, op);
     }
 
     pub fn register_unop_token(&mut self, op: UnaryOp) {
+        self.changed();
         self.tokens.register_unary_operator(op.alias, op);
     }
 
     pub fn register_function_token(&mut self, op: FunctionOp) {
+        self.changed();
         self.tokens.register_function_operator(op.name, op);
     }
 
@@ -907,6 +1073,35 @@ impl Abacus {
     pub fn shared() -> &'static Self {
         &STANDARD_ABACUS
     }
+}
+
+/// An expression parsed by [`Abacus::compile`], for repeated evaluation with
+/// [`Abacus::eval_compiled`]. Cheap to clone.
+#[derive(Debug, Clone)]
+pub struct Expr {
+    source: Box<str>,
+    compiled: Arc<crate::evaluation::parser::Compiled>,
+    engine_id: u64,
+    generation: u64,
+}
+
+impl Expr {
+    /// The expression's source text.
+    #[must_use]
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.source)
+    }
+}
+
+fn diagnostic(located: crate::evaluation::parser::ast::Located, source: &str) -> Diagnostic {
+    let inner = located.into_inner();
+    Diagnostic::new(inner.error, inner.span, source).with_note(inner.note)
 }
 
 /// The process-wide standard `Abacus` instance used by [`eval`] and [`Abacus::shared`].

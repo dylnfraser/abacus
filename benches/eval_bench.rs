@@ -108,6 +108,27 @@ fn bench_mixed_expressions(c: &mut Criterion) {
     group.finish();
 }
 
+/// Repeated evaluation of one expression: parsed once with `compile`, versus `eval` each time.
+fn bench_compiled(c: &mut Criterion) {
+    let mut group = c.benchmark_group("compiled");
+    let mut calc = Abacus::standard().with_variable("x", 1.0);
+    for &(name, src) in &[
+        ("polynomial", "3x^2 + 2x + 1"),
+        ("units", "x * 9.81 m/s^2 * 2 kg in N"),
+        ("stats", "mean(x, 2, 3, 4, 5)"),
+    ] {
+        let expr = calc.compile(src).expect("compiles");
+        group.bench_function(format!("{name}/eval"), |b| {
+            b.iter(|| black_box(calc.eval(black_box(src)).expect("evaluates")))
+        });
+        group.bench_function(format!("{name}/compiled"), |b| {
+            b.iter(|| black_box(calc.eval_compiled(black_box(&expr)).expect("evaluates")))
+        });
+        calc.set_variable("x", 2.0);
+    }
+    group.finish();
+}
+
 fn bench_construction(c: &mut Criterion) {
     // Warm the shared standard tables so this measures per-instance construction.
     black_box(Abacus::standard());
@@ -125,6 +146,7 @@ criterion_group!(
     bench_complex_expressions,
     bench_derived_units,
     bench_mixed_expressions,
+    bench_compiled,
     bench_construction
 );
 criterion_main!(benches);

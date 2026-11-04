@@ -534,6 +534,25 @@ fn command_line_examples() {
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "error: cannot perform operation on incompatible dimensions (in `1 m + 1 s`)\n"
+        "error: cannot perform operation on incompatible dimensions\n  1 m + 1 s\n      ^\n  note: m + s\n"
+    );
+}
+
+#[cfg(feature = "units")]
+#[test]
+fn compiled_expressions_and_diagnostics() {
+    let mut calc = Abacus::standard().with_variable("t", 0.0);
+    let height = calc.compile("20 m/s * t - 0.5 * 9.81 m/s^2 * t^2").unwrap();
+    let mut heights = Vec::new();
+    for t in [0.0, 1.0, 2.0] {
+        calc.set_variable("t", abacus::Value::new(t, calc.units().unit("s").unwrap()));
+        heights.push(calc.eval_compiled(&height).unwrap().to_display());
+    }
+    assert_eq!(heights, ["0 m", "15.095 m", "20.38 m"]);
+
+    let err = Abacus::standard().eval_detailed("5 m + 3 s").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "cannot perform operation on incompatible dimensions\n  5 m + 3 s\n      ^\n  note: m + s"
     );
 }

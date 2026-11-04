@@ -4,7 +4,7 @@ Abacus is a unit-aware mathematical evaluation engine written in Rust. It provid
 
 ## Features
 
-- **Pratt Parser** - Operator precedence, grouping, unary/binary/postfix operators, implicit multiplication (`5(2 + 3)`, `2 sqrt(9 m^2)`), compound measurements (`5 ft 3 in`, `1 h 30 min`), dot property access, and `as` / `in` / `to` conversions. Lexing is linear in the input length, and recursion is bounded by a configurable depth limit plus a stack-headroom guard.
+- **Pratt Parser** - Operator precedence, grouping, unary/binary/postfix operators, implicit multiplication (`5(2 + 3)`, `2 sqrt(9 m^2)`), compound measurements (`5 ft 3 in`, `1 h 30 min`), dot property access, and `as` / `in` / `to` conversions. Expressions parse to a syntax tree that can be compiled once and evaluated many times, and errors point at the offending part of the input. Lexing is linear in the input length, and recursion is bounded by a configurable depth limit plus a stack-headroom guard.
 - **Units & Dimensions** - SI base & derived, US customary, imperial, astronomical, nautical, CGS physics, engineering (cal, BTU, hp, psi, kWh), storage, typography, and historical units. Dimensions are fixed-point exponents (`[i32; 9]`, scaled by 27720 so any fraction with denominator ≤ 12 is exact) with checked arithmetic, so overflow is an error rather than a wrong answer.
 - **Interval Arithmetic** - Bracket (`[1, 10]`) and range (`1..10`) syntax with physical units. Bounds are rounded outward so results enclose the exact result of each operation; division by an interval containing zero yields `[-inf, inf]`, and even powers of intervals crossing zero are handled.
 - **Dates & Natural Relative Time** - Dates (`07-08-2026`, `2026-08-07`), times (`15:30:00`, `3:30 PM`, `3 PM`), timezones (`UTC`, `EST`, `+02:00`, `+0530`), calendar month/year durations, and natural language (`last thursday at 3pm + 2 weeks`, `today at 12 to 1`). `now`/`today` use the local timezone, read from `TZ` / the system zoneinfo with no extra dependencies.
@@ -69,6 +69,36 @@ fn main() {
 ```
 
 Numbers print in their shortest round-trip form, except that float noise in the last couple of bits is hidden (`0.1 + 0.2` prints `0.3`, `5 lb to kg` prints `2.26796185 kg`). Interval bounds always print exactly, so outward rounding stays visible: `[0.1, 0.1] + [0.2, 0.2]` is `[0.3, 0.30000000000000004]`.
+
+### Compiled Expressions & Diagnostics
+
+Parse an expression once with `compile` and evaluate it repeatedly with `eval_compiled`. It sees the engine's current variable values and settings, and is several times faster than re-evaluating the text:
+
+```rust
+use abacus::Abacus;
+
+let mut calc = Abacus::standard().with_variable("t", 0.0);
+let height = calc.compile("20 m/s * t - 0.5 * 9.81 m/s^2 * t^2").unwrap();
+for t in [0.0, 1.0, 2.0] {
+    calc.set_variable("t", abacus::Value::new(t, calc.units().unit("s").unwrap()));
+    println!("{}", calc.eval_compiled(&height).unwrap()); // 0 m, 15.095 m, 20.38 m
+}
+```
+
+A compiled expression always gives the same result as `eval` on its source: if the engine changed in a way that affects how the text is read (new variable names, units, operators or settings), or the expression contains date literals, it is re-read from the source.
+
+`eval_detailed` (and `eval_mut_detailed`) return a `Diagnostic` that locates the error; its `Display` points at it:
+
+```rust
+use abacus::Abacus;
+
+let err = Abacus::standard().eval_detailed("5 m + 3 s").unwrap_err();
+println!("{err}");
+// cannot perform operation on incompatible dimensions
+//   5 m + 3 s
+//       ^
+//   note: m + s
+```
 
 ### Engine Configuration
 
@@ -523,7 +553,10 @@ $ abacus -- "-5 + 2"      # use -- before an expression starting with '-'
 -3
 
 $ abacus "1 m + 1 s"; echo $?
-error: cannot perform operation on incompatible dimensions (in `1 m + 1 s`)
+error: cannot perform operation on incompatible dimensions
+  1 m + 1 s
+      ^
+  note: m + s
 1
 ```
 

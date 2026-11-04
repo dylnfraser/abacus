@@ -134,13 +134,14 @@ fn run_demo(calc: &Abacus) -> bool {
 
 /// Evaluates one expression, printing the result to stdout or the error to stderr.
 fn eval_one(calc: &mut Abacus, expr: &str) -> bool {
-    match calc.eval_mut(expr) {
+    match calc.eval_mut_detailed(expr) {
         Ok(res) => {
             out!("{}", calc.format_result(&res));
             true
         }
-        Err(err) => {
-            eprintln!("error: {err} (in `{expr}`)");
+        Err(diagnostic) => {
+            // The diagnostic shows the expression with a caret under the problem.
+            eprintln!("error: {diagnostic}");
             false
         }
     }
