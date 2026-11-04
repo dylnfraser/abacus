@@ -153,23 +153,36 @@ fn recursion_depth_setter_is_clamped() {
     );
 }
 
+fn nested_inputs(n: usize) -> [String; 6] {
+    [
+        format!("{}1{}", "(".repeat(n), ")".repeat(n)),
+        format!("{}1{}", "sqrt(".repeat(n), ")".repeat(n)),
+        format!("{}1{}", "max(".repeat(n), ")".repeat(n)),
+        format!("{}1{}", "[".repeat(n), ", 2]".repeat(n)),
+        format!("{}1", "2^".repeat(n)),
+        format!("{}1", "-".repeat(n)),
+    ]
+}
+
 #[test]
 fn deep_nesting_never_overflows_a_small_thread_stack() {
     let calc = Abacus::standard().with_max_recursion_depth(usize::MAX);
     let handle = std::thread::Builder::new()
         .stack_size(2 * 1024 * 1024)
         .spawn(move || {
-            for n in [255usize, 6_000] {
-                let inputs = [
-                    format!("{}1{}", "(".repeat(n), ")".repeat(n)),
-                    format!("{}1{}", "sqrt(".repeat(n), ")".repeat(n)),
-                    format!("{}1{}", "max(".repeat(n), ")".repeat(n)),
-                    format!("{}1{}", "[".repeat(n), ", 2]".repeat(n)),
-                    format!("{}1", "2^".repeat(n)),
-                    format!("{}1", "-".repeat(n)),
-                ];
-                for input in inputs {
-                    assert!(calc.eval(&input).is_err());
+            // Below the depth cap, whether nesting is rejected depends on frame sizes (the
+            // stack-budget guard trips in debug builds but not in release), so only require that
+            // it doesn't crash. Above the cap it must always be an error.
+            for input in nested_inputs(255) {
+                let _ = calc.eval(&input);
+            }
+            // 600 is past the cap even for `-` runs, which lex as `--` pairs (one level each).
+            for n in [600usize, 6_000] {
+                for input in nested_inputs(n) {
+                    assert!(
+                        calc.eval(&input).is_err(),
+                        "nesting {n} accepted: {input:.20}…"
+                    );
                 }
             }
         })
