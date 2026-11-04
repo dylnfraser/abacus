@@ -16,14 +16,14 @@ as -02-30	OK -32	OK -32
 8₪7₺	OK 56 ILS*TRY	OK 56 ILS*TRY
 m^274 billion[2, 3]	OK [2 m^274*billion, 3 m^274*billion]	OK [2 m^274*billion, 3 m^274*billion]
 - -1 kmph -0	OK 1 kmph	ERR IncompatibleDimensions
-after until 2026-09-21	OK September 21, 2026 09:30:00	OK September 21, 2026 09:30:00
+after until 2026-09-21	OK September 21, 2026 09:30:00 UTC	OK September 21, 2026 09:30:00 UTC
 -1000 sqrt seconds	OK -1000 s^0.5	OK -1000 s^0.5
-1 Jun	OK June 1, 2026	OK June 1, 2026
+1 Jun	OK June 1, 2026 UTC	OK June 1, 2026 UTC
 business_days 20%	OK 0.2 business_days	OK 0.2 business_days
 linreg_slope monday	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 )hypgeompdfkBphi^2normcdf	ERR UnknownUnit("hypgeompdfkBphi")	ERR UnknownUnit("hypgeompdfkBphi")
 GB 1..1	OK 1 GB..1 GB	OK 1 GB..1 GB
-August 7, 2026	OK August 7, 2026	OK August 7, 2026
+August 7, 2026	OK August 7, 2026 UTC	OK August 7, 2026 UTC
 mean $500	OK $500	OK $500
 clamp m^100000 linreg_predict unknown_var_name -10 less UTC GB after	ERR ExponentLimitExceeded	ERR ExponentLimitExceeded
 +((in <o	ERR UnexpectedCharacter('<')	ERR UnexpectedCharacter('<')
@@ -162,7 +162,7 @@ quintillioneuromax(°F^hour	ERR UnknownFunction("quintillioneuromax")	ERR Unknow
 !!( [2, 4])0--	OK [-6.204484017332394e23, -2]	OK [-6.204484017332394e23, -2]
 sqrt 1st*m	OK 1 st^0.5*m	OK 1 st^0.5*m
 range + %	OK 0%	OK 0%
-2027-09-5 +5 mos	OK February 5, 2028	OK February 5, 2028
+2027-09-5 +5 mos	OK February 5, 2028 UTC	OK February 5, 2028 UTC
 UTC 2	OK 2 UTC	OK 2 UTC
 quadrillion 2	OK 2 quadrillion	OK 2 quadrillion
 -08-2026 m^3 meters year	OK -2034 m^4*yr	ERR IncompatibleDimensions
@@ -179,7 +179,7 @@ pi  @0 @06	ERR InvalidDate("invalid date format: '0'")	ERR InvalidDate("invalid 
 3 /(rad $3 m^1 ^2) /(rad 1 m^1 m^2) (rad 1 m^2)	OK 1 1/$*rad*m^3	OK 1 1/$*rad*m^3
 moe(0m,m, 1 moe(m, 1mm ,% ))	OK 1.4286238320140716 m	OK 1.4286238320140716 m
 R$€R$€b 0.52	OK 0.52 BRL^2*EUR^2*b	OK 0.52 BRL^2*EUR^2*b
-September 1, 2026	OK September 1, 2026	OK September 1, 2026
+September 1, 2026	OK September 1, 2026 UTC	OK September 1, 2026 UTC
 binomcdf(07, 2026-08-07 5)	ERR UnclosedParen	ERR UnclosedParen
 min $1 smoot abs	ERR UnexpectedEnd	ERR UnexpectedEnd
 $5 weeks	OK 5 $*wk	OK 5 $*wk
@@ -190,7 +190,7 @@ s  --5	OK 6 s	ERR IncompatibleDimensions
 ft-6	OK -5 ft	ERR IncompatibleDimensions
 pica GBP TiB	OK 1 pica*GBP*TiB	OK 1 pica*GBP*TiB
 -6 -08-01	OK -15	OK -15
-bar tdy	ERR UnexpectedToken("October 21, 2026")	ERR UnexpectedToken("October 21, 2026")
+bar tdy	ERR UnexpectedToken("October 21, 2026 UTC")	ERR UnexpectedToken("October 21, 2026 UTC")
 9 bar	OK 9 bar	OK 9 bar
 0 °C sin 2	OK 0 °C	OK 0 °C
 range(0m .. 99 m)	OK 99 m	OK 99 m
@@ -505,7 +505,7 @@ poissonpdf( 252,11)	OK 2.355270491384268e-91	OK 2.355270491384268e-91
 [m,m/m]	OK [1 m, 1 m]	ERR IncompatibleDimensions
 chisqcdf(1e5, 1e5)	OK 0.5005947081047915	OK 0.5005947081047915
 -2 e sterling median -40 !	OK 4.435775376029549e48 GBP	OK 4.435775376029549e48 GBP
-today at 20	OK October 21, 2026 20:00:00	OK October 21, 2026 20:00:00
+today at 20	OK October 21, 2026 20:00:00 UTC	OK October 21, 2026 20:00:00 UTC
 $1 -08-07	OK -$14	ERR IncompatibleDimensions
 + atm 20%	OK 0.2 atm	OK 0.2 atm
 linreg(1 h, 2 h, mi, 12 mi)	OK { intercept: -10 mi, mean_x: 1.5 h, mean_y: 6.5 mi, r: 1, r2: 1, slope: 11 mi/h }	OK { intercept: -10 mi, mean_x: 1.5 h, mean_y: 6.5 mi, r: 1, r2: 1, slope: 11 mi/h }
@@ -559,7 +559,7 @@ s^2 kg more than€5	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 €20 days	OK 20 EUR*d	OK 20 EUR*d
 1e -08-2026  as  PER hr	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 max 5 max(45tan(45) 1 )	OK 364.4494178723688	OK 225
-second after	OK October 21, 2026 09:30:01	OK October 21, 2026 09:30:01
+second after	OK October 21, 2026 09:30:01 UTC	OK October 21, 2026 09:30:01 UTC
 $57.50	OK $57.50	OK $57.50
 corr h	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 1e ZInterval 2026-08-07 secs	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
@@ -682,7 +682,7 @@ gross + pi PI -100 atm	OK -98.93146108054799 atm	ERR IncompatibleDimensions
 100m trillion 10%	OK 10 m*trillion	OK 10 m*trillion
 in quintillion 20% quid $85	OK 17 quintillion*GBP*$	OK 17 quintillion*GBP*$
 date(2,.0, 5)	ERR InvalidDate("date(): month 0 is out of range 1..=12")	ERR InvalidDate("date(): month 0 is out of range 1..=12")
-07-08-1627 to UTC	OK August 7, 1627 04:56:00 UTC	OK August 7, 1627 04:56:00 UTC
+07-08-1627 to UTC	OK August 7, 1627 UTC	OK August 7, 1627 UTC
 m^273,sinmoremean(-3	ERR UnknownFunction("sinmoremean")	ERR UnknownFunction("sinmoremean")
 linreg_slope Da	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 --5 m	OK 4 m	OK 4 m
@@ -696,7 +696,7 @@ until-08-07workdays	ERR EvaluationError("expected a date after 'until'")	ERR Eva
  ago mode -08-01 ft %	OK -8.01 ft	ERR IncompatibleDimensions
 m^300 +0	OK 1 m^300	ERR IncompatibleDimensions
 $0per in $50 per in rs$	OK 0 rs*$	OK 0 rs*$
-before business_days	OK October 20, 2026 09:30:00	OK October 20, 2026 09:30:00
+before business_days	OK October 20, 2026 09:30:00 UTC	OK October 20, 2026 09:30:00 UTC
 3.520%	OK 3.52%	OK 3.52%
 in / -0..1.2/  -0..1.2 / -1.	OK -inf in..-0.6944444444444443 in	OK -inf in..-0.6944444444444443 in
 0to Da 6 s	OK 0 Da*s	OK 0 Da*s
@@ -733,7 +733,7 @@ sign mph -08-07	OK -14	OK -14
 million pc	OK 1 million*pc	OK 1 million*pc
 std(0,°)	OK 0.01234134149488435	OK 0.01234134149488435
 $180000	OK $180000	OK $180000
-2 feb	OK February 2, 2026	OK February 2, 2026
+2 feb	OK February 2, 2026 UTC	OK February 2, 2026 UTC
 + 2-07-2...2006-082 to 1+ 2..17-003-82 to 1GB + 2.-8	OK -89 GB..-87.2006 GB	ERR IncompatibleDimensions
 hr minute	OK 0.016666666666666666 h^2	OK 0.016666666666666666 h^2
 1m/m%1%-10-1m/m%1-10--0-5-0-5-8	OK -37.99	OK -37.99
@@ -780,7 +780,7 @@ date(2026, 8, 7, 10, billion	ERR UnclosedParen	ERR UnclosedParen
 $1 atm	OK 1 $*atm	OK 1 $*atm
 last friday of sqrt 2026	ERR IncompatibleOperatorType("cannot perform operator 'of' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator 'of' on date and scalar")
 workdays deg	OK 1 workdays*deg	OK 1 workdays*deg
-075608month+0:0	OK June 21, 8327	OK June 21, 8327
+075608month+0:0	OK June 21, 8327 UTC	OK June 21, 8327 UTC
 1 m in inches	OK 39.37007874015748 in	OK 39.37007874015748 in
 smoot * until m/s^2	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 1:0/in meters	ERR IncompatibleOperatorType("cannot perform operator '/' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator '/' on date and scalar")
@@ -829,7 +829,7 @@ E/ km	OK 2.718281828459045 1/km	OK 2.718281828459045 1/km
 €20 ly	OK 20 EUR*ly	OK 20 EUR*ly
 mean asin(0)  $2 asin(1) to $ million	OK 0 $*million	OK 0 $*million
 e-19 EST 3 s	OK -54.28171817154095 EST^2	ERR IncompatibleDimensions
-2026-02-1 +5 mo	OK July 1, 2026	OK July 1, 2026
+2026-02-1 +5 mo	OK July 1, 2026 UTC	OK July 1, 2026 UTC
 log2(0% 3((((t(((((((((((((((((((((((((((((((((sqrt(((((((((((((((((((((((	ERR RecursionLimitExceeded	ERR RecursionLimitExceeded
 -1000 $ 1°^3/5 	OK -200 $*°^3	OK -200 $*°^3
 $500 [-1,0]	OK [-$500, $0]	OK [-$500, $0]
@@ -895,7 +895,7 @@ thousands-tau	OK 0.9937168146928205 thousand	OK 0.9937168146928205 thousand
 quarterTIntervalmonthshmillion	ERR UnknownUnit("quarterTIntervalmonthshmillion")	ERR UnknownUnit("quarterTIntervalmonthshmillion")
  ^2^)0@28TTe@	ERR InvalidDate("invalid date format: '28TTe'")	ERR InvalidDate("invalid date format: '28TTe'")
 -6-33 days-2	OK -41 d	ERR IncompatibleDimensions
-5-08-0226 + 2 work days	OK August 8, 0226	OK August 8, 0226
+5-08-0226 + 2 work days	OK August 8, 0226 UTC	OK August 8, 0226 UTC
 m^6/mo^5 0	OK 0 m^6/mo^5	OK 0 m^6/mo^5
 hour euro	OK 1 h*EUR	OK 1 h*EUR
 2500000000000	OK 2500000000000	OK 2500000000000
@@ -929,7 +929,7 @@ bday $80	OK 80 bdays*$	OK 80 bdays*$
 cm = 10$m  m^-15 m  m^-1	ERR UnexpectedCharacter('=')	ERR UnexpectedCharacter('=')
  until smoot	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 +++2in +++3in++ mm	OK 7.039370078740157 in	OK 7.039370078740157 in
-August 11, 2026	OK August 11, 2026	OK August 11, 2026
+August 11, 2026	OK August 11, 2026 UTC	OK August 11, 2026 UTC
 mm $5 -01-01	OK 3 mm*$	ERR IncompatibleDimensions
 -08-2026 of 22t of 2s of 2ys*0t of m/m	OK -8 t^2*s*ys	ERR IncompatibleDimensions
 [1 m m,2phi Chi2Test [2phi m,!4 m]	ERR UnclosedBracket	ERR UnclosedBracket
@@ -941,7 +941,7 @@ TiB-01-01	OK -1 TiB	ERR IncompatibleDimensions
 million$100	OK 100 million*$	OK 100 million*$
 +$off @2garbage0$2  @  	ERR InvalidDate("invalid date format: '2garbage0$2'")	ERR InvalidDate("invalid date format: '2garbage0$2'")
 range(0°C,°C)	OK 1 K	OK 1 K
-day before	OK October 20, 2026 09:30:00	OK October 20, 2026 09:30:00
+day before	OK October 20, 2026 09:30:00 UTC	OK October 20, 2026 09:30:00 UTC
 bdays $5miles	OK 5 bdays*$*mi	OK 5 bdays*$*mi
 deg m	OK 1 deg*m	OK 1 deg*m
  m^3	OK 1 m^3	OK 1 m^3
@@ -973,7 +973,7 @@ percent dozens kg £25	OK 0.25 dozen*kg*GBP	OK 0.25 dozen*kg*GBP
 $5 till m^274 -02-30 dollar	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 factoTIntervalStatsrial(3)	ERR UnknownFunction("factoTIntervalStatsrial")	ERR UnknownFunction("factoTIntervalStatsrial")
 -10nPr	ERR UnexpectedEnd	ERR UnexpectedEnd
-07-08-2026 -+ 4 business days	OK August 3, 2026	OK August 3, 2026
+07-08-2026 -+ 4 business days	OK August 3, 2026 UTC	OK August 3, 2026 UTC
 tmr(1m/s) tmr(0m^9 -6-3	ERR UnexpectedToken("(")	ERR UnexpectedToken("(")
  in  5 m	OK 5 m	OK 5 m
 99.8 m/s^.8 m/s^2	OK 99.8 m^2/s^2.8	OK 99.8 m^2/s^2.8
@@ -1019,9 +1019,9 @@ rad bdays	OK 1 rad*bdays	OK 1 rad*bdays
 km m^2 pc -08-01 --5	OK -0.000003 km^3*pc	ERR IncompatibleDimensions
 max 5 max(max m^-6 max(45tan(45) 45tan(45) 1 )	ERR UnclosedParen	ERR UnclosedParen
 °F --[1, 10144]	OK [1.9999999999998521 °F, 10145 °F]	OK [1.9999999999998521 °F, 10145 °F]
-2026-08-07 10:30:00 + 3 hours	OK August 7, 2026 13:30:00	OK August 7, 2026 13:30:00
+2026-08-07 10:30:00 + 3 hours	OK August 7, 2026 13:30:00 UTC	OK August 7, 2026 13:30:00 UTC
 1e999	ERR InvalidNumber("1e999")	ERR InvalidNumber("1e999")
-new year's	OK January 1, 2027	OK January 1, 2027
+new year's	OK January 1, 2027 UTC	OK January 1, 2027 UTC
 pi-0-07-2026kmpoissonpdf	ERR InvalidDate("'0-07-2026' is not a valid calendar date")	ERR InvalidDate("'0-07-2026' is not a valid calendar date")
 linreg(1 s, 2 s, 3 s,s,billions 10 m, 20 m, 30 m, 40 m).r	OK -0.5222329685634041	OK -0.5222329685634041
 ..2026-08-070pilb(euromonth	ERR UnknownFunction("pilb")	ERR UnknownFunction("pilb")
@@ -1126,7 +1126,7 @@ sin( deg deg)	OK 0.0003046174150757102	OK 0.0003046174150757102
 $100 billion m^6 tau	OK 628318530717.9586 $*m^6	OK 628318530717.9586 $*m^6
  -3 *log10 0 m	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 1 m^250 * range m^250	OK 0 m^500	OK 0 m^500
-1 Jul	OK July 1, 2026	OK July 1, 2026
+1 Jul	OK July 1, 2026 UTC	OK July 1, 2026 UTC
 quintillion	OK 1 quintillion	OK 1 quintillion
 invt(1%%%%%%,01)	OK -318309886183.7902	OK -318309886183.7902
 PI 3 days	OK 9.42477796076938 d	OK 9.42477796076938 d
@@ -1143,7 +1143,7 @@ tmoe(15 m, 25)	OK 6.191695684884076 m	OK 6.191695684884076 m
 2.26796185 kg	OK 2.26796185 kg	OK 2.26796185 kg
  quadrillion s	OK 1 quadrillion*s	OK 1 quadrillion*s
 3/%0-°C^2	ERR AffineUnitOperation("exponentiate")	ERR AffineUnitOperation("exponentiate")
-easter	OK March 28, 2027	OK March 28, 2027
+easter	OK March 28, 2027 UTC	OK March 28, 2027 UTC
 $3 $85 day	OK 255 $^2*d	OK 255 $^2*d
 3 hours before today at 5pm to to 5pm in hours	ERR EvaluationError("cannot convert a date to 'h': expected a timezone or a date (subtract dates to get a duration)")	ERR EvaluationError("cannot convert a date to 'h': expected a timezone or a date (subtract dates to get a duration)")
 1e16 log10 2 - 1e16	OK -6989700043360188	OK -6989700043360188
@@ -1205,7 +1205,7 @@ mean(0 m^273 12 m)	OK 0 m^274	OK 0 m^274
 miles inches	OK 0.000015782828282828283 mi^2	OK 0.000015782828282828283 mi^2
 m billions m,m, 01,2 m)	ERR UnexpectedToken(",")	ERR UnexpectedToken(",")
 5m^-5 m^-6	OK 5 1/m^11	OK 5 1/m^11
-1 aug	OK August 1, 2026	OK August 1, 2026
+1 aug	OK August 1, 2026 UTC	OK August 1, 2026 UTC
  -1m/mm/-00..2 / -1m/mm/ -1m/m/m/m	OK -inf 1/mm^6..-5e-13 1/mm^6	OK -inf 1/mm^6..-5e-13 1/mm^6
 5 % +3	OK 2	OK 2
 40 as % of 200	OK 20%	OK 20%
@@ -1273,7 +1273,7 @@ mi/h  point	OK 1 mi*point/h	OK 1 mi*point/h
 days  ys 44052	OK 44052 d*ys	OK 44052 d*ys
 1^ [6, 7]	OK [1, 1]	OK [1, 1]
 0. m^4	OK 0 m^4	OK 0 m^4
-1 april	OK April 1, 2026	OK April 1, 2026
+1 april	OK April 1, 2026 UTC	OK April 1, 2026 UTC
 EST EST cos  until  year -6 m^0	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 m^274[10mm^22, 3]	OK [3 m^274*mm^22, 10 m^274*mm^22]	ERR IncompatibleDimensions
 %more than $0	OK $0	OK $0
@@ -1327,7 +1327,7 @@ kHz ..1.-0+ 1..10until 2026-9-01	ERR IntervalInFunction	ERR IncompatibleDimensio
 degC 0* %	OK 0 °C	OK 0 °C
 1as days	OK 1 d	OK 1 d
 kg 60m	OK 60 kg*m	OK 60 kg*m
-end of q1 2027	OK March 31, 2027	OK March 31, 2027
+end of q1 2027	OK March 31, 2027 UTC	OK March 31, 2027 UTC
 L^2501 m^21 h^125 *%%%5%%%%%	ERR ExponentLimitExceeded	ERR ExponentLimitExceeded
 attosecond bdays day_of_week JPY	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 m^6 + linreg_r e-19 is_weekend usd mm 0.	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
@@ -1426,7 +1426,7 @@ propztest($.5, 8 + 5,400).z	ERR IncompatibleDimensions	ERR IncompatibleDimension
 months	OK 1 mo	OK 1 mo
 TInterval(0.2, 0.5, 0.7)	OK [-0.15849428127091075, 1.091827614604244]	OK [-0.15849428127091075, 1.091827614604244]
 [-2, -1/ [0, 2]-20	ERR UnclosedBracket	ERR UnclosedBracket
-$0:3m^53	ERR UnexpectedToken("October 21, 2026 00:03:00")	ERR UnexpectedToken("October 21, 2026 00:03:00")
+$0:3m^53	ERR UnexpectedToken("October 21, 2026 00:03:00 UTC")	ERR UnexpectedToken("October 21, 2026 00:03:00 UTC")
 745.6998715822702 W	OK 745.6998715822702 W	OK 745.6998715822702 W
 [2, 3] * [4,e-193] * [4,  5]	OK [-2854.2257725731147, 60]	OK [-2854.2257725731147, 60]
 $2 €50 meter	OK 100 $*EUR*m	OK 100 $*EUR*m
@@ -1458,7 +1458,7 @@ kilometers kB fm	OK 1 km*kB*fm	OK 1 km*kB*fm
 tmoe(m, :	ERR UnexpectedCharacter(':')	ERR UnexpectedCharacter(':')
 m^09 -12-25 MiB N/m^2 moe	ERR UnexpectedEnd	ERR UnexpectedEnd
 [-2, -1] / [0, m^-1	ERR UnclosedBracket	ERR UnclosedBracket
-before hrs	OK October 21, 2026 08:30:00	OK October 21, 2026 08:30:00
+before hrs	OK October 21, 2026 08:30:00 UTC	OK October 21, 2026 08:30:00 UTC
 -- m	OK 0 m	OK 0 m
 0 m/m ^ e-13	OK -13 1/m^1.718281828459045	ERR IncompatibleDimensions
 N/m^2 m^300 ^ tmr	ERR IncompatibleOperatorType("cannot perform operator '^' on scalar and date")	ERR IncompatibleOperatorType("cannot perform operator '^' on scalar and date")
@@ -1474,7 +1474,7 @@ m^250 --[1,44]	OK [2 m^250, 45 m^250]	OK [2 m^250, 45 m^250]
 (07-08-2026 + 1 bday) in days	ERR EvaluationError("cannot convert a date to 'd': expected a timezone or a date (subtract dates to get a duration)")	ERR EvaluationError("cannot convert a date to 'd': expected a timezone or a date (subtract dates to get a duration)")
 ceil ago 1	OK 1	OK 1
 12+ % +0%+%	ERR UnexpectedToken("%")	ERR UnexpectedToken("%")
-10-2-8276 	OK February 10, 8276	OK February 10, 8276
+10-2-8276 	OK February 10, 8276 UTC	OK February 10, 8276 UTC
 1..3 -100	OK -99..-97	OK -99..-97
 120..2 m^09	OK 2 m^9..120 m^9	ERR IncompatibleDimensions
 TTest hour propztest quid rad/s Chi2Test -08-2026	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
@@ -1524,7 +1524,7 @@ huf	OK 1 HUF	OK 1 HUF
 invt(1e-10, 3)	OK -2225.7692846830923	OK -2225.7692846830923
 10% m^273	OK 0.1 m^273	OK 0.1 m^273
 tdy ^21 m^0 * m^0	ERR IncompatibleOperatorType("cannot perform operator '^' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator '^' on date and scalar")
-16th May 2010	OK May 16, 2010	OK May 16, 2010
+16th May 2010	OK May 16, 2010 UTC	OK May 16, 2010 UTC
 are	OK 1 a	OK 1 a
 deg e-19 day	OK -16.281718171540955 d	ERR IncompatibleDimensions
 sin 1*to to 3:001*in 3:0001*in months deg	ERR IncompatibleOperatorType("cannot perform operator '*' on dates")	ERR IncompatibleOperatorType("cannot perform operator '*' on dates")
@@ -1564,7 +1564,7 @@ days  of 	ERR UnexpectedEnd	ERR UnexpectedEnd
 bar PER irr dollars N/m^2 dollars £5	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 e-19 april	ERR IncompatibleOperatorType("cannot perform operator '-' on scalar and date")	ERR IncompatibleOperatorType("cannot perform operator '-' on scalar and date")
 5in K N/m^2	OK 0.127 K*N/m	OK 0.127 K*N/m
-07-09-2023 +d.2+d+d.26 +d+d.2+d+d.26 +das	OK September 10, 2023 22:04:58	OK September 10, 2023 22:04:58
+07-09-2023 +d.2+d+d.26 +d+d.2+d+d.26 +das	OK September 10, 2023 22:04:58 UTC	OK September 10, 2023 22:04:58 UTC
 cm m^4	OK 100000000 cm^5	OK 100000000 cm^5
 10 weeks 	OK 10 wk	OK 10 wk
 year + 1 workday	OK 1.0027379070069886 yr	OK 1.0027379070069886 yr
@@ -1628,7 +1628,7 @@ ZInterval monday euro bdays m^100000 log2 tau	ERR ExponentLimitExceeded	ERR Expo
 km !	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 sqrt(9 m$4 / s^1)	OK 6 m^0.5*$^0.5/s^0.5	OK 6 m^0.5*$^0.5/s^0.5
 2026-08-07 linreg e yen [ invnorm °C^1 bday	ERR UnexpectedToken("linreg")	ERR UnexpectedToken("linreg")
-2026-03-08 03:30	OK March 8, 2026 03:30:00	OK March 8, 2026 03:30:00
+2026-03-08 03:30	OK March 8, 2026 03:30:00 UTC	OK March 8, 2026 03:30:00 UTC
 per factorial @	ERR UnexpectedCharacter('@')	ERR UnexpectedCharacter('@')
 R$ -08-01	OK -8 BRL	ERR IncompatibleDimensions
 -08-2026 UTC quadrillion an minute	OK -33766666666666676	OK -33766666666666676
@@ -1743,7 +1743,7 @@ tonnes	OK 1 t	OK 1 t
 °F 0	OK 0 °F	OK 0 °F
  fm	OK 1 fm	OK 1 fm
 40 as% of min	OK 66.66666666666666%	OK 66.66666666666666%
-2026-08-07 10:54:49	OK August 7, 2026 10:54:49	OK August 7, 2026 10:54:49
+2026-08-07 10:54:49	OK August 7, 2026 10:54:49 UTC	OK August 7, 2026 10:54:49 UTC
 0meter	OK 0 m	OK 0 m
 1+2m/0	OK inf m	ERR IncompatibleDimensions
 -10-2026 £d	OK -2036 GBP*d	ERR IncompatibleDimensions
@@ -1776,13 +1776,13 @@ m^8%m^8$Qm^6%€	OK 0.0001 m^16*$*Qm^6*EUR	OK 0.0001 m^16*$*Qm^6*EUR
 (3 million + -100 thousand) in million	OK 2.9 million	OK 2.9 million
 -08-01 [1+mm, 3 m] 7	OK [-21008 mm, -22 mm]	ERR IncompatibleDimensions
 100 km/myriad	OK 100 km/myriad	OK 100 km/myriad
-07-08-2026+ 4 business days	OK August 13, 2026	OK August 13, 2026
+07-08-2026+ 4 business days	OK August 13, 2026 UTC	OK August 13, 2026 UTC
 1e-13 m	OK 1e-13 m	OK 1e-13 m
  °C^1	OK 1 °C	OK 1 °C
 max m--	OK 0 m	OK 0 m
 5t of 22t of 2s thousand 2s m^273%	OK 4.4 t^2*s^2*thousand*m^273	OK 4.4 t^2*s^2*thousand*m^273
 $3 -3	OK $0	ERR IncompatibleDimensions
-end of q1	OK March 31, 2026	OK March 31, 2026
+end of q1	OK March 31, 2026 UTC	OK March 31, 2026 UTC
 quantile( m m^4 m, 0.5)quantile(0 m, 0.2)quantile(0.5 m ..  m, 0.5)	OK 0 m^8	OK 0 m^8
 -100 + $2	OK -$98	ERR IncompatibleDimensions
 pound kmph e-19	OK -16.281718171540955 lb*kmph	ERR IncompatibleDimensions
@@ -1927,7 +1927,7 @@ until linreg $500 -1000 TIntervalStats Da	ERR IncompatibleFunctionArguments	ERR 
 03-08-2026 to 12-08m^2-07-085 + 2...1017-003-8	ERR EvaluationError("cannot convert a date to 'm^2': expected a timezone or a date (subtract dates to get a duration)")	ERR IncompatibleDimensions
 $85 JPY / $100	OK 1 JPY	OK 1 JPY
 max-1000-02-30e2	ERR InvalidDate("'1000-02-30' is not a valid calendar date")	ERR InvalidDate("'1000-02-30' is not a valid calendar date")
-in seconds	OK October 21, 2026 09:30:01	OK October 21, 2026 09:30:01
+in seconds	OK October 21, 2026 09:30:01 UTC	OK October 21, 2026 09:30:01 UTC
 euros 	OK 1 EUR	OK 1 EUR
 mi / .. kHz myriad less normcdf at	ERR UnknownUnit("less")	ERR UnknownUnit("less")
 3 percent 12m	OK 0.36 m	OK 0.36 m
@@ -1950,7 +1950,7 @@ mi EST until year propztest seconds dollars	ERR EvaluationError("expected a date
 GiB-6-3-08-07.	OK -23 GiB	ERR IncompatibleDimensions
 day(5-0-0206)	ERR InvalidDate("'5-0-0206' is not a valid calendar date")	ERR InvalidDate("'5-0-0206' is not a valid calendar date")
 m^9 usd	OK 1 m^9*$	OK 1 m^9*$
-19-10-2026 + 4 business days	OK October 23, 2026	OK October 23, 2026
+19-10-2026 + 4 business days	OK October 23, 2026 UTC	OK October 23, 2026 UTC
  in  mA	OK 1 mA	OK 1 mA
 a hundred	OK 100	OK 100
 lninvt(0.975, sun	ERR UnknownFunction("lninvt")	ERR UnknownFunction("lninvt")
@@ -1994,7 +1994,7 @@ $5GiB	OK 5 $*GiB	OK 5 $*GiB
 150 % 25	OK 0	OK 0
 linreg_slope(1 s, 24 s,0 m, 40 m)	OK 1.7391304347826086 m/s	OK 1.7391304347826086 m/s
 UTC min	OK 60 UTC^2	OK 60 UTC^2
-today + 1 year	OK October 21, 2027	OK October 21, 2027
+today + 1 year	OK October 21, 2027 UTC	OK October 21, 2027 UTC
 s^2 inches	OK 1 s^2*in	OK 1 s^2*in
 $85 -20	OK $65	ERR IncompatibleDimensions
 [1++ in/1 m+ 0++++++ in/1 m, 3 m] 	OK [1.1016000000000001 m, 3 m]	ERR IncompatibleDimensions
@@ -2050,7 +2050,7 @@ m^-1% °C^2 from 50)	ERR AffineUnitOperation("exponentiate")	ERR AffineUnitOpera
 max hr $50 m^250	OK 50 h*$*m^250	OK 50 h*$*m^250
 1kB	OK 1 kB	OK 1 kB
 0.tmoepoundstd	ERR UnexpectedToken("cannot access property '.tmoepoundstd' on this result type")	ERR UnexpectedToken("cannot access property '.tmoepoundstd' on this result type")
- 9 sep	OK September 9, 2026	OK September 9, 2026
+ 9 sep	OK September 9, 2026 UTC	OK September 9, 2026 UTC
 10 --1:30--1:3  --1:30--1:3 ---1:3  --1:30--1:3 PST  --1:30--1:30--1:30  --1:30  --1:30--1:30--1:30  --1:30--1:30	ERR IncompatibleOperatorType("cannot perform unary operation on date result")	ERR IncompatibleOperatorType("cannot perform unary operation on date result")
 -08-07 m^-1000	OK -15 1/m^1000	ERR IncompatibleDimensions
 10000 m^2	OK 10000 m^2	OK 10000 m^2
@@ -2071,7 +2071,7 @@ log2(0% 3(((((((((((((((((((((((((((((((((0((((((((((((((((((((((((((30%1-3(	ERR
 Gm^5/m^2 /m^5/	ERR UnexpectedEnd	ERR UnexpectedEnd
 07-.08-2026 to 17-08-20226 in days	OK -2019.08 d	OK -2019.08 d
 °C^1 -10000	OK -9999 °C	ERR IncompatibleDimensions
-2024-02-29	OK February 29, 2024	OK February 29, 2024
+2024-02-29	OK February 29, 2024 UTC	OK February 29, 2024 UTC
 m 3*13 V TiB m .1 m	OK 3.9 m^3*V*TiB	OK 3.9 m^3*V*TiB
 mph m/s^2 @	ERR UnexpectedCharacter('@')	ERR UnexpectedCharacter('@')
 sqrt(9 m$4 invnorm s^1)months	ERR IncompatibleDimensions	ERR IncompatibleDimensions
@@ -2151,7 +2151,7 @@ hundred mean m^0 day second $50	OK 0.0005787037037037037 hundred*d^2*$	OK 0.0005
 thousand m^1 ^5 ^%%%%  * m^0	OK 0.000001 thousand*m^1.0162245912673256	OK 0.000001 thousand*m^1.0162245912673256
 (20 (°C * h in!!in!!!!!in!!s!	ERR UnclosedParen	ERR UnclosedParen
 atan2(1m, ceil m)	OK 0.7853981633974483 rad	OK 45 deg
-@2426-09-07@	OK September 7, 2426	OK September 7, 2426
+@2426-09-07@	OK September 7, 2426 UTC	OK September 7, 2426 UTC
 hour(2:00)	OK 2	OK 2
 pound 0. ft	OK 0 lb*ft	OK 0 lb*ft
 30.436875 d	OK 30.436875 d	OK 30.436875 d
@@ -2159,7 +2159,7 @@ $120 year meter	OK 120 $*yr*m	OK 120 $*yr*m
 till ly m^100000 -09-21 kmph from work dollar of	ERR ExponentLimitExceeded	ERR ExponentLimitExceeded
 h 5 m	OK 5 h*m	OK 5 h*m
 USD $25 tan meter pi	ERR IncompatibleDimensions	ERR IncompatibleDimensions
-07-08-2026 + 4 business days	OK August 13, 2026	OK August 13, 2026
+07-08-2026 + 4 business days	OK August 13, 2026 UTC	OK August 13, 2026 UTC
 -07-2026mean(sterling	ERR UnclosedParen	ERR UnclosedParen
 3.5 m^250 EST mi/h m^300 .. trillion bday	OK 0.0009722222222222221 m^550*mi*bdays..972222222.2222223 m^550*mi*bdays	ERR IncompatibleDimensions
 dollar 1e * max x	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
@@ -2264,7 +2264,7 @@ fortnight $[-e^0,113/8hundred^-2-$)	ERR UnclosedBracket	ERR UnclosedBracket
 0N/m^26-52	OK -52 N/m^26	ERR IncompatibleDimensions
 after until 3 s	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 17-0807-080- 07-07-00-8-8- 07- 07-07-0808- median 07-8--.26!	OK -1743	OK -1743
-trillion tdy max	ERR UnexpectedToken("October 21, 2026")	ERR UnexpectedToken("October 21, 2026")
+trillion tdy max	ERR UnexpectedToken("October 21, 2026 UTC")	ERR UnexpectedToken("October 21, 2026 UTC")
 range °C	OK 0 K	OK 0 K
 mean( propztest lb	ERR UnclosedParen	ERR UnclosedParen
 kB $5	OK 5 kB*$	OK 5 kB*$
@@ -2328,7 +2328,7 @@ km/h PER 3.5	OK 0.28571428571428575 km/h	OK 0.28571428571428575 km/h
 £5kmph	OK 5 GBP*kmph	OK 5 GBP*kmph
 -08-01 m^273	OK -9 m^273	ERR IncompatibleDimensions
 workdays(08-9-2026, 14-08-2027)	OK 243 workdays	OK 243 workdays
-2026-01-1 +2 months	OK March 1, 2026	OK March 1, 2026
+2026-01-1 +2 months	OK March 1, 2026 UTC	OK March 1, 2026 UTC
 $3$5PER$80	OK $0.19	OK $0.19
 [-[-%,2 ]-1[-%,2 billion	ERR UnclosedBracket	ERR UnclosedBracket
 -100 °^2	OK -100 °^2	OK -100 °^2
@@ -2372,7 +2372,7 @@ billion dozens $5 sqrt m/s^2  of  pi	OK 15.707963267948964 billion*dozen*$*m^0.5
 lninvt(0.959, 9095)	ERR UnknownFunction("lninvt")	ERR UnknownFunction("lninvt")
 mi/h iqr $80 $50	OK 0 mi*$^2/h	OK 0 mi*$^2/h
 last thursday at 3pm.hour	OK 15	OK 15
-07/08/2026	OK August 7, 2026	OK August 7, 2026
+07/08/2026	OK August 7, 2026 UTC	OK August 7, 2026 UTC
 thousand e-19	OK 2.6992818284590454 thousand	OK 2.6992818284590454 thousand
 gi	OK 1 gi	OK 1 gi
 $3 million in EUR	OK 2674980 EUR	OK 2674980 EUR
@@ -2411,7 +2411,7 @@ invt(0.97, 10111111111111111111)	OK 1.8807936081512504	OK 1.8807936081512504
 -10000 1e work TTest °C -01-01 e300 business	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 -PropZInt pmt	ERR UnknownUnit("PropZInt")	ERR UnknownUnit("PropZInt")
 - yr	OK -1 yr	OK -1 yr
-mon	OK October 26, 2026	OK October 26, 2026
+mon	OK October 26, 2026 UTC	OK October 26, 2026 UTC
 3 s m^9 /m	OK 3 s*m^8	OK 3 s*m^8
  until  1e height .. e308	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 sum -08-07	OK -15	OK -15
@@ -2429,7 +2429,7 @@ mad(+ m.. 3 m)	OK 0.6666666666666666 m	OK 0.6666666666666666 m
 m^300 pound	OK 1 m^300*lb	OK 1 m^300*lb
 -08-2026 mi/$10 mi/h	OK -210.6 mi^2/$*h	ERR IncompatibleDimensions
 % change from $2 [1,1]/20/1062/0/6/-20/1060/m 62million to $2.5m $2 million yen million to $2.on	ERR IntervalInFunction	ERR IntervalInFunction
- to today	OK October 21, 2026	OK October 21, 2026
+ to today	OK October 21, 2026 UTC	OK October 21, 2026 UTC
 3 million + 500 thousand	OK 3500000	OK 3500000
 3 pV 13 V  V 4 V *1 -1000	OK -844 pV*V^3	ERR IncompatibleDimensions
 -07-2026 ft abs bdays	OK -2033 ft*bdays	ERR IncompatibleDimensions
@@ -2442,7 +2442,7 @@ RON	OK 1 RON	OK 1 RON
 quintillion mm	OK 1 quintillion*mm	OK 1 quintillion*mm
 / 1e r2 fee christmas fv normcdf £5 linreg_se	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 0[1,2]-1 off [-1,0]0/$$$102/$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$15	OK [-5e-324 $^30, 5e-324 $^30]	OK [-5e-324 $^30, 5e-324 $^30]
-4th of july	OK July 4, 2026	OK July 4, 2026
+4th of july	OK July 4, 2026 UTC	OK July 4, 2026 UTC
 °C..°C	OK 1 °C..1 °C	OK 1 °C..1 °C
 L%%%%%%%%trillion%%%%%googol%%%%%%%%%%%%%%%%%% %%%%-%%%%%	OK 9.999999999e-71 L*trillion*googol	OK 9.999999999e-71 L*trillion*googol
 sum mode  in  m^5 feb	ERR UnknownUnit("feb")	ERR UnknownUnit("feb")
@@ -2459,7 +2459,7 @@ $3 @8-202@ 2	ERR InvalidDate("invalid date format: '8-202'")	ERR InvalidDate("in
 00h m^-2/s	OK 0 1/m^2	OK 0 1/m^2
 UTC 2...00+3-08-208	OK -213 UTC..-211 UTC	OK -213 UTC..-211 UTC
 0/5!	OK 0	OK 0
-new years eve	OK December 31, 2026	OK December 31, 2026
+new years eve	OK December 31, 2026 UTC	OK December 31, 2026 UTC
 5%£25%	OK 0.01 GBP	OK 0.01 GBP
 ((2 (1((W (1 (e)^(1/72 e)kHz/7)minute)^7)^7 - (e)^(1/72 e)kHz/4)minute)777777777^7)^7 e	ERR EvaluationError("result overflows the largest representable number (~1.8e308)")	ERR EvaluationError("result overflows the largest representable number (~1.8e308)")
 Da 5 m business_days off $80 max( seconds PI asin	ERR UnexpectedEnd	ERR UnexpectedEnd
@@ -2477,7 +2477,7 @@ m^6 mean meters	OK 1 m^7	OK 1 m^7
 1 - atan atan+ 2% + atan+ 210%+ 2% + atan+ 210%	OK 3.274887213733085	OK 3.274887213733085
 -02-30e	ERR InvalidNumber("30e")	ERR InvalidNumber("30e")
 fortnight $80 secs fm ceil -09-21	OK -741 fortnight*$*s*fm	ERR IncompatibleDimensions
-075661month+0:0	OK November 21, 8331	OK November 21, 8331
+075661month+0:0	OK November 21, 8331 UTC	OK November 21, 8331 UTC
 (1-10-2026(0+	ERR UnclosedParen	ERR UnclosedParen
 50%/ %	OK 0.5 1/%	OK 0.5 1/%
 $120 fv floor km	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
@@ -2497,7 +2497,7 @@ kB tau m^2	OK 6.283185307179586 kB*m^2	OK 6.283185307179586 kB*m^2
 -15!	OK -1307674368000	OK -1307674368000
 sqrt pi point	OK 1.7724538509055159 point	OK 1.7724538509055159 point
 $^atan 0	OK 1	OK 1
-3 PM	OK October 21, 2026 15:00:00	OK October 21, 2026 15:00:00
+3 PM	OK October 21, 2026 15:00:00 UTC	OK October 21, 2026 15:00:00 UTC
 nibbles	OK 1 nibble	OK 1 nibble
 00-0%%%-%%-%	OK 0	OK 0
 andiscountBusinessm^2outlinreg_predictm/s^2-1000TiB	ERR UnknownUnit("andiscountBusinessm")	ERR UnknownUnit("andiscountBusinessm")
@@ -2586,7 +2586,7 @@ monday to Pa	ERR EvaluationError("cannot convert a date to 'Pa': expected a time
 --5e	ERR InvalidNumber("5e")	ERR InvalidNumber("5e")
 christmas off EST mode m/m linreg_r2 millions	ERR IncompatibleOperatorType("cannot perform operator 'off' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator 'off' on date and scalar")
 3 days Da	OK 3 d*Da	OK 3 d*Da
-nov 3	OK November 3, 2026	OK November 3, 2026
+nov 3	OK November 3, 2026 UTC	OK November 3, 2026 UTC
 1 feb in kg	ERR EvaluationError("cannot convert a date to 'kg': expected a timezone or a date (subtract dates to get a duration)")	ERR EvaluationError("cannot convert a date to 'kg': expected a timezone or a date (subtract dates to get a duration)")
 [-5, -1]after e-19	ERR IntervalInFunction	ERR IntervalInFunction
 [%, tdy* mA 5]	ERR IncompatibleOperatorType("cannot perform operator '*' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator '*' on date and scalar")
@@ -2603,14 +2603,14 @@ GHz sqrt	ERR UnexpectedEnd	ERR UnexpectedEnd
  r2- - - -ZInterval 5of 2t	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 km kB	OK 1 km*kB	OK 1 km*kB
 date(1e12, 1, 1)	ERR InvalidDate("date(): year 1000000000000 is out of range -9999..=9999")	ERR InvalidDate("date(): year 1000000000000 is out of range -9999..=9999")
-date(20, 8, 7, 10, 54, 49)	OK August 7, 0020 10:54:49	OK August 7, 0020 10:54:49
+date(20, 8, 7, 10, 54, 49)	OK August 7, 0020 10:54:49 UTC	OK August 7, 0020 10:54:49 UTC
 km 2e0	OK 2 km	OK 2 km
 secs mi  as  million	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 EST mi/h	OK 0.0002777777777777778 mi	OK 0.0002777777777777778 mi
 sqrt-6	ERR EvaluationError("cannot take the square root of a negative value")	ERR EvaluationError("cannot take the square root of a negative value")
 TInterval -10000 EUR	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 after + 5 m mi/h e-13	OK 951.7807546979668 m^2/h	ERR IncompatibleDimensions
-February 28, 2026	OK February 28, 2026	OK February 28, 2026
+February 28, 2026	OK February 28, 2026 UTC	OK February 28, 2026 UTC
 -10 m	OK -10 m	OK -10 m
 -02-30 -- quadrillion 0	OK -32	OK -32
 -08-2026 /2	OK -1021	OK -1021
@@ -2631,11 +2631,11 @@ mA -09-01	OK -9 mA	ERR IncompatibleDimensions
 lninvt(0.956, seconds	ERR UnknownFunction("lninvt")	ERR UnknownFunction("lninvt")
 2t of 2s m-2%m	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 20%$$$$$$$$$$$$$$$$$ €20	OK 4 $^17*EUR	OK 4 $^17*EUR
-2026-08-07 10:00 -3 hours	OK August 7, 2026 07:00:00	OK August 7, 2026 07:00:00
+2026-08-07 10:00 -3 hours	OK August 7, 2026 07:00:00 UTC	OK August 7, 2026 07:00:00 UTC
 m^8 / thousands	OK 1 m^8/thousand	OK 1 m^8/thousand
 m^09 $5 day_of_week christmas 2026-08-07 off 3.5	OK 20.5 m^9*$	ERR IncompatibleDimensions
 [-5, EST 	ERR UnclosedBracket	ERR UnclosedBracket
-December 31, 2026	OK December 31, 2026	OK December 31, 2026
+December 31, 2026	OK December 31, 2026 UTC	OK December 31, 2026 UTC
 20%$$$$$$$$4%$$$$$$$$$$$$*$$$$$$$$$$$$$$$$$$$$42$	OK 0.336 $^41	OK 0.336 $^41
 m^250 pica ^	ERR UnexpectedEnd	ERR UnexpectedEnd
 -1000 m/s^2	OK -1000 m/s^2	OK -1000 m/s^2
@@ -2658,7 +2658,7 @@ ZTest(100 m, 105 m, 15 m, 50).p_value	OK 0.018422125454099013	OK 0.0184221254540
 fv(0.05,1, 00, 1)	OK -1.05	OK -1.05
 sqrt m/s^2	OK 1 m^0.5/s^2	OK 1 m^0.5/s^2
 e-13quadrillion	OK -12999999999999998	OK -12999999999999998
- 2026-9-01	OK September 1, 2026	OK September 1, 2026
+ 2026-9-01	OK September 1, 2026 UTC	OK September 1, 2026 UTC
  in  km/h m^-1[50 mi/h, 0 mi/h]/s	OK [0 mi/h^3, 180000000 mi/h^3]	OK [0 mi/h^3, 180000000 mi/h^3]
 EUR millions	OK 1 EUR*million	OK 1 EUR*million
 EST $120 weeks	OK 72576000 EST^2*$	OK 72576000 EST^2*$
@@ -2809,14 +2809,14 @@ gill	OK 1 gi	OK 1 gi
 [2,s 0]of wk	OK [-5e-324 s^2, 1209600 s^2]	ERR IncompatibleDimensions
 $2phi	OK $3.24	OK $3.24
 dozen$5dozens	OK 60 dozen*$	OK 60 dozen*$
-after 0:3	OK October 21, 2026 00:03:00	OK October 21, 2026 00:03:00
+after 0:3	OK October 21, 2026 00:03:00 UTC	OK October 21, 2026 00:03:00 UTC
 1e bar billions vat -20 e999 £25 km/h	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 5 [1, 3]	OK [5, 15]	OK [5, 15]
 min( 30e2 m .. 2 m)0 m .. min( 30e2 m .. 2 m)	OK 0 m^2..4 m^2	OK 0 m^2..4 m^2
 2(3-08-2026 to 1739900)	ERR EvaluationError("cannot convert a date to '': expected a timezone or a date (subtract dates to get a duration)")	ERR EvaluationError("cannot convert a date to '': expected a timezone or a date (subtract dates to get a duration)")
 -6 lb	OK -6 lb	OK -6 lb
 [1, secs [6,Pa 7]	ERR UnclosedBracket	ERR UnclosedBracket
-dec 2	OK December 2, 2026	OK December 2, 2026
+dec 2	OK December 2, 2026 UTC	OK December 2, 2026 UTC
 L%%%/%% L%%%%%%-07-07%%%%%%/%%%%%%%%%-	ERR UnexpectedEnd	ERR UnexpectedEnd
 max(m,tan(45tan(45) 1 m,5 m)	ERR UnclosedParen	ERR UnclosedParen
 165600 km	OK 165600 km	OK 165600 km
@@ -2854,7 +2854,7 @@ pi  	OK 3.141592653589793	OK 3.141592653589793
 (0-09-01[secs per-------------------------kB-------------+------------------- [-5,1]5/6/205/12026--096/2010-	ERR UnexpectedEnd	ERR UnexpectedEnd
 [1 m, 3 m] +++ in +++++exp+2in ++++++++++%+ 	ERR UnexpectedEnd	ERR UnexpectedEnd
 log2(0% 30%1,m+((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((30%1,3(	ERR RecursionLimitExceeded	ERR RecursionLimitExceeded
- to weeks	OK October 28, 2026 09:30:00	OK October 28, 2026 09:30:00
+ to weeks	OK October 28, 2026 09:30:00 UTC	OK October 28, 2026 09:30:00 UTC
 bday hrs	OK 1 bdays*h	OK 1 bdays*h
 m^2 quadrillion dollar	OK 1 m^2*quadrillion*$	OK 1 m^2*quadrillion*$
 50 m^2	OK 50 m^2	OK 50 m^2
@@ -2862,7 +2862,7 @@ m^2 quadrillion dollar	OK 1 m^2*quadrillion*$	OK 1 m^2*quadrillion*$
 mode atm	OK 1 atm	OK 1 atm
 (% change from 50 to 70) m^274 50%	OK 0.2 m^274	OK 0.2 m^274
 trillion / °C^2 10	ERR AffineUnitOperation("exponentiate")	ERR AffineUnitOperation("exponentiate")
- before  today	OK October 21, 2026	OK October 21, 2026
+ before  today	OK October 21, 2026 UTC	OK October 21, 2026 UTC
 m^250 sterling	OK 1 m^250*GBP	OK 1 m^250*GBP
 $500 °^220%s	OK NaN $*°^220*s	OK NaN $*°^220*s
 +5m	OK 5 m	OK 5 m
@@ -2941,7 +2941,7 @@ asin +second 2	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 10 per m%m^2[1, 3]7	OK [0.7 m, 2.1000000000000005 m]	OK [0.7 m, 2.1000000000000005 m]
 ly	OK 1 ly	OK 1 ly
 hours-07-2026	OK -2032 h	ERR IncompatibleDimensions
- ago monday	OK October 26, 2026	OK October 26, 2026
+ ago monday	OK October 26, 2026 UTC	OK October 26, 2026 UTC
 {expr}: got {got}, expected -0 (rel {rel:e})	ERR UnexpectedCharacter('{')	ERR UnexpectedCharacter('{')
 binomcdf(05, 0.5,binomcdf(05, h 2) 2)	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 1GB..2 / -P	OK -2 GB/P..-1 GB/P	ERR IncompatibleDimensions
@@ -3034,14 +3034,14 @@ $500 -1:30	ERR IncompatibleOperatorType("cannot perform operator '-' on scalar a
 -3 - pc	OK -4 pc	ERR IncompatibleDimensions
 ([1, 3] + [5%,1]0%m	ERR UnclosedParen	ERR UnclosedParen
 m JPY V  V 4 V 1 m	OK 4 m^2*JPY*V^3	OK 4 m^2*JPY*V^3
-meter binomcdf EST christmas	ERR UnexpectedToken("December 25, 2026")	ERR UnexpectedToken("December 25, 2026")
+meter binomcdf EST christmas	ERR UnexpectedToken("December 25, 2026 UTC")	ERR UnexpectedToken("December 25, 2026 UTC")
 Gm^5/m 	OK 1000000000 Gm^4	OK 1000000000 Gm^4
 UTC dozen 2 km mean poissoncdf	ERR UnexpectedEnd	ERR UnexpectedEnd
 median degC billions	OK 1000000000 °C	OK 1000000000 °C
 % km cm JPY minutes -09-21	OK -0.0002999 km^2*JPY*min	ERR IncompatibleDimensions
 s^2 1e	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 max(-01.5 m^-5 m^-12.22)	OK -1.5 1/m^17.22	OK -1.5 1/m^17.22
-easter sunday	OK March 28, 2027	OK March 28, 2027
+easter sunday	OK March 28, 2027 UTC	OK March 28, 2027 UTC
 ($1$0 per day) *GBP ( s )	OK 0 $^2*GBP	OK 0 $^2*GBP
 0 ° £25 ° as 5°F	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 iqr(1 m .. 5m)	OK 2 m	OK 2 m
@@ -3058,7 +3058,7 @@ trillion-01-15	OK 0.999999999984 trillion	OK 0.999999999984 trillion
 m^2  as  pi * pc	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 2 usd $80 --5	OK 165 $^2	ERR IncompatibleDimensions
 52@2026-08-17 €5050:0@	ERR InvalidDate("unexpected trailing input in date: '2026-08-17 €5050:0'")	ERR InvalidDate("unexpected trailing input in date: '2026-08-17 €5050:0'")
-valentines day	OK February 14, 2027	OK February 14, 2027
+valentines day	OK February 14, 2027 UTC	OK February 14, 2027 UTC
 mbar^-510 bday	OK NaN bdays/mbar^510	OK NaN bdays/mbar^510
 ago until EUR -07-2026 dozens quid -12-25 attosecond $120	ERR EvaluationError("expected a date after 'until'")	ERR EvaluationError("expected a date after 'until'")
 $50-02-30	OK $18	ERR IncompatibleDimensions
@@ -3078,8 +3078,8 @@ sinh%	OK 0.0100001666675	OK 0.0100001666675
 MB  to   before 	ERR UnexpectedEnd	ERR UnexpectedEnd
 20% off 2% off$4% off 2% off$0	OK -$0.04	OK -$0.04
 sqrt(9 Am^4 / s^2)	ERR IncompatibleOperatorType("cannot perform operator '^' on date and scalar")	ERR IncompatibleOperatorType("cannot perform operator '^' on date and scalar")
-05-16-2010 14:30:00	OK May 16, 2010 14:30:00	OK May 16, 2010 14:30:00
-wednesday	OK October 21, 2026	OK October 21, 2026
+05-16-2010 14:30:00	OK May 16, 2010 14:30:00 UTC	OK May 16, 2010 14:30:00 UTC
+wednesday	OK October 21, 2026 UTC	OK October 21, 2026 UTC
 1 sign 1 m	OK 1	OK 1
 nPr(88nPr(8, 5),  !7)	ERR EvaluationError("nPr result overflows")	ERR EvaluationError("nPr result overflows")
 0 cm	OK 0 cm	OK 0 cm
@@ -3102,7 +3102,7 @@ MiB log2 an rad/s -5	OK -5 MiB/s	ERR IncompatibleDimensions
 3 s -40	OK -37 s	ERR IncompatibleDimensions
 -02-30 mar	ERR IncompatibleOperatorType("cannot perform operator '-' on scalar and date")	ERR IncompatibleOperatorType("cannot perform operator '-' on scalar and date")
 3 s  per  meters year m/s^2 PST -3 -02-30	OK -1009822464 PST	ERR IncompatibleDimensions
- as  UTC trillion	OK July 18, 33715 11:16:40	OK July 18, 33715 11:16:40
+ as  UTC trillion	OK July 18, 33715 11:16:40 UTC	OK July 18, 33715 11:16:40 UTC
 ceil-10-2026	OK -2036	OK -2036
 60 miles per -3 in/h	OK -352 Hz	OK -352 Hz
 m/s -6 -10	OK -15 m/s	ERR IncompatibleDimensions
@@ -3172,7 +3172,7 @@ s %7	OK 1 s	OK 1 s
 invnorm 20%	OK -0.8416212335729139	OK -0.8416212335729139
 quadrillion 	OK 1 quadrillion	OK 1 quadrillion
 _PropZInt (	ERR UnknownFunction("_PropZInt")	ERR UnknownFunction("_PropZInt")
- before   to  h	OK October 21, 2026 10:30:00	OK October 21, 2026 10:30:00
+ before   to  h	OK October 21, 2026 10:30:00 UTC	OK October 21, 2026 10:30:00 UTC
 917£7s^.7777777777740	OK 6419 GBP*s^(7/9)	OK 6419 GBP*s^(7/9)
 rmb	OK 1 CNY	OK 1 CNY
 -1 4)(5+ 3)+ 3)(5)	ERR UnexpectedToken("adjacent numbers without an operator near '4'")	ERR UnexpectedToken("adjacent numbers without an operator near '4'")
@@ -3203,7 +3203,7 @@ GBP pound 3 s m^5	OK 3 GBP*lb*s*m^5	OK 3 GBP*lb*s*m^5
 hrs USD months	OK 730.485 h^2*$	OK 730.485 h^2*$
 -02-30 kmph MB	OK -32 kmph*MB	ERR IncompatibleDimensions
 yearlinreg_slopemax(kg-2$85_PropZInt	ERR UnknownFunction("yearlinreg_slopemax")	ERR UnknownFunction("yearlinreg_slopemax")
-August 7, 2026 14:30:00	OK August 7, 2026 14:30:00	OK August 7, 2026 14:30:00
+August 7, 2026 14:30:00	OK August 7, 2026 14:30:00 UTC	OK August 7, 2026 14:30:00 UTC
 1+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++cm^0.0	OK 37	OK 37
 lninvt(0.956, googol	ERR UnknownFunction("lninvt")	ERR UnknownFunction("lninvt")
 smoot €20 hours	OK 20 smoot*EUR*h	OK 20 smoot*EUR*h
@@ -3259,7 +3259,7 @@ $50 e-13	OK $122.91	ERR IncompatibleDimensions
 after m/s^2 UTC range yen irr hr s^2 [	ERR UnexpectedEnd	ERR UnexpectedEnd
   °C-40 	OK -39 °C	ERR IncompatibleDimensions
 in  sec^2 9/sec^2 9/[2,1]m(90/deg^5/deg) second [2,1]m(90/deg^5/deg) second e^2 days	ERR ExponentLimitExceeded	ERR ExponentLimitExceeded
-pi + kilometers sun -02-30 sterling	ERR UnexpectedToken("October 25, 2026")	ERR UnexpectedToken("October 25, 2026")
+pi + kilometers sun -02-30 sterling	ERR UnexpectedToken("October 25, 2026 UTC")	ERR UnexpectedToken("October 25, 2026 UTC")
 1 m .. 10 m + 5 m	OK 6 m..15 m	OK 6 m..15 m
 $50meter	OK 50 $*m	OK 50 $*m
 [9.8 m, kg m] / 2 s	ERR IncompatibleDimensions	ERR IncompatibleDimensions
@@ -3307,7 +3307,7 @@ GB yr	OK 1 GB*yr	OK 1 GB*yr
 m^5 2 m	OK 2 m^6	OK 2 m^6
 fv(0.051mm^27€200^27€7€m^27€22 1e fv(00tan(00)	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 e-192026-08-07	OK -192038.28171817155	OK -192038.28171817155
-tues	OK October 27, 2026	OK October 27, 2026
+tues	OK October 27, 2026 UTC	OK October 27, 2026 UTC
 2 - 9007199254740991	OK -9007199254740989	OK -9007199254740989
 sqrt JPY meters	OK 1 JPY^0.5*m	OK 1 JPY^0.5*m
 npv(0.1, 00,0, 40, 500, 500)	OK 682.019981248176	OK 682.019981248176
@@ -3323,14 +3323,14 @@ kHz	OK 1 kHz	OK 1 kHz
 an m^3 m--	OK 0 m^4	OK 0 m^4
 abs quadrillion $100	OK 100 quadrillion*$	OK 100 quadrillion*$
  in  $5	OK $5	OK $5
-3 months ago	OK July 21, 2026 09:30:00	OK July 21, 2026 09:30:00
+3 months ago	OK July 21, 2026 09:30:00 UTC	OK July 21, 2026 09:30:00 UTC
 0 °C 0 °C as -5°F	ERR AffineUnitOperation("multiply")	ERR AffineUnitOperation("multiply")
 days googol	OK 1 d*googol	OK 1 d*googol
 1m/m%1%-0--0--5-0	OK 5.01	OK 5.01
 -3-6-3-6-3	OK -21	OK -21
 point usd a sec   fm     rad/s               $d a second in                 20 days	OK 149299200000 point*$^2*fm*rad/s	OK 149299200000 point*$^2*fm*rad/s
 m/m%1%-0-0-5-0	OK -4.99	OK -4.99
-1 yr from now	OK October 21, 2027 09:30:00	OK October 21, 2027 09:30:00
+1 yr from now	OK October 21, 2027 09:30:00 UTC	OK October 21, 2027 09:30:00 UTC
 $85 * 1 mm^249 days* 2m ^250	OK NaN $*mm^249*d*m^250	OK NaN $*mm^249*d*m^250
  -1m/mm/ 11-00m..2 linreg -1m/mm/ -1m/m/m/m	ERR IncompatibleFunctionArguments	ERR IncompatibleDimensions
 kB pound m^4	OK 1 kB*lb*m^4	OK 1 kB*lb*m^4
@@ -3361,17 +3361,17 @@ till billions m^9 -40 after hrs ft	ERR EvaluationError("expected a date after 'u
 ZInterval(100 m, 15m, year	ERR UnclosedParen	ERR UnclosedParen
 5 bar^-5 $5-6	OK 19 $/bar^5	ERR IncompatibleDimensions
 1 gal rad L	OK 0.26417205235814845 gal^2*rad	OK 0.26417205235814845 gal^2*rad
-after bdays	OK October 22, 2026 09:30:00	OK October 22, 2026 09:30:00
+after bdays	OK October 22, 2026 09:30:00 UTC	OK October 22, 2026 09:30:00 UTC
  3 quadrillions degC	OK 3000000000000000 °C	OK 3000000000000000 °C
 1 (4 secs / (4 s^20.5	ERR UnclosedParen	ERR UnclosedParen
- in  sec	OK October 21, 2026 09:30:01	OK October 21, 2026 09:30:01
+ in  sec	OK October 21, 2026 09:30:01 UTC	OK October 21, 2026 09:30:01 UTC
 150. * 2.50	OK 375	OK 375
 pounds  @0 @06	ERR InvalidDate("invalid date format: '0'")	ERR InvalidDate("invalid date format: '0'")
 $1 rad/s e-19	OK -16.281718171540955 $*rad/s	ERR IncompatibleDimensions
 max 3(((((((((((((((((((((((((((((((((0((((((((((((((((((((((((((30%1-3(	ERR RecursionLimitExceeded	ERR RecursionLimitExceeded
 tmoe million	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 linreg_r2 2-as-2-102	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
-fourth of july	OK July 4, 2026	OK July 4, 2026
+fourth of july	OK July 4, 2026 UTC	OK July 4, 2026 UTC
 lb kHz deg -02-30	OK -31 lb*kHz*deg	ERR IncompatibleDimensions
 poissoncdf(0,2)	OK 1	OK 1
 gross in!in!	ERR IncompatibleDimensions	ERR IncompatibleDimensions
@@ -3397,7 +3397,7 @@ N[10 km, 20 -6 / [0 h, 2 h]	ERR UnclosedBracket	ERR UnclosedBracket
 * 5)	ERR UnexpectedToken("*")	ERR UnexpectedToken("*")
 3 *[2 m, 4 tdy	ERR UnclosedBracket	ERR UnclosedBracket
 1 h 30 min	OK 1.5 h	OK 1.5 h
-format_dmy(07-08-2026)	OK 07-08-2026	OK 07-08-2026
+format_dmy(07-08-2026)	OK 07-08-2026 UTC	OK 07-08-2026 UTC
 sum-@2026-1-7@-1	ERR IncompatibleOperatorType("cannot perform unary operation on date result")	ERR IncompatibleOperatorType("cannot perform unary operation on date result")
 feb 29 PER	ERR InvalidDate("February 29, 2026 is not a valid calendar date")	ERR InvalidDate("February 29, 2026 is not a valid calendar date")
 lb = x + km/h	ERR UnexpectedCharacter('=')	ERR UnexpectedCharacter('=')
@@ -3421,7 +3421,7 @@ business_days^-8 	OK 1 1/business_days^8	OK 1 1/business_days^8
 e999 $5 m--	ERR UnknownUnit("e999")	ERR UnknownUnit("e999")
 -10-2026..pm	OK -2036 pm..-11 pm	ERR IncompatibleDimensions
 sum% m^-1	OK 0.01 1/m	OK 0.01 1/m
-2026-10-20	OK October 20, 2026	OK October 20, 2026
+2026-10-20	OK October 20, 2026 UTC	OK October 20, 2026 UTC
 au log10 pmt Pa 20%	ERR IncompatibleFunctionArguments	ERR IncompatibleFunctionArguments
 -02-30	OK -32	OK -32
 tau-5	OK 1.2831853071795862	OK 1.2831853071795862
@@ -3470,7 +3470,7 @@ normcdf-1---10	OK -8.841344746068543	OK -8.841344746068543
 1 + atan+ 030%	OK 1.2914567944778672	OK 1.2914567944778672
 [1 m, 3 m] mph	OK [1 m*mph, 3 m*mph]	OK [1 m*mph, 3 m*mph]
 $80 -12-25	OK $43	ERR IncompatibleDimensions
-+02:00	OK October 21, 2026 02:00:00	OK October 21, 2026 02:00:00
++02:00	OK October 21, 2026 02:00:00 UTC	OK October 21, 2026 02:00:00 UTC
 poissonpdf(2,0e-19)	OK 0.1353352832366127	OK 0.1353352832366127
 % atm	OK 0.01 atm	OK 0.01 atm
 -0PIsunsecsmean(my_stats-10000kB	ERR UnknownFunction("PIsunsecsmean")	ERR UnknownFunction("PIsunsecsmean")
@@ -3557,7 +3557,7 @@ abs $120 m--	OK 0 $*m	OK 0 $*m
 100 km/h in 00 km/h in 00 km/s	OK 0.02777777777777778 km/s	OK 0.02777777777777778 km/s
 m^4 e^2	OK 7.3890560989306495 m^4	OK 7.3890560989306495 m^4
 -100 atm -02-30 pound	ERR IncompatibleDimensions	ERR IncompatibleDimensions
-April 5, 2026	OK April 5, 2026	OK April 5, 2026
+April 5, 2026	OK April 5, 2026 UTC	OK April 5, 2026 UTC
 PST 10	OK 10 PST	OK 10 PST
 cm kmph	OK 1 cm*kmph	OK 1 cm*kmph
 year  s^2[0.1,0.]1+[1-070-	ERR UnexpectedEnd	ERR UnexpectedEnd
@@ -3676,7 +3676,7 @@ workdays °^2	OK 1 workdays*°^2	OK 1 workdays*°^2
 iqr(52122..58,4e4..5)	OK 23015	OK 23015
 47409sin- thousands 9007199254740991	OK -353096011049827400000	OK -353096011049827400000
 -40 - N/m^2 m^273 au	OK -41 N*m^271*au	ERR IncompatibleDimensions
-2026-07-1+5 mos	OK December 1, 2026	OK December 1, 2026
+2026-07-1+5 mos	OK December 1, 2026 UTC	OK December 1, 2026 UTC
 °C^1 -01-01 e^2 m^5 s^2 phi^2	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 °C^2 2 mass	ERR AffineUnitOperation("exponentiate")	ERR AffineUnitOperation("exponentiate")
 hr meters	OK 1 h*m	OK 1 h*m
@@ -3716,7 +3716,7 @@ sqrt -08-07 m^2	ERR EvaluationError("cannot take the square root of a negative v
 _PropZIntpercentagemean(weeks as moestdhundred	ERR UnknownFunction("_PropZIntpercentagemean")	ERR UnknownFunction("_PropZIntpercentagemean")
 -08-01 before  to  iqr asin m^6 3 days	ERR IncompatibleDimensions	ERR IncompatibleDimensions
 ---------------------6 in days	OK -16 d	OK -16 d
-07-08-2026 + 3 work days	OK August 12, 2026	OK August 12, 2026
+07-08-2026 + 3 work days	OK August 12, 2026 UTC	OK August 12, 2026 UTC
 % JPY	OK 0 JPY	OK 0 JPY
 USD MB	OK 1 $*MB	OK 1 $*MB
 sign(m quintillion )	OK 1	OK 1
@@ -3730,7 +3730,7 @@ pm $85 billion €50 USD tmoe h	ERR IncompatibleFunctionArguments	ERR Incompatib
 m^520 MB	OK 1 m^520*MB	OK 1 m^520*MB
 secs m^78/ s	OK 1 m^78	OK 1 m^78
 007-0-(2!7N/m^2-0	ERR UnclosedParen	ERR UnclosedParen
-before-Z	OK October 21, 2026 09:30:01	OK October 21, 2026 09:30:01
+before-Z	OK October 21, 2026 09:30:01 UTC	OK October 21, 2026 09:30:01 UTC
 1..01-02-30e20-30e202-30e20-0e202-30e20-30e202-30e202-301	OK -9.000000000000003e203..-8.999999999999999e203	OK -9.000000000000003e203..-8.999999999999999e203
 3 sum[2 m, 4 -02-30m]	ERR IntervalInFunction	ERR IncompatibleDimensions
 $100 after 20% discount	OK $80	OK $80
@@ -3759,7 +3759,7 @@ hrs pc min	OK 0.016666666666666666 h^2*pc	OK 0.016666666666666666 h^2*pc
 L%%-6-33%%% L%%%%%%%%%$%%%%%%%%%t[-1--5,1]2%%googol%%%%%%-07-07%in-t[-1--,51]2%%%%%%%%%%%t[-2--5,1]%%%%%%%%%%%%%%% r^2	ERR UnknownUnit("r")	ERR UnknownUnit("r")
 pica -12-25 °C^1  until  1e gross GHz	ERR InvalidNumber("1e")	ERR InvalidNumber("1e")
 linreg(93112%..1%,%,6)	OK { intercept: -46556.870701143416%, intercept_se: 0.0683047105175646%, mean_x: 69834%, mean_y: 23277.012930386398%, r: 0.9999999785261305, r2: 0.9999999570522615, se: 2.7853073706417324%, slope: 0.9999983336416333, slope_se: 9.604754524505513e-7 }	OK { intercept: -46556.870701143416%, intercept_se: 0.0683047105175646%, mean_x: 69834%, mean_y: 23277.012930386398%, r: 0.9999999785261305, r2: 0.9999999570522615, se: 2.7853073706417324%, slope: 0.9999983336416333, slope_se: 9.604754524505513e-7 }
-yesterday	OK October 20, 2026	OK October 20, 2026
+yesterday	OK October 20, 2026 UTC	OK October 20, 2026 UTC
 moe(0m, 1m, moe(0m, 1m, 1 m))	OK 1.8270167102114616 m	OK 1.8270167102114616 m
 1e16 + 2 -1e16	OK 2	OK 2
 -04:00	ERR IncompatibleOperatorType("cannot perform unary operation on date result")	ERR IncompatibleOperatorType("cannot perform unary operation on date result")
@@ -3772,7 +3772,7 @@ $5 m^100000 kHz €50 factorial e2 millions rad cm	ERR ExponentLimitExceeded	ERR
 m$++	OK 2 m*$	OK 2 m*$
 sqrt 0	OK 0	OK 0
  per  °C^2 binomcdf secs  ago irr nCr €50 ZInterval	ERR AffineUnitOperation("exponentiate")	ERR AffineUnitOperation("exponentiate")
- after  h	OK October 21, 2026 10:30:00	OK October 21, 2026 10:30:00
+ after  h	OK October 21, 2026 10:30:00 UTC	OK October 21, 2026 10:30:00 UTC
 sqrt-10-2026-07-2026TInterval in pi-01-15m^5	ERR EvaluationError("cannot take the square root of a negative value")	ERR EvaluationError("cannot take the square root of a negative value")
 [2,3] * [4, 5]	OK [8, 15]	OK [8, 15]
 ly-100	OK -99 ly	ERR IncompatibleDimensions

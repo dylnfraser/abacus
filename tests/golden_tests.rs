@@ -17,16 +17,21 @@
     feature = "currencies"
 ))]
 
-use abacus::{Abacus, AngleMode, Date};
+use abacus::{Abacus, AngleMode, Date, TimeZone};
 
 const PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/golden.tsv");
 
 fn engines() -> [Abacus; 2] {
+    // A fixed timezone, so results don't depend on the machine's.
+    let tz = TimeZone::parse("UTC").unwrap();
     let now: Date = "2026-10-21 09:30:00".parse().unwrap();
     [
-        Abacus::standard().with_now(now.clone()),
+        Abacus::standard()
+            .with_now(now.clone())
+            .with_default_timezone(tz.clone()),
         Abacus::standard()
             .with_now(now)
+            .with_default_timezone(tz)
             .with_angle_mode(AngleMode::Degrees)
             .with_strict_dimensions(true),
     ]
