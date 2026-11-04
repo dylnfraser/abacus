@@ -9,13 +9,13 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// Parse `x_data` and `y_data` arrays from arguments by delegating to `parse_paired_data`.
+/// Splits the arguments into `x_data` and `y_data`.
 fn parse_regression_inputs(args: &[Value]) -> Result<(&[Value], &[Value]), AbacusError> {
     let (x, y, _) = parse_paired_data(args)?;
     Ok((x, y))
 }
 
-/// Computes basic regression statistics (`mean_x`, `mean_y`, Sxx, Syy, Sxy, n)
+/// Basic regression statistics: n, `mean_x`, `mean_y`, Sxx, Syy and Sxy.
 struct RegStats {
     n: f64,
     mean_x: f64,
@@ -106,7 +106,7 @@ impl RegStats {
     }
 }
 
-// ── linreg(x_data..., y_data...) -> EvalResult::Hash ──
+// linreg(x_data..., y_data...) -> EvalResult::Hash
 //
 // Keys: `slope`, `intercept`, `r`, `r2`, `se` (residual standard error s = √(SSE/(n−2))),
 // `slope_se` (standard error of the slope, s/√Sxx), `intercept_se`
@@ -162,7 +162,7 @@ fn compute_stats(args: &[Value]) -> Result<RegStats, AbacusError> {
     RegStats::compute(x_data, y_data)
 }
 
-// ── linreg_slope(x_data..., y_data...) ──
+// linreg_slope(x_data..., y_data...)
 fn linreg_slope_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     let stats = compute_stats(args)?;
     Ok(AbacusValue::from_canonical(
@@ -171,24 +171,24 @@ fn linreg_slope_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     ))
 }
 
-// ── linreg_intercept(x_data..., y_data...) ──
+// linreg_intercept(x_data..., y_data...)
 fn linreg_intercept_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     let stats = compute_stats(args)?;
     Ok(AbacusValue::from_canonical(stats.intercept(), stats.y_unit))
 }
 
-// ── linreg_r2(x_data..., y_data...) ──
+// linreg_r2(x_data..., y_data...)
 fn linreg_r2_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     let r = compute_stats(args)?.r_or_err()?;
     Ok(Value::dimensionless(r * r))
 }
 
-// ── linreg_r(x_data..., y_data...) ──
+// linreg_r(x_data..., y_data...)
 fn linreg_r_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     Ok(Value::dimensionless(compute_stats(args)?.r_or_err()?))
 }
 
-// ── linreg_se(x_data..., y_data...) — residual standard error ──
+// linreg_se(x_data..., y_data...): residual standard error
 fn linreg_se_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     let stats = compute_stats(args)?;
     let s = stats
@@ -214,13 +214,13 @@ fn check_predict_arity(args: &[Value]) -> Result<(), AbacusError> {
     Ok(())
 }
 
-// ── predict(x_target, x_data..., y_data...) — target first ──
+// predict(x_target, x_data..., y_data...): target first
 fn predict_target_first_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     check_predict_arity(args)?;
     predict_with(&args[0], &args[1..])
 }
 
-// ── linreg_predict(x_data..., y_data..., x_target) — target last ──
+// linreg_predict(x_data..., y_data..., x_target): target last
 fn predict_target_last_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
     check_predict_arity(args)?;
     let (x_target, reg_args) = args.split_last().ok_or(AbacusError::UnexpectedEnd)?;
@@ -230,7 +230,7 @@ fn predict_target_last_fn(args: &[Value]) -> Result<AbacusValue, AbacusError> {
 pub fn register_regression() -> Vec<FunctionOp> {
     let mut ops = Vec::new();
 
-    // linreg / LinReg -> Returns EvalResult::Hash (see `linreg_hash_fn` for keys)
+    // Returns a hash; see `linreg_hash_fn` for the keys.
     for name in &["linreg", "LinReg"] {
         ops.push(FunctionOp::eval_result(name, 4, usize::MAX, linreg_hash_fn));
     }

@@ -79,7 +79,7 @@ fn tan_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(t))
 }
 
-/// Validates a dimensionless argument and checks it lies in `domain`.
+/// Checks that an argument is dimensionless and lies in `domain`.
 fn ranged_arg(val: &Value, domain: impl Fn(f64) -> bool) -> Result<f64, AbacusError> {
     if !val.unit.is_dimensionless() {
         return Err(AbacusError::IncompatibleDimensions);

@@ -1,12 +1,12 @@
 use crate::{Date, Value};
 
-// Represents a token parsed from the input string
+// A token lexed from the input.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'a> {
     // Operators
-    BinaryOp(&'static str), // e.g., '+', '-', '*', '/'
-    UnaryOp(&'static str),  // e.g., 'sqrt' for square root or '!' for factorial
-    Function(&'static str), // e.g., 'sin', 'binompdf', 'mean'
+    BinaryOp(&'static str), // `+`, `-`, `*`, `/`
+    UnaryOp(&'static str),  // `sqrt`, `!`
+    Function(&'static str), // `sin`, `binompdf`, `mean`
 
     ConversionOp,
     RelTimeOp(&'static str),  // "ago", "from_now", "before", "after"
@@ -15,17 +15,17 @@ pub enum Token<'a> {
 
     // Values
     Float(f64),     // parsed number
-    Unit(&'a str),  // "kg", "m", "ft" borrowed directly from input text
-    Ident(&'a str), // variable or constant identifier, e.g. "x", "pi", "e"
+    Unit(&'a str),  // "kg", "m", "ft", borrowed from the input
+    Ident(&'a str), // variable or constant: "x", "pi", "e"
 
-    // Grouping & Delimiters
+    // Grouping and delimiters
     OpenParen,
     CloseParen,
     OpenBracket,
     CloseBracket,
     Comma,
-    Range,                // `..` for range expressions inside functions, e.g. mean(1..10)
-    DotProperty(&'a str), // `.intercept`, `.slope`, `.r2` etc.
+    Range,                // `..`, as in `mean(1..10)`
+    DotProperty(&'a str), // `.intercept`, `.slope`, `.r2`, ...
 
     Val(Value), // final value
     Date(Date), // parsed date

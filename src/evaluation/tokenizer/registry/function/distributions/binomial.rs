@@ -20,7 +20,7 @@ fn parse_binom_args(args: &[Value]) -> Result<(f64, f64, f64), AbacusError> {
     Ok((n, p, k))
 }
 
-/// binompdf(n, p, k) — computed with Loader's saddle-point method, so it stays accurate for
+/// `binompdf(n, p, k)`, computed with Loader's saddle-point method so it stays accurate for
 /// very large n instead of overflowing.
 fn binompdf_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (n, p, k) = parse_binom_args(args)?;

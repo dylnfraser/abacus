@@ -68,7 +68,7 @@ fn z_test_core(mu0: &Value, xbar: f64, sigma: f64, n: f64) -> Result<EvalResult,
     )))
 }
 
-// ── ZTest / ZTestStats(μ₀, x̄, σ, n) ──
+// ZTest / ZTestStats(μ₀, x̄, σ, n)
 fn z_test_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mu0 = &args[0];
     if !args[1].unit.is_compatible_with(&mu0.unit) {
@@ -79,7 +79,7 @@ fn z_test_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     z_test_core(mu0, args[1].canonical, sigma, n)
 }
 
-// ── ZTestData(μ₀, σ, x₁, x₂, …) ──
+// ZTestData(μ₀, σ, x₁, x₂, …)
 fn z_test_data_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mu0 = &args[0];
     let sigma = positive_spread(&args[1], &mu0.unit)?;
@@ -98,7 +98,7 @@ fn t_test_core(mu0: &Value, xbar: f64, s: f64, n: f64) -> Result<EvalResult, Aba
     Ok(EvalResult::Hash(hash))
 }
 
-// ── TTest / TTestStats(μ₀, x̄, s, n) ──
+// TTest / TTestStats(μ₀, x̄, s, n)
 fn t_test_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mu0 = &args[0];
     if !args[1].unit.is_compatible_with(&mu0.unit) {
@@ -109,7 +109,7 @@ fn t_test_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     t_test_core(mu0, args[1].canonical, s, n)
 }
 
-// ── TTestData(μ₀, x₁, x₂, …) ──
+// TTestData(μ₀, x₁, x₂, …)
 fn t_test_data_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mu0 = &args[0];
     let data = &args[1..];
@@ -133,7 +133,7 @@ fn count_and_size(x: &Value, n: &Value) -> Result<(f64, f64), AbacusError> {
     Ok((x, n))
 }
 
-// ── 1-PropZTest(p₀, x, n) ──
+// 1-PropZTest(p₀, x, n)
 fn one_prop_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     if !args[0].unit.is_dimensionless() {
         return Err(AbacusError::IncompatibleDimensions);
@@ -159,7 +159,7 @@ fn one_prop_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     Ok(EvalResult::Hash(hash))
 }
 
-// ── 2-SampZTest(σ₁, σ₂, x̄₁, n₁, x̄₂, n₂) ──
+// 2-SampZTest(σ₁, σ₂, x̄₁, n₁, x̄₂, n₂)
 fn two_samp_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let x1 = &args[2];
     let x2 = &args[4];
@@ -185,7 +185,7 @@ fn two_samp_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     Ok(EvalResult::Hash(hash))
 }
 
-// ── 2-SampTTest(x̄₁, s₁, n₁, x̄₂, s₂, n₂) — Welch's unequal-variance test ──
+// 2-SampTTest(x̄₁, s₁, n₁, x̄₂, s₂, n₂): Welch's unequal-variance test
 fn two_samp_t_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let x1 = &args[0];
     let x2 = &args[3];
@@ -220,7 +220,7 @@ fn two_samp_t_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     Ok(EvalResult::Hash(hash))
 }
 
-// ── 2-PropZTest(x₁, n₁, x₂, n₂) — pooled standard error ──
+// 2-PropZTest(x₁, n₁, x₂, n₂): pooled standard error
 fn two_prop_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (x1, n1) = count_and_size(&args[0], &args[1])?;
     let (x2, n2) = count_and_size(&args[2], &args[3])?;
@@ -249,7 +249,7 @@ fn two_prop_z_test_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     Ok(EvalResult::Hash(hash))
 }
 
-// ── Chi2Test(o₁, …, oₖ, e₁, …, eₖ) ──
+// Chi2Test(o₁, …, oₖ, e₁, …, eₖ)
 // χ² goodness-of-fit test: the first half of the arguments are the observed counts and the
 // second half the expected counts, with df = k − 1. (This differs from the TI-84's χ²-Test,
 // which is a test of independence on a matrix.)

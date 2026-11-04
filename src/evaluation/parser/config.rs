@@ -1,6 +1,6 @@
 use crate::{AngleMode, IntervalStyle, TimeZone, WeekendDays};
 
-/// Configuration settings controlling evaluation semantics.
+/// Settings that control how expressions are evaluated.
 #[derive(Debug, Clone)]
 pub struct EvalConfig {
     pub auto_derived: bool,

@@ -4,7 +4,7 @@ use crate::units::date::Date;
 use crate::units::hash::Hash;
 use crate::{AbacusError, BinaryOp, Interval, UnaryOp, Unit, UnitRegistry, Value};
 
-/// The result of evaluating an expression — a scalar `Value`, an `Interval`, a `Hash` map, or a `Date`.
+/// The result of evaluating an expression: a scalar, an interval, a hash or a date.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EvalResult {
@@ -15,9 +15,8 @@ pub enum EvalResult {
 }
 
 impl EvalResult {
-    /// Apply a binary operator across two `EvalResult`s, promoting scalars to
-    /// degenerate intervals when mixing scalar and interval operands.
-    /// Apply a binary operator to two `EvalResult`s using custom weekend definitions.
+    /// Applies a binary operator, using `weekend` for business-day date arithmetic. A scalar
+    /// combined with an interval is promoted to a degenerate interval.
     pub fn apply_binary_with_weekend(
         self,
         op: &BinaryOp,
@@ -77,12 +76,12 @@ impl EvalResult {
         }
     }
 
-    /// Apply a binary operator to two `EvalResult`s.
+    /// Applies a binary operator with a Saturday-Sunday weekend.
     pub fn apply_binary(self, op: &BinaryOp, rhs: EvalResult) -> Result<EvalResult, AbacusError> {
         self.apply_binary_with_weekend(op, rhs, crate::units::date::WeekendDays::SaturdaySunday)
     }
 
-    /// Apply a unary operator to an `EvalResult`.
+    /// Applies a unary operator.
     pub fn apply_unary(self, op: &UnaryOp) -> Result<EvalResult, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(EvalResult::Scalar(op.apply(v)?)),
@@ -96,7 +95,7 @@ impl EvalResult {
         }
     }
 
-    /// Convert the result to a target unit.
+    /// Converts the result to `unit`.
     pub fn convert_to(self, unit: Arc<Unit>) -> Result<EvalResult, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(EvalResult::Scalar(v.convert_to(unit)?)),
@@ -106,7 +105,7 @@ impl EvalResult {
         }
     }
 
-    /// Attempt automatic derived-unit reduction.
+    /// Reduces the result to a derived unit where possible (see [`Value::to_derived`]).
     pub fn to_derived(self, registry: &UnitRegistry) -> Result<EvalResult, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(EvalResult::Scalar(v.to_derived(registry)?)),
@@ -122,12 +121,12 @@ impl EvalResult {
         }
     }
 
-    /// Simplify unit display.
+    /// Simplifies the displayed unit.
     pub fn simplify_unit_display(&mut self, registry: &UnitRegistry) {
         self.simplify_unit_display_with_options(registry, true);
     }
 
-    /// Simplify unit display, optionally keeping same-dimension units as written.
+    /// Simplifies the displayed unit; without `consolidate`, same-dimension units stay as written.
     pub(crate) fn simplify_unit_display_with_options(
         &mut self,
         registry: &UnitRegistry,
@@ -141,7 +140,7 @@ impl EvalResult {
         }
     }
 
-    /// Render to display string.
+    /// Formats the result for display.
     #[must_use]
     pub fn to_display(&self) -> String {
         match self {
@@ -152,7 +151,7 @@ impl EvalResult {
         }
     }
 
-    /// Returns a new `EvalResult` with scalar and interval components rounded to `sig_figs` significant figures.
+    /// Rounds numbers in the result to `sig_figs` significant figures. Dates are unchanged.
     #[must_use]
     pub fn round_to_sig_figs(self, sig_figs: usize) -> Self {
         match self {
@@ -163,7 +162,7 @@ impl EvalResult {
         }
     }
 
-    /// Render to display string formatted to `sig_figs` significant figures.
+    /// Formats the result with `sig_figs` significant figures.
     #[must_use]
     pub fn to_display_with_sig_figs(&self, sig_figs: usize) -> String {
         match self {
@@ -174,7 +173,7 @@ impl EvalResult {
         }
     }
 
-    /// Returns a new `EvalResult` with scalar, interval, and hash components rounded to `decimals` decimal places.
+    /// Rounds numbers in the result to `decimals` decimal places. Dates are unchanged.
     #[must_use]
     pub fn round_to_decimals(self, decimals: usize) -> Self {
         match self {
@@ -185,7 +184,7 @@ impl EvalResult {
         }
     }
 
-    /// Render to display string formatted to `decimals` decimal places.
+    /// Formats the result with `decimals` decimal places.
     #[must_use]
     pub fn to_display_with_decimals(&self, decimals: usize) -> String {
         match self {
@@ -196,7 +195,7 @@ impl EvalResult {
         }
     }
 
-    /// Render to display string in scientific notation.
+    /// Formats the result in scientific notation.
     #[must_use]
     pub fn to_display_scientific(&self) -> String {
         match self {
@@ -207,7 +206,7 @@ impl EvalResult {
         }
     }
 
-    /// Render to display string in engineering notation.
+    /// Formats the result in engineering notation.
     #[must_use]
     pub fn to_display_engineering(&self) -> String {
         match self {
@@ -218,7 +217,7 @@ impl EvalResult {
         }
     }
 
-    /// Overrides the interval display style (bracket vs range) if this result is an Interval.
+    /// Sets the interval display style (bracket or range). Non-interval results are unchanged.
     #[must_use]
     pub fn with_interval_style(mut self, style: crate::units::interval::IntervalStyle) -> Self {
         if let EvalResult::Interval(ref mut i) = self {
@@ -227,7 +226,7 @@ impl EvalResult {
         self
     }
 
-    /// Applies unit display overrides to this evaluation result.
+    /// Applies unit display overrides.
     #[must_use]
     pub fn with_display_override(
         self,
@@ -256,7 +255,7 @@ impl EvalResult {
         }
     }
 
-    /// Borrow the scalar Value, or error if this is not a scalar.
+    /// The scalar value, or an error if this is not a scalar.
     pub fn as_scalar(&self) -> Result<&Value, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(v),
@@ -264,8 +263,7 @@ impl EvalResult {
         }
     }
 
-    /// Extract the scalar Value, or error if this is an Interval, Hash, or Date
-    /// (same errors as [`EvalResult::as_scalar`]).
+    /// Takes the scalar value, failing as [`EvalResult::as_scalar`] does.
     pub fn into_scalar(self) -> Result<Value, AbacusError> {
         match self {
             EvalResult::Scalar(v) => Ok(v),
@@ -273,7 +271,7 @@ impl EvalResult {
         }
     }
 
-    /// Extract the `Hash`, or error if this is not a Hash.
+    /// Takes the hash, or an error if this is not a hash.
     pub fn into_hash(self) -> Result<Hash, AbacusError> {
         match self {
             EvalResult::Hash(h) => Ok(h),
@@ -281,7 +279,7 @@ impl EvalResult {
         }
     }
 
-    /// Extract the `Date`, or error if this is not a Date.
+    /// Takes the date, or an error if this is not a date.
     pub fn into_date(self) -> Result<Date, AbacusError> {
         match self {
             EvalResult::Date(d) => Ok(d),
@@ -289,7 +287,7 @@ impl EvalResult {
         }
     }
 
-    /// Get the unit from the result (for intervals, uses the `lo` endpoint's unit).
+    /// The result's unit (the `lo` endpoint's unit for intervals).
     #[must_use]
     pub fn unit(&self) -> &Arc<Unit> {
         match self {

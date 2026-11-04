@@ -194,7 +194,7 @@ macro_rules! optional_settings {
 }
 
 impl Abacus {
-    /// Returns the standard mathematical constants (`pi`, `PI`, `e`, `E`, `tau`, `TAU`, `phi`, `PHI`).
+    /// The standard mathematical constants (`pi`, `PI`, `e`, `E`, `tau`, `TAU`, `phi`, `PHI`).
     #[must_use]
     pub fn standard_variables() -> HashMap<String, EvalResult> {
         crate::evaluation::tokenizer::registry::constants::standard_variables_map()
@@ -213,7 +213,7 @@ impl Abacus {
         Self::from_registry(UnitRegistry::new(), TokenRegistry::new())
     }
 
-    /// Initialize a new `Abacus` instance with custom units and tokens.
+    /// An engine with the given unit and operator registries, default settings and no variables.
     #[must_use]
     pub fn from_registry(units: UnitRegistry, tokens: TokenRegistry) -> Self {
         Self {
@@ -251,13 +251,13 @@ impl Abacus {
         self.generation = self.generation.wrapping_add(1);
     }
 
-    /// Defines or updates a variable. (Compiled expressions track the variable names they
-    /// depend on themselves, so this needn't invalidate them.)
+    /// Defines or updates a variable. Compiled expressions track the variable names they
+    /// depend on, so this doesn't invalidate them.
     fn insert_variable(&mut self, name: String, value: EvalResult) {
         self.variables.insert(name, value);
     }
 
-    /// Initialize an `Abacus` instance populated with standard physical units, operator registries, and mathematical constants (`pi`, `e`, `tau`, `phi`).
+    /// An engine with the standard units, operators and mathematical constants (`pi`, `e`, `tau`, `phi`).
     ///
     /// # Examples
     ///
@@ -277,7 +277,7 @@ impl Abacus {
         abacus
     }
 
-    // ── Registries ──
+    // Registries
 
     /// The unit registry.
     #[must_use]
@@ -285,7 +285,7 @@ impl Abacus {
         &self.units
     }
 
-    /// Mutable access to the unit registry, e.g. to register units in bulk.
+    /// Mutable access to the unit registry, for registering units in bulk.
     pub fn units_mut(&mut self) -> &mut UnitRegistry {
         self.changed();
         &mut self.units
@@ -303,7 +303,7 @@ impl Abacus {
         &mut self.tokens
     }
 
-    // ── Settings ──
+    // Settings
 
     settings! {
         /// Output date format. `MMDDYYYY` also reads ambiguous `NN-NN-YYYY` input month-first.
@@ -483,7 +483,6 @@ impl Abacus {
     /// [`Abacus::try_set_live_rates`] to observe them.
     #[must_use]
     pub fn with_live_rates(mut self, enabled: bool) -> Self {
-        // Errors are intentionally ignored by this builder; see the doc comment.
         let _ = self.try_set_live_rates(enabled);
         self
     }
@@ -512,8 +511,8 @@ impl Abacus {
             .unwrap_or_else(default_currency_cache_path)
     }
 
-    /// Updates currency rates according to daily cache policy:
-    /// Loads from disk if cache is fresh (< 24 hours); otherwise fetches live rates and updates cache.
+    /// Updates currency rates, loading them from the cache file if it is less than 24 hours old
+    /// and otherwise fetching live rates and refreshing the cache.
     pub fn update_daily_rates(&mut self) -> Result<(), AbacusError> {
         #[cfg(feature = "currencies")]
         {
@@ -552,8 +551,8 @@ impl Abacus {
         }
     }
 
-    /// Updates currency exchange rates from a JSON string (Frankfurter response format)
-    /// and saves the response into the cache file if configured.
+    /// Updates exchange rates from a Frankfurter API response, saving it to the cache file
+    /// if one is configured.
     pub fn update_rates_from_json(&mut self, _json_str: &str) -> Result<(), AbacusError> {
         #[cfg(feature = "currencies")]
         {
@@ -574,7 +573,7 @@ impl Abacus {
         }
     }
 
-    /// Sets an exchange rate manually for a specific currency code (e.g. "EUR", 0.86281).
+    /// Sets the exchange rate for a currency code, in units per US dollar (`"EUR"`, `0.86281`).
     pub fn set_currency_rate(&mut self, _code: &str, _rate_per_usd: f64) -> &mut Self {
         self.changed();
         #[cfg(feature = "currencies")]
@@ -584,7 +583,7 @@ impl Abacus {
         self
     }
 
-    /// Builder method to set an exchange rate for a currency code.
+    /// Sets the exchange rate for a currency code, in units per US dollar.
     #[must_use]
     pub fn with_currency_rate(mut self, code: &str, rate_per_usd: f64) -> Self {
         self.set_currency_rate(code, rate_per_usd);
@@ -592,7 +591,7 @@ impl Abacus {
     }
 }
 
-/// Checks whether the specified exchange rates cache file is fresh (modified < 24 hours ago).
+/// Whether the exchange-rate cache file was modified less than 24 hours ago.
 #[must_use]
 pub fn is_currency_cache_fresh(cache_path: &std::path::Path) -> bool {
     #[cfg(feature = "currencies")]
@@ -606,7 +605,7 @@ pub fn is_currency_cache_fresh(cache_path: &std::path::Path) -> bool {
     }
 }
 
-/// Returns the default file path where exchange rates are cached.
+/// Default location of the exchange-rate cache file.
 #[must_use]
 pub fn default_currency_cache_path() -> std::path::PathBuf {
     #[cfg(feature = "currencies")]
@@ -676,14 +675,14 @@ impl Abacus {
         )
     }
 
-    /// Define a variable on this `Abacus` instance (builder pattern).
+    /// Defines a variable.
     #[must_use]
     pub fn with_variable(mut self, name: impl Into<String>, value: impl Into<EvalResult>) -> Self {
         self.insert_variable(name.into(), value.into());
         self
     }
 
-    /// Define a variable in-place on this `Abacus` instance.
+    /// Defines or updates a variable.
     pub fn set_variable(
         &mut self,
         name: impl Into<String>,
@@ -693,7 +692,8 @@ impl Abacus {
         self
     }
 
-    /// Define a variable by evaluating an expression string on this `Abacus` instance.
+    /// Defines a variable as the value of `expr`. The variable keeps full precision; the
+    /// returned value has output settings applied.
     pub fn set_variable_expr(
         &mut self,
         name: impl Into<String>,
@@ -710,40 +710,40 @@ impl Abacus {
         &self.variables
     }
 
-    /// Retrieve a reference to a defined variable.
+    /// The value of a variable, if defined.
     #[must_use]
     pub fn get_variable(&self, name: &str) -> Option<&EvalResult> {
         self.variables.get(name)
     }
 
-    /// Check if a variable is defined.
+    /// Whether a variable is defined.
     #[must_use]
     pub fn has_variable(&self, name: &str) -> bool {
         self.variables.contains_key(name)
     }
 
-    /// Remove a defined variable.
+    /// Removes a variable, returning its value.
     pub fn remove_variable(&mut self, name: &str) -> Option<EvalResult> {
         self.variables.remove(name)
     }
 
-    /// Clear all defined variables.
+    /// Removes all variables, including the standard constants.
     pub fn clear_variables(&mut self) {
         self.variables.clear();
     }
 
-    /// Reset variables back to standard mathematical constants (`pi`, `e`, `tau`, `phi`).
+    /// Replaces all variables with the standard constants (`pi`, `e`, `tau`, `phi`).
     pub fn reset_standard_variables(&mut self) {
         self.variables = Self::standard_variables();
     }
 
-    /// Returns the standard common speed unit display overrides ("mi/h" -> "mph", "km/h" -> "kmph").
+    /// The standard speed display overrides (`"mi/h"` -> `"mph"`, `"km/h"` -> `"kmph"`).
     #[must_use]
     pub fn standard_unit_display_overrides() -> HashMap<String, String> {
         crate::units::speed_overrides::standard_speed_overrides()
     }
 
-    /// Adds a display override for a unit string (e.g. `"mi/h"` -> `"mph"`, `"km/h"` -> `"kmph"`).
+    /// Displays unit string `pattern` as `replacement` (`"mi/h"` -> `"mph"`).
     #[must_use]
     pub fn with_unit_display_override(
         mut self,
@@ -754,7 +754,7 @@ impl Abacus {
         self
     }
 
-    /// Sets a display override for a unit string in-place.
+    /// Displays unit string `pattern` as `replacement`.
     pub fn set_unit_display_override(
         &mut self,
         pattern: impl Into<String>,
@@ -764,14 +764,14 @@ impl Abacus {
             .insert(pattern.into(), replacement.into());
     }
 
-    /// Builder method to configure multiple unit display overrides.
+    /// Adds several unit display overrides.
     #[must_use]
     pub fn with_unit_display_overrides(mut self, overrides: HashMap<String, String>) -> Self {
         self.set_unit_display_overrides(overrides);
         self
     }
 
-    /// Sets multiple unit display overrides in-place.
+    /// Adds several unit display overrides, replacing any with the same pattern.
     pub fn set_unit_display_overrides(&mut self, overrides: HashMap<String, String>) {
         self.unit_display_overrides.extend(overrides);
     }
@@ -783,7 +783,7 @@ impl Abacus {
         self
     }
 
-    /// Enables common speed overrides (`"mi/h"` -> `"mph"`, `"km/h"` -> `"kmph"`) in-place.
+    /// Enables common speed overrides (`"mi/h"` -> `"mph"`, `"km/h"` -> `"kmph"`).
     pub fn enable_common_speed_overrides(&mut self) {
         self.set_unit_display_overrides(Self::standard_unit_display_overrides());
     }
@@ -804,15 +804,14 @@ impl Abacus {
         &self.unit_display_overrides
     }
 
-    /// Checks if a display override is configured for a pattern.
+    /// Whether a display override is set for `pattern`.
     #[must_use]
     pub fn has_unit_display_override(&self, pattern: &str) -> bool {
         self.unit_display_overrides.contains_key(pattern)
     }
 
-    /// Evaluate an expression or variable assignment (`name = expr`).
-    /// If the expression is an assignment, updates or creates the variable on `self` and returns its evaluated value.
-    /// Otherwise, evaluates the expression normally.
+    /// Evaluates an expression or a variable assignment (`name = expr`). An assignment
+    /// defines or updates the variable and returns its value.
     pub fn eval_mut(&mut self, expr: &str) -> Result<EvalResult, AbacusError> {
         self.eval_mut_detailed(expr).map_err(Diagnostic::into_error)
     }
@@ -821,7 +820,7 @@ impl Abacus {
     /// [`Abacus::eval_detailed`]).
     pub fn eval_mut_detailed(&mut self, expr: &str) -> Result<EvalResult, Diagnostic> {
         let trimmed = expr.trim();
-        // Check for simple assignment: <ident> = <rhs>
+        // `<ident> = <rhs>`, but not `==`.
         if let Some((ident, rhs)) = trimmed.split_once('=') {
             let ident = ident.trim();
             let is_ident = !ident.is_empty()
@@ -1075,8 +1074,8 @@ impl Abacus {
         Ok(self.format_result(&self.eval(expr)?))
     }
 
-    /// Formats an `EvalResult` according to this `Abacus` instance's configuration
-    /// (date format, significant figures, decimal places, notation, etc.).
+    /// Formats a result with the engine's display settings: decimal places, significant
+    /// figures, notation, interval style and display overrides.
     ///
     /// `EvalResult`'s own `Display` cannot see engine settings, so [`Notation`] only takes
     /// effect here (and in [`Abacus::eval_to_string`]).
@@ -1104,25 +1103,22 @@ impl Abacus {
         }
     }
 
-    /// Evaluate an expression, returning only scalar results.
-    /// Returns an error if the result is an interval or hash.
+    /// Evaluates an expression whose result must be a scalar (not an interval or hash).
     pub fn eval_scalar(&self, expr: &str) -> Result<Value, AbacusError> {
         self.eval(expr)?.into_scalar()
     }
 
-    /// Evaluate an expression, returning only Hash results.
-    /// Returns an error if the result is not a Hash.
+    /// Evaluates an expression whose result must be a hash.
     pub fn eval_hash(&self, expr: &str) -> Result<Hash, AbacusError> {
         self.eval(expr)?.into_hash()
     }
 
-    /// Evaluate an expression, returning only Date results.
-    /// Returns an error if the result is not a Date.
+    /// Evaluates an expression whose result must be a date.
     pub fn eval_date(&self, expr: &str) -> Result<Date, AbacusError> {
         self.eval(expr)?.into_date()
     }
 
-    // Format dates using configured styles
+    // Date formatting
     pub fn format_date(&self, date: &Date) -> String {
         date.format_with_style(self.date_format)
     }
@@ -1131,7 +1127,7 @@ impl Abacus {
         date.format_with_style(style)
     }
 
-    // Registry functions for units & tokens
+    // Registering units and operators
     pub fn register_unit(&mut self, alias: &str, unit: Unit) {
         self.changed();
         self.units.insert_unit(alias, Arc::from(unit));
@@ -1152,7 +1148,7 @@ impl Abacus {
         self.tokens.register_function_operator(op.name, op);
     }
 
-    /// Returns a reference to the globally shared standard `Abacus` instance.
+    /// The process-wide standard engine.
     #[must_use]
     pub fn shared() -> &'static Self {
         &STANDARD_ABACUS
@@ -1199,7 +1195,7 @@ impl Default for Abacus {
     }
 }
 
-/// Evaluates a physical unit or mathematical expression using the standard unit and token registry.
+/// Evaluates an expression with the standard engine.
 ///
 /// # Examples
 ///

@@ -21,25 +21,24 @@ fn eval_scalar(expr: &str) -> Result<abacus::Value, AbacusError> {
     Abacus::standard().eval_scalar(expr)
 }
 
-// ── TInterval (TI-84 Option 8) ──
+// TInterval (TI-84 Option 8)
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_section3_confidence_intervals_expanded() {
     let calc = Abacus::standard();
 
-    // TInterval(10 m, 12 m, 11 m, 14 m)
     let t_int = calc.eval("TInterval(10 m, 12 m, 11 m, 14 m)").unwrap();
     assert!(t_int.to_display().contains("m"));
 
-    // ZInterval(100 m, 15 m, 100) -> [97.06 m, 102.94 m]; z* = 1.959963984540054
+    // z* = 1.959963984540054
     let z_int = calc.eval("ZInterval(100 m, 15 m, 100)").unwrap();
     assert_eq!(
         z_int.to_display(),
         "[97.06005402318992 m, 102.93994597681008 m]"
     );
 
-    // 1-PropZInt(45, 100) — Wald interval, as on the TI-84
+    // Wald interval, as on the TI-84.
     let prop_int = calc.eval("1-PropZInt(45, 100)").unwrap();
     if let EvalResult::Interval(interval) = prop_int {
         assert!((interval.lo.canonical - 0.352_493_022_910_060_6).abs() < 1e-14);
@@ -48,7 +47,6 @@ fn test_section3_confidence_intervals_expanded() {
         panic!("Expected interval result");
     }
 
-    // 2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)
     let samp2_int = calc
         .eval("2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)")
         .unwrap();
@@ -58,7 +56,6 @@ fn test_section3_confidence_intervals_expanded() {
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_t_interval_sample_data() {
-    // Tests TInterval with sample data: TInterval(10 m, 12 m, 11 m, 14 m)
     let result = eval("TInterval(10 m, 12 m, 11 m, 14 m)").unwrap();
     let display = result.to_display();
     assert!(
@@ -88,7 +85,6 @@ fn test_ti84_t_interval_sample_data() {
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_t_interval_summary_stats() {
-    // Tests TIntervalStats with summary statistics: TIntervalStats(100 m, 15 m, 25)
     let result = eval("TIntervalStats(100 m, 15 m, 25)").unwrap();
     let display = result.to_display();
     assert!(
@@ -115,12 +111,11 @@ fn test_ti84_t_interval_summary_stats() {
     }
 }
 
-// ── ZInterval (TI-84 Option 7) ──
+// ZInterval (TI-84 Option 7)
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_z_interval_summary_stats() {
-    // Tests ZInterval with summary statistics: ZInterval(100 m, 15 m, 100)
     let result = eval("ZInterval(100 m, 15 m, 100)").unwrap();
     if let EvalResult::Interval(interval) = result {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
@@ -140,12 +135,12 @@ fn test_ti84_z_interval_summary_stats() {
     }
 }
 
-// ── 1-PropZInt (TI-84 Option A) ──
+// 1-PropZInt (TI-84 Option A)
 
 #[cfg(feature = "stats")]
 #[test]
 fn test_ti84_1_prop_z_int() {
-    // Tests 1-PropZInt(45, 100) and 1_PropZInt(45, 100)
+    // Both spellings are accepted.
     let result1 = eval("1-PropZInt(45, 100)").unwrap();
     let result2 = eval("1_PropZInt(45, 100)").unwrap();
     assert_eq!(result1.to_display(), result2.to_display());
@@ -168,12 +163,11 @@ fn test_ti84_1_prop_z_int() {
     }
 }
 
-// ── 2-SampTInt (TI-84 Option 0) ──
+// 2-SampTInt (TI-84 Option 0)
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_2_samp_t_int() {
-    // Tests 2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)
     let result = eval("2-SampTInt(100 m, 15 m, 25, 90 m, 10 m, 30)").unwrap();
     let display = result.to_display();
     assert!(
@@ -201,12 +195,11 @@ fn test_ti84_2_samp_t_int() {
     }
 }
 
-// ── 2-SampZInt (TI-84 Option 9) ──
+// 2-SampZInt (TI-84 Option 9)
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_2_samp_z_int() {
-    // Tests 2-SampZInt(100 m, 15 m, 50, 90 m, 10 m, 50)
     let result = eval("2-SampZInt(100 m, 15 m, 50, 90 m, 10 m, 50)").unwrap();
     if let EvalResult::Interval(interval) = result {
         let lo = (interval.lo.canonical - interval.lo.unit.offset) / interval.lo.unit.scalar;
@@ -227,12 +220,11 @@ fn test_ti84_2_samp_z_int() {
     }
 }
 
-// ── 2-PropZInt (TI-84 Option B) ──
+// 2-PropZInt (TI-84 Option B)
 
 #[cfg(feature = "stats")]
 #[test]
 fn test_ti84_2_prop_z_int() {
-    // Tests 2-PropZInt(45, 100, 30, 100)
     let result = eval("2-PropZInt(45, 100, 30, 100)").unwrap();
     if let EvalResult::Interval(interval) = result {
         let lo = interval.lo.canonical;
@@ -253,7 +245,7 @@ fn test_ti84_2_prop_z_int() {
     }
 }
 
-// ── Margin of Error (moe, tmoe, zmoe) ──
+// Margin of error (moe, tmoe, zmoe)
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -271,12 +263,11 @@ fn test_moe_scalar_margin_of_error() {
     assert!((zmoe_val.canonical - 2.939_945_976_810_081).abs() < 1e-13);
 }
 
-// ── Interval arithmetic with TI-84 Confidence Intervals ──
+// Interval arithmetic on confidence intervals
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_ti84_interval_with_arithmetic() {
-    // TInterval(10 m, 12 m, 11 m, 14 m) * 2
     let result = eval("TInterval(10 m, 12 m, 11 m, 14 m) * 2").unwrap();
     let display = result.to_display();
     assert!(

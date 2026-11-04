@@ -8,7 +8,6 @@ pub struct BinaryOp {
     pub right_associative: bool,
 }
 
-// Applies the binary operators function to the given left and right values
 impl BinaryOp {
     pub fn apply(&self, lhs: Value, rhs: Value) -> Result<Value, AbacusError> {
         (self.func)(lhs, rhs)

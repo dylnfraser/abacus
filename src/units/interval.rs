@@ -18,7 +18,7 @@ pub enum IntervalStyle {
     Range,
 }
 
-/// A physical interval `[lo, hi]` or `lo..hi` where both endpoints carry physical units.
+/// An interval `[lo, hi]` or `lo..hi` whose endpoints carry units.
 ///
 /// Built-in arithmetic (`+ - * / per ^ %`) produces enclosures of the true result set:
 /// inexact floating-point endpoints are rounded outward (via `next_down`/`next_up`), even
@@ -120,13 +120,13 @@ fn is_exact_power(x: f64, y: f64, result: f64) -> bool {
 }
 
 impl Interval {
-    /// Create a new interval from two `Value` endpoints.
-    /// Validates dimension compatibility and normalizes so `lo.canonical <= hi.canonical`.
+    /// An interval between two values, which must have compatible dimensions. The endpoints
+    /// are ordered so `lo.canonical <= hi.canonical`.
     pub fn new(a: Value, b: Value) -> Result<Self, AbacusError> {
         Self::new_with_style(a, b, IntervalStyle::Bracket)
     }
 
-    /// Create a new interval with an explicit display style (Bracket or Range).
+    /// Like [`Interval::new`], with an explicit display style.
     pub fn new_with_style(a: Value, b: Value, style: IntervalStyle) -> Result<Self, AbacusError> {
         let (a, b) = if a.unit.is_dimensionless() && !b.unit.is_dimensionless() {
             (Value::new(a.canonical, Arc::clone(&b.unit)), b)
@@ -155,13 +155,13 @@ impl Interval {
         }
     }
 
-    /// Promote a single scalar `Value` to a degenerate interval `[v, v]`.
+    /// The degenerate interval `[v, v]`.
     #[must_use]
     pub fn from_value(v: Value) -> Self {
         Self::from_value_with_style(v, IntervalStyle::Bracket)
     }
 
-    /// Promote a single scalar `Value` to a degenerate interval with an explicit style.
+    /// The degenerate interval `[v, v]` with an explicit display style.
     #[must_use]
     pub fn from_value_with_style(v: Value, style: IntervalStyle) -> Self {
         Self {
@@ -187,7 +187,7 @@ impl Interval {
         }
     }
 
-    /// Apply a binary operator across two intervals, returning an enclosure of all results.
+    /// Applies a binary operator to two intervals, returning an enclosure of all results.
     ///
     /// Built-in `+`/`-` use endpoint fast paths, `*`/`/` the four corners, `^` additionally
     /// considers zero when the base spans it, and `%` is bounded by the divisor magnitude.
@@ -432,7 +432,7 @@ impl Interval {
         Ok(Self::from_bounds(lo, hi, &unit, style))
     }
 
-    /// Apply a unary operator to an interval by evaluating both endpoints and normalizing.
+    /// Applies a unary operator to both endpoints and reorders them.
     ///
     /// This is an enclosure only for monotonic operators, which all built-in unary operators
     /// (`-`, `sqrt`, `!`, `++`, `--`) are. Non-integer results other than negation are
@@ -460,7 +460,7 @@ impl Interval {
         })
     }
 
-    /// Convert both endpoints to a target unit.
+    /// Converts both endpoints to `unit`.
     pub fn convert_to(&self, unit: Arc<Unit>) -> Result<Interval, AbacusError> {
         let lo = self.lo.convert_to(Arc::clone(&unit))?;
         let hi = self.hi.convert_to(unit)?;
@@ -479,7 +479,7 @@ impl Interval {
         }
     }
 
-    /// Attempt automatic derived-unit reduction on both endpoints.
+    /// Reduces both endpoints to a derived unit where possible (see [`Value::to_derived`]).
     pub fn to_derived(&self, registry: &UnitRegistry) -> Result<Interval, AbacusError> {
         let lo = self.lo.to_derived(registry)?;
         let hi = self.hi.to_derived(registry)?;
@@ -490,7 +490,7 @@ impl Interval {
         })
     }
 
-    /// Simplify the unit display on both endpoints.
+    /// Simplifies the displayed unit of both endpoints.
     pub fn simplify_unit_display(&mut self, registry: &UnitRegistry) {
         self.simplify_unit_display_with_options(registry, true);
     }
@@ -506,13 +506,13 @@ impl Interval {
             .simplify_unit_display_with_options(registry, consolidate);
     }
 
-    /// Render the interval as `[lo, hi]` or `lo..hi` depending on style.
+    /// Formats the interval as `[lo, hi]` or `lo..hi`, depending on its style.
     #[must_use]
     pub fn to_display(&self) -> String {
         self.to_string()
     }
 
-    /// Returns a new `Interval` with both endpoints rounded to `sig_figs` significant figures.
+    /// Rounds both endpoints to `sig_figs` significant figures.
     #[must_use]
     pub fn round_to_sig_figs(&self, sig_figs: usize) -> Self {
         Self {
@@ -522,7 +522,7 @@ impl Interval {
         }
     }
 
-    /// Formats the interval with both endpoints rounded to `sig_figs` significant figures.
+    /// Formats the interval with `sig_figs` significant figures on each endpoint.
     #[must_use]
     pub fn to_display_with_sig_figs(&self, sig_figs: usize) -> String {
         match self.style {
@@ -543,14 +543,14 @@ impl Interval {
         }
     }
 
-    /// Returns a new `Interval` with the specified display style.
+    /// The same interval with a different display style.
     #[must_use]
     pub fn with_style(mut self, style: IntervalStyle) -> Self {
         self.style = style;
         self
     }
 
-    /// Returns a new `Interval` with both endpoints rounded to `decimals` decimal places.
+    /// Rounds both endpoints to `decimals` decimal places.
     #[must_use]
     pub fn round_to_decimals(&self, decimals: usize) -> Self {
         Self {
@@ -560,7 +560,7 @@ impl Interval {
         }
     }
 
-    /// Formats the interval with both endpoints rounded to `decimals` decimal places.
+    /// Formats the interval with `decimals` decimal places on each endpoint.
     #[must_use]
     pub fn to_display_with_decimals(&self, decimals: usize) -> String {
         match self.style {
@@ -600,7 +600,7 @@ impl Interval {
         self.render_with(Value::to_display_engineering)
     }
 
-    /// Returns a new `Interval` with display overrides applied to both endpoints.
+    /// Applies unit display overrides to both endpoints.
     #[must_use]
     pub fn with_display_override(
         &self,

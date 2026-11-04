@@ -1,4 +1,5 @@
-//! Regression tests for the post-audit code review findings.
+//! Precision and robustness edge cases: integer differences, tiny angles, temperature
+//! spreads, DST-gap dates and Student's t with very large degrees of freedom.
 
 #[cfg(any(feature = "units", feature = "distributions"))]
 use abacus::eval;
@@ -16,7 +17,7 @@ fn exact_integer_differences_are_not_snapped_to_zero() {
     assert_eq!(show("9007199254740992 - 9007199254740991"), "1");
     assert_eq!(show("10000000000000000 - 9999999999999998"), "2");
     assert_eq!(show("1e16 + 2 - 1e16"), "2");
-    // Genuine cancellation noise on non-integers is still cleaned up.
+    // Cancellation noise on non-integers is cleaned up.
     assert_eq!(show("0.1 + 0.2 - 0.3"), "0");
     assert_eq!(show("1.1 - 1.0 - 0.1"), "0");
 }
@@ -45,7 +46,7 @@ fn temperature_spreads_use_the_same_unit_as_subtraction() {
 #[cfg(feature = "units")]
 fn distinct_whole_numbers_display_distinctly() {
     assert_ne!(show("1e20 + 16384"), show("1e20"));
-    // Float noise on short decimals is still hidden.
+    // Float noise on short decimals is hidden.
     assert_eq!(show("0.1 + 0.2"), "0.3");
 }
 
@@ -61,7 +62,7 @@ fn temperature_divided_by_zero_is_an_error() {
 fn distinct_floating_dates_never_compare_equal() {
     use abacus::Date;
     use std::collections::HashSet;
-    // 02:30 doesn't exist on 2026-03-08 in US zones (DST gap); it must still differ from 03:30.
+    // 02:30 doesn't exist on 2026-03-08 in US zones (DST gap), but it must still differ from 03:30.
     let gap: Date = "2026-03-08 02:30".parse().unwrap();
     let after: Date = "2026-03-08 03:30".parse().unwrap();
     assert_ne!(gap, after);
@@ -69,7 +70,7 @@ fn distinct_floating_dates_never_compare_equal() {
     let set: HashSet<Date> = [gap.clone(), after.clone()].into_iter().collect();
     assert_eq!(set.len(), 2);
 
-    // Zoned dates still compare by instant.
+    // Zoned dates compare by instant.
     let est: Date = "2026-08-07 10:00 EST".parse().unwrap();
     let utc: Date = "2026-08-07 15:00 UTC".parse().unwrap();
     assert_eq!(est, utc);
@@ -81,7 +82,7 @@ fn distinct_floating_dates_never_compare_equal() {
 #[test]
 #[cfg(all(feature = "units", feature = "stats"))]
 fn fahrenheit_spreads_keep_full_precision() {
-    // Values match Python's `statistics.stdev`; previously the kelvin offset cost ~3 digits.
+    // Values match Python's `statistics.stdev`. Going through kelvin would lose about 3 digits.
     assert_eq!(show("std(20 °F, 30 °F)"), "7.0710678118654755 °R");
     assert_eq!(show("var(20 °F, 30 °F)"), "50 °R^2");
     assert_eq!(
@@ -103,7 +104,7 @@ fn num(expr: &str) -> f64 {
 #[test]
 #[cfg(feature = "distributions")]
 fn student_t_with_huge_df_matches_the_normal_limit() {
-    // Found by cargo-fuzz: invt with df ≈ 5e44 took ~10 s and returned -8388608.
+    // Input found by cargo-fuzz. Huge df must be fast and match the normal distribution.
     let start = std::time::Instant::now();
     let z = -6.254_027_707_160_142; // Φ⁻¹(2e-10), mpmath
     for df in ["1e30", "5.288774053104562e44"] {
@@ -114,7 +115,7 @@ fn student_t_with_huge_df_matches_the_normal_limit() {
     let tail = num("tcdf(1e20, -6.2)");
     assert!(((tail - normal_tail) / normal_tail).abs() < 1e-13, "{tail}");
     assert!((num("tpdf(1e30, 0)") - 0.398_942_280_401_432_7).abs() < 1e-15);
-    // Moderate df is unchanged (mpmath references).
+    // Moderate df (mpmath references).
     assert!((num("invt(0.975, 30)") - 2.042_272_456_301_238).abs() < 1e-13);
     assert!((num("tpdf(5, 1)") - 0.219_679_797_350_980_6).abs() < 1e-15);
     assert!(start.elapsed() < std::time::Duration::from_secs(2));

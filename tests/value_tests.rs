@@ -17,7 +17,6 @@ use std::sync::Arc;
 #[cfg(feature = "units")]
 #[test]
 fn test_value_creation_and_display() {
-    // Tests manual construction of Value structs from numerical amounts and Unit Arcs
     let registry = UnitRegistry::standard();
     let meter = registry.unit("m").unwrap();
 
@@ -28,7 +27,6 @@ fn test_value_creation_and_display() {
 
 #[test]
 fn test_dimensionless_value() {
-    // Tests constructing dimensionless Value structs with Unit::dimensionless()
     let val = Value::new(42.0, Arc::new(Unit::dimensionless()));
     assert_eq!(val.canonical, 42.0);
     assert_eq!(val.to_display(), "42");
@@ -38,7 +36,7 @@ fn test_dimensionless_value() {
 #[cfg(feature = "units")]
 #[test]
 fn test_value_addition_subtraction() {
-    // Tests direct Value arithmetic (+ and -) across compatible unit scales (e.g. km and m)
+    // Operands in different units of the same dimension.
     let registry = UnitRegistry::standard();
     let km = registry.unit("km").unwrap();
     let m = registry.unit("m").unwrap();
@@ -58,7 +56,7 @@ fn test_value_addition_subtraction() {
 #[cfg(feature = "units")]
 #[test]
 fn test_value_multiplication_division() {
-    // Tests Value division across different physical dimensions (Length / Time -> Speed in km/h)
+    // Length / time gives a speed in km/h.
     let registry = UnitRegistry::standard();
     let km = registry.unit("km").unwrap();
     let h = registry.unit("h").unwrap();
@@ -74,7 +72,6 @@ fn test_value_multiplication_division() {
 #[cfg(feature = "units")]
 #[test]
 fn test_value_unit_conversion() {
-    // Tests programmatic unit conversion via value.convert_to(target_unit)
     let registry = UnitRegistry::standard();
     let km = registry.unit("km").unwrap();
     let m = registry.unit("m").unwrap();
@@ -86,7 +83,7 @@ fn test_value_unit_conversion() {
     assert_eq!(converted.canonical, 3500.0);
 }
 
-// ── Exact arithmetic and equality ──
+// Exact arithmetic and equality
 
 #[cfg(feature = "units")]
 #[test]

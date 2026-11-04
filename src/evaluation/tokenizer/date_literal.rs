@@ -1,9 +1,8 @@
 use crate::AbacusError;
 use crate::units::date::{Date, DayOfWeek, FLAG_EXPLICIT_MERIDIEM, FLAG_TIME_ONLY, Time, TimeZone};
 
-/// If `haystack` starts with the literal word `word` (case-insensitively) and is followed
-/// by a non-alphanumeric character (or end-of-string), returns the word length; otherwise
-/// returns `None`.
+/// The length of `word` if `haystack` starts with it (case-insensitively) followed by a
+/// non-alphanumeric character or the end of the string.
 #[inline]
 pub(crate) fn strip_word_prefix(haystack: &str, word: &str) -> Option<usize> {
     let len = word.len();
@@ -17,8 +16,8 @@ pub(crate) fn strip_word_prefix(haystack: &str, word: &str) -> Option<usize> {
     }
 }
 
-/// First words that can begin a textual date phrase (sorted, lowercase) — used as a cheap
-/// pre-filter so ordinary identifiers skip the date-phrase parsers entirely.
+/// First words that can begin a textual date phrase (sorted, lowercase). A cheap pre-filter, so
+/// ordinary identifiers skip the date-phrase parsers entirely.
 const DATE_PHRASE_FIRST_WORDS: &[&str] = &[
     "1st",
     "2nd",
@@ -123,7 +122,7 @@ fn first_word_shapes() -> &'static [u16; 128] {
     })
 }
 
-/// Returns `true` if the word at the start of `s` can begin a textual date phrase.
+/// Whether the word at the start of `s` can begin a textual date phrase.
 pub(crate) fn could_start_date_phrase(s: &str) -> bool {
     let len = s
         .bytes()
@@ -288,7 +287,7 @@ fn lowercase_leading_word<'b>(s: &str, buf: &'b mut [u8]) -> Option<&'b str> {
     std::str::from_utf8(&buf[..len]).ok()
 }
 
-/// Parses an optional four-digit year preceded by whitespace (e.g. `" 2026"`). Shorter digit runs
+/// Parses an optional four-digit year preceded by whitespace (`" 2026"`). Shorter digit runs
 /// and digits that start a time (`10:00`) are not years.
 pub(crate) fn parse_optional_year(s: &str) -> Option<(i32, usize)> {
     let s_trim = s.trim_start();
@@ -593,7 +592,7 @@ pub(crate) fn try_parse_textual_date(
     s: &str,
     ref_date: &Date,
 ) -> Result<Option<(Date, usize)>, AbacusError> {
-    // 1. Month first: e.g. "May 16, 2010", "May 16th, 2010", "May 16 2010", "May 16"
+    // 1. Month first: "May 16th, 2010", "May 16 2010", "May 16"
     if let Some((month, m_len)) = parse_month(s) {
         let rest1 = s[m_len..].trim_start();
         let ws1 = s[m_len..].len() - rest1.len();
@@ -621,7 +620,7 @@ pub(crate) fn try_parse_textual_date(
         }
     }
 
-    // 2. Day first: e.g. "16 May 2010", "16th May 2010", "16th of May 2010"
+    // 2. Day first: "16 May 2010", "16th of May 2010"
     let day = parse_ordinal(s)
         .filter(|(ord, _)| *ord > 0)
         .map(|(ord, len)| (ord as u32, len))
@@ -679,16 +678,16 @@ pub(crate) fn try_parse_event_date(
 
 /// Parses relative date keywords against `ref_date`:
 ///
-/// * `today`/`tdy`, `tomorrow`/`tmr`, `yesterday` — midnight of that calendar day.
-/// * `now` — the reference instant itself.
-/// * `next <weekday>` / `last <weekday>` — strictly after / before the reference day (on a
+/// * `today`/`tdy`, `tomorrow`/`tmr`, `yesterday`: midnight of that calendar day.
+/// * `now`: the reference instant itself.
+/// * `next <weekday>` / `last <weekday>`: strictly after / before the reference day (on a
 ///   Wednesday, `next thursday` is tomorrow and `next wednesday` is a week away).
-/// * `this <weekday>` — that day within the reference day's Monday-to-Sunday week (may be past).
-/// * bare `<weekday>` — the next such day, or today if it already is that day.
-/// * `next/last week|month|year` — the reference date shifted by one unit (calendar-aware).
+/// * `this <weekday>`: that day within the reference day's Monday-to-Sunday week (may be past).
+/// * bare `<weekday>`: the next such day, or today if it already is that day.
+/// * `next/last week|month|year`: the reference date shifted by one unit (calendar-aware).
 ///
 /// When `after_quantity` is set (the previous token is a number or quantity) bare weekdays are
-/// not recognised so that e.g. `1 sun` can refer to a unit.
+/// not recognised, so `1 sun` can refer to a unit.
 pub(crate) fn try_parse_relative_date_keyword(
     s: &str,
     ref_date: &Date,
@@ -697,7 +696,7 @@ pub(crate) fn try_parse_relative_date_keyword(
     let today_dow = ref_date.day_of_week() as i64;
     let midnight = ref_date.start_of_day();
 
-    // 1. Check modifier + space + subject
+    // 1. Modifier, space, subject (`next friday`, `last month`)
     if let Some((modifier, mod_len)) = parse_rel_modifier(s) {
         let rest = s[mod_len..].trim_start();
         let ws_len = s[mod_len..].len() - rest.len();
@@ -863,7 +862,7 @@ pub(crate) fn try_parse_date_literal_with_anchor(
     };
 
     if maybe_phrase || remaining.starts_with(|c: char| c.is_ascii_digit()) {
-        // Event dates (e.g. "third thursday of november 2026", "end of quarter", "christmas")
+        // Event dates: "third thursday of november 2026", "end of quarter", "christmas"
         if let Some((mut date, event_len)) = try_parse_event_date(remaining, ref_date)? {
             if ref_date.timezone.is_some() && date.timezone.is_none() {
                 date.timezone = ref_date.timezone.clone();
@@ -885,7 +884,7 @@ pub(crate) fn try_parse_date_literal_with_anchor(
         return Ok(None);
     }
 
-    // Standalone time literal: e.g. "3pm", "3 PM", "15:00" on the reference date
+    // A bare time ("3pm", "15:00") is on the reference date.
     if let Some((time, time_len, meridiem)) = Time::parse_time_spec_ext(remaining, false) {
         let mut date = ref_date.start_of_day();
         date.time = time;
@@ -894,7 +893,7 @@ pub(crate) fn try_parse_date_literal_with_anchor(
         return Ok(Some((date, end_idx)));
     }
 
-    // Numeric date literals (e.g. YYYY-MM-DD, DD-MM-YYYY)
+    // Numeric dates (YYYY-MM-DD, DD-MM-YYYY)
     if let Some((y, m, d, date_len)) = Date::parse_ymd_components_with(remaining, opts.month_first)?
     {
         let mut date = Date::new(y, m, d);
@@ -920,7 +919,7 @@ pub(crate) fn try_parse_date_literal_with_anchor(
             let before = end_idx;
             end_idx = parse_trailing_time(remaining, end_idx, &mut date);
             if end_idx == before {
-                // A timezone may follow a bare date (e.g. "07-08-2026 EST").
+                // A timezone may follow a bare date ("07-08-2026 EST").
                 end_idx = parse_trailing_timezone(remaining, end_idx, &mut date);
             }
         }

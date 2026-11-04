@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-/// A dimensional quantity consisting of a canonical SI scalar and an associated physical unit.
+/// A quantity: a magnitude in canonical SI units plus the unit it is displayed in.
 ///
 /// # Affine units (°C, °F)
 ///
@@ -97,7 +97,7 @@ impl Value {
         }
     }
 
-    /// Creates a dimensionless `Value` with the given scalar.
+    /// A dimensionless value.
     #[must_use]
     pub fn dimensionless(val: f64) -> Self {
         Self {
@@ -106,14 +106,14 @@ impl Value {
         }
     }
 
-    /// Returns the display-unit amount: `(canonical − offset) / scalar`.
+    /// The amount in the display unit: `(canonical − offset) / scalar`.
     #[inline]
     #[must_use]
     pub fn amount(&self) -> f64 {
         (self.canonical - self.unit.offset) / self.unit.scalar
     }
 
-    /// Constructs a `Value` directly from a pre-computed canonical value.
+    /// Builds a `Value` from a magnitude that is already canonical.
     #[inline]
     #[must_use]
     pub fn from_canonical(canonical: f64, unit: Arc<Unit>) -> Self {
@@ -183,8 +183,8 @@ impl Value {
         self.simplify_unit_display_with_options(unit_registry, true);
     }
 
-    /// Simplifies the unit display; `consolidate` controls whether same-dimension units
-    /// are merged (disabled when the user explicitly requested a target unit).
+    /// Simplifies the displayed unit. With `consolidate`, units of the same dimension are
+    /// merged; it is off when the user asked for a specific target unit.
     pub(crate) fn simplify_unit_display_with_options(
         &mut self,
         unit_registry: &UnitRegistry,
@@ -207,7 +207,7 @@ impl Value {
     }
 
     /// Re-expressing an amount in a different display unit divides by a product of
-    /// inexact conversion factors, which leaves noise in the last bits (e.g. `0.0009999999999999998`
+    /// inexact conversion factors, which leaves noise in the last bits (`0.0009999999999999998`
     /// instead of `0.001`). Nudge `canonical` by at most a few ULPs so `amount()` equals `target`,
     /// the amount computed directly from the previous display. Leaves `canonical` unchanged if
     /// no nearby value round-trips.
@@ -243,7 +243,7 @@ impl Value {
         }
     }
 
-    /// Returns a new `Value` with the displayed quantity rounded to `sig_figs` significant figures.
+    /// Rounds the displayed amount to `sig_figs` significant figures.
     #[must_use]
     pub fn round_to_sig_figs(&self, sig_figs: usize) -> Self {
         let amt = self.amount();
@@ -255,7 +255,7 @@ impl Value {
         }
     }
 
-    /// Renders this `Value` formatted to `sig_figs` significant figures.
+    /// Formats the value with `sig_figs` significant figures.
     #[must_use]
     pub fn to_display_with_sig_figs(&self, sig_figs: usize) -> String {
         let formatted_amt = format_f64_sig_figs(self.amount(), sig_figs);
@@ -263,7 +263,7 @@ impl Value {
         format_with_unit(&formatted_amt, &unit_str)
     }
 
-    /// Returns a new `Value` with the displayed quantity rounded to `decimals` decimal places.
+    /// Rounds the displayed amount to `decimals` decimal places.
     ///
     /// Values too large for the requested precision to matter (or that would overflow when
     /// scaled) are returned unchanged.
@@ -287,7 +287,7 @@ impl Value {
         }
     }
 
-    /// Renders this `Value` formatted to `decimals` decimal places.
+    /// Formats the value with `decimals` decimal places.
     #[must_use]
     pub fn to_display_with_decimals(&self, decimals: usize) -> String {
         let formatted_amt = format!("{:.precision$}", self.amount(), precision = decimals);
@@ -295,7 +295,7 @@ impl Value {
         format_with_unit(&formatted_amt, &unit_str)
     }
 
-    /// Renders this `Value` in scientific notation.
+    /// Formats the value in scientific notation.
     #[must_use]
     pub fn to_display_scientific(&self) -> String {
         let formatted_amt = format!("{:e}", self.amount());
@@ -303,7 +303,7 @@ impl Value {
         format_with_unit(&formatted_amt, &unit_str)
     }
 
-    /// Renders this `Value` in engineering notation (powers of 10 that are multiples of 3).
+    /// Formats the value in engineering notation (exponents are multiples of 3).
     #[must_use]
     pub fn to_display_engineering(&self) -> String {
         let formatted_amt = format_engineering(self.amount());
@@ -311,8 +311,8 @@ impl Value {
         format_with_unit(&formatted_amt, &unit_str)
     }
 
-    /// Returns a copy of this `Value` with its rendered unit replaced if it matches
-    /// any entry in `overrides` (e.g. `"mi/h"` -> `"mph"`, `"km/h"` -> `"kmph"`).
+    /// Replaces the rendered unit when it matches an entry in `overrides`
+    /// (`"mi/h"` -> `"mph"`).
     #[must_use]
     pub fn with_display_override(
         &self,
@@ -335,7 +335,7 @@ impl Value {
     }
 }
 
-/// Returns true if `sym` should be rendered as a prefix before the number (e.g. `$`, `€`, `£`, `¥`).
+/// Whether `sym` is written before the number, as with `$` and `€`.
 #[must_use]
 pub fn is_prefix_symbol(sym: &str) -> bool {
     matches!(
@@ -344,7 +344,7 @@ pub fn is_prefix_symbol(sym: &str) -> bool {
     )
 }
 
-/// Returns the standard number of decimal places for a currency (0 for JPY, KRW, etc., 2 for USD, EUR, GBP, etc.).
+/// Standard decimal places for a currency: 0 for currencies such as JPY and KRW, otherwise 2.
 #[must_use]
 pub fn currency_decimal_places(unit_str: &str) -> usize {
     match unit_str {
@@ -354,7 +354,7 @@ pub fn currency_decimal_places(unit_str: &str) -> usize {
     }
 }
 
-/// Helper to format a value with its unit.
+/// Joins `amount` and its unit, putting prefix symbols such as `$` first.
 #[must_use]
 pub fn format_with_unit(amount: &str, unit: &str) -> String {
     let mut s = String::with_capacity(amount.len() + unit.len() + 2);
@@ -531,7 +531,7 @@ pub fn format_engineering(val: f64) -> String {
 }
 
 /// Snaps a value that is within float noise of a 12-significant-figure value
-/// (e.g. `ft/in` = `12.000000000000002`) to that value. Genuine long fractions such as
+/// (`ft/in` = `12.000000000000002`) to that value. Genuine long fractions such as
 /// `1/12` differ from their 12-figure rounding by far more than the tolerance and are kept.
 pub(crate) fn snap_float_noise(value: f64) -> f64 {
     let snapped = round_f64_sig_figs(value, 12);
@@ -542,7 +542,7 @@ pub(crate) fn snap_float_noise(value: f64) -> f64 {
     }
 }
 
-/// Rounds a floating-point number to a specified number of significant figures.
+/// Rounds `val` to `sig_figs` significant figures.
 #[must_use]
 pub fn round_f64_sig_figs(val: f64, sig_figs: usize) -> f64 {
     if sig_figs == 0 || !val.is_finite() || val == 0.0 {
@@ -560,8 +560,7 @@ pub fn round_f64_sig_figs(val: f64, sig_figs: usize) -> f64 {
     scaled.round() / scale
 }
 
-/// Formats a floating-point number to a specified number of significant figures,
-/// preserving trailing zeros.
+/// Formats `val` to `sig_figs` significant figures, keeping trailing zeros.
 #[must_use]
 pub fn format_f64_sig_figs(val: f64, sig_figs: usize) -> String {
     if sig_figs == 0 || !val.is_finite() {
@@ -700,8 +699,8 @@ pub(crate) fn temperature_delta_unit(affine: &Unit) -> Arc<Unit> {
 }
 
 impl Value {
-    /// Resolves canonical operand values and target unit for additive operations (+ and -),
-    /// handling dimensionless promotion and percentage unit normalization.
+    /// Resolves the canonical operands and result unit for `+` and `-`, handling
+    /// dimensionless promotion and percentage units.
     fn resolve_additive_operands(&self, rhs: &Value) -> Result<(f64, f64, Arc<Unit>), AbacusError> {
         if !self.unit.is_compatible_with(&rhs.unit) {
             if rhs.unit.is_dimensionless() && !self.unit.is_dimensionless() {
@@ -1209,7 +1208,7 @@ mod tests {
 
         let sum = (&a + &b).unwrap();
         assert_eq!(sum.to_display(), "5.5 km");
-        // Verify a and b are not consumed
+        // `a` and `b` must not be consumed.
         assert_eq!(a.to_display(), "5 km");
         assert_eq!(b.to_display(), "500 m");
     }

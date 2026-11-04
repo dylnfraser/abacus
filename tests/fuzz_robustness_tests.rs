@@ -2,7 +2,7 @@ use abacus::{AbacusError, eval};
 
 #[test]
 fn test_recursion_depth_limit_nested_parentheses() {
-    // 1000 nested parentheses should cleanly fail with RecursionLimitExceeded
+    // 1000 nested parentheses fail with RecursionLimitExceeded rather than overflowing the stack.
     let mut expr = String::with_capacity(2001);
     for _ in 0..1000 {
         expr.push('(');
@@ -61,7 +61,7 @@ fn test_recursion_depth_limit_nested_functions() {
 
 #[test]
 fn test_recursion_depth_within_limit_succeeds() {
-    // 50 nested parentheses is well within MAX_RECURSION_DEPTH (256)
+    // 50 levels is within the default recursion limit.
     let mut expr = String::with_capacity(105);
     for _ in 0..50 {
         expr.push('(');
@@ -102,14 +102,14 @@ fn test_extreme_arithmetic_overflow_never_panics() {
     ];
 
     for input in dangerous_inputs {
-        // Must either return Ok or Err, but NEVER panic or abort
+        // Any result is fine as long as it doesn't panic.
         let _ = eval(input);
     }
 }
 
 #[test]
 fn test_pseudo_random_string_fuzzing() {
-    // Deterministic linear congruential generator (LCG) for reproducible fuzzing
+    // Fixed-seed LCG so failures are reproducible.
     let mut seed: u64 = 0xDEADBEEFCAFEBABE;
     let mut next_rand = || -> u64 {
         seed = seed
@@ -194,7 +194,6 @@ fn test_pseudo_random_string_fuzzing() {
         "\\",
     ];
 
-    // Run 5,000 generated randomized inputs through eval
     for _ in 0..5000 {
         let length = (next_rand() % 15) + 1;
         let mut expr = String::new();
@@ -203,7 +202,7 @@ fn test_pseudo_random_string_fuzzing() {
             expr.push_str(corpus_tokens[idx]);
         }
 
-        // Must never panic
+        // Must not panic.
         let _ = eval(&expr);
     }
 }

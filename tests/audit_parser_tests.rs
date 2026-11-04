@@ -1,4 +1,5 @@
-//! Regression tests for parser/lexer findings from the codebase audit.
+//! Parser and lexer edge cases: lexing cost, articles vs ampere, conversions, recursion limits,
+//! implicit multiplication, percent vs modulo and number literals.
 // Helpers and imports are only used by tests gated on default features.
 #![cfg_attr(
     not(all(
@@ -29,7 +30,7 @@ fn add_ten(lhs: Value, rhs: Value) -> Result<Value, AbacusError> {
     Ok(Value::new(sum.canonical + 10.0, sum.unit))
 }
 
-// ── Lexer performance: no O(n^2) rescans of the remaining input ──
+// Lexer performance: no O(n^2) rescans of the remaining input
 
 #[test]
 fn long_operator_chains_lex_in_linear_time() {
@@ -38,7 +39,7 @@ fn long_operator_chains_lex_in_linear_time() {
     assert!(eval(&expr).is_ok());
     let expr = format!("{}1", "-".repeat(100_000));
     assert_eq!(eval(&expr), Err(AbacusError::RecursionLimitExceeded));
-    // Previously ~5 s (release) / ~54 s (debug); now milliseconds. Generous bound for slow CI.
+    // This takes milliseconds; a quadratic lexer takes seconds. The bound is loose for slow CI.
     assert!(start.elapsed() < Duration::from_secs(10));
 }
 
@@ -87,7 +88,7 @@ fn binary_minus_wins_equal_length_tie_deterministically() {
     );
 }
 
-// ── Indefinite articles vs ampere ──
+// Indefinite articles vs ampere
 
 #[cfg(feature = "units")]
 #[test]
@@ -108,7 +109,7 @@ fn articles_still_mean_one_or_per() {
     assert_eq!(display("$50 an hour"), display("$50 / hour"));
 }
 
-// ── Conversions: rate x duration only with an explicit duration ──
+// Conversions: rate x duration only with an explicit duration
 
 #[cfg(feature = "units")]
 #[test]
@@ -160,7 +161,7 @@ fn only_unitless_expressions_take_on_a_conversion_unit() {
     assert_eq!(display("10 m / 5 m in %"), "200%");
 }
 
-// ── Recursion limits and stack safety ──
+// Recursion limits and stack safety
 
 #[test]
 fn recursion_depth_setter_is_clamped() {
@@ -213,7 +214,7 @@ fn range_element_limit_is_total_not_per_range() {
     assert_eq!(display("sum(1..100, 1..100)"), "10100");
 }
 
-// ── Juxtaposed numbers and compound measurements ──
+// Juxtaposed numbers and compound measurements
 
 #[cfg(feature = "units")]
 #[test]
@@ -238,7 +239,7 @@ fn compound_measurements_are_summed() {
     assert_eq!(display("2 m 3 s"), "6 m*s");
 }
 
-// ── Increment / decrement vs binary operators ──
+// Increment / decrement vs binary operators
 
 #[test]
 fn double_signs_between_operands_are_binary_then_unary() {
@@ -255,7 +256,7 @@ fn increment_binds_like_unary_minus() {
     assert_eq!(display("(5--)"), "4");
 }
 
-// ── Variables vs units ──
+// Variables vs units
 
 #[cfg(feature = "units")]
 #[test]
@@ -270,7 +271,7 @@ fn variables_shadow_units_regardless_of_spacing() {
     assert_eq!(calc.eval("2 hours in min").unwrap().to_display(), "120 min");
 }
 
-// ── Percent vs modulo ──
+// Percent vs modulo
 
 #[cfg(feature = "units")]
 #[test]
@@ -283,7 +284,7 @@ fn percent_and_modulo_ignore_whitespace() {
     assert_eq!(eval("10%").unwrap().to_display(), "10%");
 }
 
-// ── sqrt of negatives ──
+// sqrt of negatives
 
 #[cfg(feature = "units")]
 #[test]
@@ -296,7 +297,7 @@ fn sqrt_of_negative_is_an_error_on_every_path() {
     }
 }
 
-// ── Ranges ──
+// Ranges
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -316,7 +317,7 @@ fn range_endpoints_in_functions_require_parentheses_for_loose_operators() {
     assert_eq!(display("mean(0 m .. 10 m .. 2 m)"), "5 m");
 }
 
-// ── Significant figures ──
+// Significant figures
 
 #[test]
 fn sig_fig_scan_skips_identifiers_and_exponents() {
@@ -329,7 +330,7 @@ fn sig_fig_scan_skips_identifiers_and_exponents() {
     assert_eq!(calc.eval("123 * log10(456)").unwrap().to_display(), "327");
 }
 
-// ── Number literals ──
+// Number literals
 
 #[test]
 fn overflowing_and_truncated_literals_are_errors() {
@@ -339,7 +340,7 @@ fn overflowing_and_truncated_literals_are_errors() {
     assert_eq!(display("4e2"), "400");
 }
 
-// ── Timezone offset literals ──
+// Timezone offset literals
 
 #[test]
 fn timezone_offsets_only_follow_dates() {
@@ -353,7 +354,7 @@ fn timezone_offsets_only_follow_dates() {
     );
 }
 
-// ── Miscellaneous quirks ──
+// Miscellaneous quirks
 
 #[cfg(all(feature = "units", feature = "currencies"))]
 #[test]

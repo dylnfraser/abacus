@@ -243,7 +243,7 @@ fn currency_unit(def: &CurrencyDefinition, rate_per_usd: f64) -> Arc<Unit> {
     })
 }
 
-/// Registers all currency units with default fixed exchange rates into the provided map.
+/// Registers every currency unit in `map` at the bundled fixed rates.
 pub fn register_currency_units<S: std::hash::BuildHasher>(map: &mut HashMap<String, Arc<Unit>, S>) {
     for def in FIXED_EXCHANGE_RATES {
         let unit = currency_unit(def, def.rate_per_usd);
@@ -253,8 +253,8 @@ pub fn register_currency_units<S: std::hash::BuildHasher>(map: &mut HashMap<Stri
     }
 }
 
-/// Updates currency exchange rates in the provided unit map.
-/// `rates` maps currency code (e.g. "EUR") to `rate_per_usd` (e.g. 0.89166).
+/// Replaces the currency units in `map` with ones at the given rates.
+/// `rates` maps a currency code (`"EUR"`) to its `rate_per_usd` (0.89166).
 /// Non-finite or non-positive rates are ignored.
 pub fn update_currency_rates_in_map<S: std::hash::BuildHasher, R: std::hash::BuildHasher>(
     map: &mut HashMap<String, Arc<Unit>, S>,
@@ -273,9 +273,9 @@ pub fn update_currency_rates_in_map<S: std::hash::BuildHasher, R: std::hash::Bui
     }
 }
 
-/// Returns `true` if every currency in `registry` still uses the bundled
-/// [`FIXED_EXCHANGE_RATES`] (dated [`FALLBACK_RATES_DATE`]), i.e. no live, cached or
-/// manually set rate has been applied.
+/// Whether every currency in `registry` still uses the bundled [`FIXED_EXCHANGE_RATES`]
+/// (dated [`FALLBACK_RATES_DATE`]), meaning no live, cached or manually set rate has been
+/// applied.
 #[must_use]
 pub fn is_using_fallback_rates(registry: &UnitRegistry) -> bool {
     FIXED_EXCHANGE_RATES.iter().all(|def| {
@@ -285,9 +285,7 @@ pub fn is_using_fallback_rates(registry: &UnitRegistry) -> bool {
     })
 }
 
-// ---------------------------------------------------------------------------------------------
-// Minimal, dependency-free JSON reader (enough for the Frankfurter response format).
-// ---------------------------------------------------------------------------------------------
+// Minimal JSON reader, enough for the Frankfurter response format.
 
 #[derive(Debug, Clone, PartialEq)]
 enum Json {
@@ -549,8 +547,8 @@ fn parse_frankfurter(json: &str) -> Result<FrankfurterRates, AbacusError> {
     Ok(FrankfurterRates { rates, date })
 }
 
-/// Parses and validates a Frankfurter JSON response
-/// (e.g. `{"amount":1.0,"base":"USD","date":"2026-10-20","rates":{"EUR":0.89166,...}}`).
+/// Parses and validates a Frankfurter JSON response such as
+/// `{"amount":1.0,"base":"USD","date":"2026-10-20","rates":{"EUR":0.89166,...}}`.
 ///
 /// # Errors
 /// Returns an error if the document is not valid JSON, the base is not USD, or any rate
@@ -596,9 +594,7 @@ fn today_utc_days() -> Option<i64> {
     i64::try_from(secs / 86_400).ok()
 }
 
-// ---------------------------------------------------------------------------------------------
 // Network fetch
-// ---------------------------------------------------------------------------------------------
 
 /// Runs `curl` to download the Frankfurter response body.
 #[cfg(feature = "live-rates")]
@@ -669,11 +665,9 @@ pub fn fetch_and_cache_rates(_cache_path: &Path) -> Result<HashMap<String, f64>,
     ))
 }
 
-// ---------------------------------------------------------------------------------------------
 // Cache file handling
-// ---------------------------------------------------------------------------------------------
 
-/// Returns the default path to the cached exchange rates file.
+/// The default path of the exchange-rate cache file.
 ///
 /// Resolution order: `ABACUS_CURRENCY_CACHE` (file), `ABACUS_CACHE_DIR`, `XDG_CACHE_HOME`,
 /// `$HOME/.cache` / `%LOCALAPPDATA%` / `%USERPROFILE%\.cache`, and finally a per-user,
@@ -779,7 +773,7 @@ fn check_private_dir(dir: &Path, create: bool) -> Result<(), AbacusError> {
     Ok(())
 }
 
-/// Returns true if the cache file was written within the last 24 hours **and** contains a
+/// Whether the cache file was written within the last 24 hours and contains a
 /// valid response whose ECB reference `date` is recent (at most a few days old, to allow
 /// for weekends and bank holidays).
 #[must_use]
@@ -884,7 +878,7 @@ pub fn load_rates_from_cache(cache_path: &Path) -> Result<HashMap<String, f64>, 
     parse_frankfurter_json(&read_cache_file(cache_path)?)
 }
 
-/// Retrieves rates using daily cache logic:
+/// Loads rates through the daily cache:
 /// - If the cache is fresh (see [`is_cache_fresh`]), loads it without network access.
 /// - Otherwise attempts a live fetch via curl (if `live-rates` is enabled) and saves it.
 /// - If the network fetch fails, falls back to existing (stale) cached rates if available.

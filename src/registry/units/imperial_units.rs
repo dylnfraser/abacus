@@ -130,7 +130,7 @@ const IMPERIAL_UNITS: &[UnitDefinition] = &[
         offset: 0.0,
         dimensions: Dimensions::MASS,
     },
-    // Metric ton (tonne): 1000 kg. Not prefixable, since e.g. `kt` is the knot and `ft` the foot.
+    // Metric ton (tonne): 1000 kg. Not prefixable, since `kt` is the knot and `ft` the foot.
     UnitDefinition {
         keys: &[
             "t",

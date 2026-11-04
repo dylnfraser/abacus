@@ -1,21 +1,20 @@
 # abacus
 
-Abacus is a unit-aware mathematical evaluation engine written in Rust. It provides a Pratt parser supporting physical dimensions, implicit multiplication, unit conversions, intervals, date & relative time calculations, business day calendars, statistics, probability distributions, hypothesis testing, confidence intervals, financial mathematics, and dimension-aware linear regression.
+Abacus is a calculator engine for Rust that keeps track of units. It evaluates expressions with physical dimensions, unit conversions, intervals, dates and business days, statistics and probability distributions, hypothesis tests, linear regression and financial functions.
 
 ## Features
 
-- **Pratt Parser** - Operator precedence, grouping, unary/binary/postfix operators, implicit multiplication (`5(2 + 3)`, `2 sqrt(9 m^2)`), compound measurements (`5 ft 3 in`, `1 h 30 min`), dot property access, and `as` / `in` / `to` conversions. Expressions parse to a syntax tree that can be compiled once and evaluated many times, and errors point at the offending part of the input. Lexing is linear in the input length, and recursion is bounded by a configurable depth limit plus a stack-headroom guard.
-- **Units & Dimensions** - SI base & derived, US customary, imperial, astronomical, nautical, CGS physics, engineering (cal, BTU, hp, psi, kWh), storage, typography, and historical units. Dimensions are fixed-point exponents (`[i32; 9]`, scaled by 27720 so any fraction with denominator ≤ 12 is exact) with checked arithmetic, so overflow is an error rather than a wrong answer.
-- **Interval Arithmetic** - Bracket (`[1, 10]`) and range (`1..10`) syntax with physical units. Bounds are rounded outward so results enclose the exact result of each operation; division by an interval containing zero yields `[-inf, inf]`, and even powers of intervals crossing zero are handled.
-- **Dates & Natural Relative Time** - Dates (`07-08-2026`, `2026-08-07`), times (`15:30:00`, `3:30 PM`, `3 PM`), timezones (`UTC`, `EST`, `+02:00`, `+0530`), calendar month/year durations, and natural language (`last thursday at 3pm + 2 weeks`, `today at 12 to 1`). `now`/`today` use the local timezone, read from `TZ` / the system zoneinfo with no extra dependencies.
-- **Business Day Calendars** - Closed-form business day arithmetic (`07-08-2026 + 5 business days`), interval counting (`workdays(start, end)`), configurable weekends, and workday/weekend predicates.
-- **Derived SI Reduction** - Composite results reduce to standard derived units (`10 N * 5 m -> 50 J`, `12 V * 2 A -> 24 W`); a unit you typed yourself (`1 atm`, `3 GHz`) is kept as written.
-- **Statistics & Distributions** - Descriptive statistics, dispersion, covariance, correlation, skewness, kurtosis, z-scores, quantiles, and distributions (Normal, Student's t, Chi-Squared, F, Binomial, Poisson, Geometric, Hypergeometric, Exponential, Uniform) computed to near full double precision, with log-space discrete distributions and incomplete gamma/beta CDFs.
-- **Hypothesis Testing & Confidence Intervals** — TI-84-style tests and intervals with explicit raw-data and summary-statistics forms.
-- **Linear Regression** — Dimension-aware `linreg` returning a hash with `slope`, `intercept`, `r`, `r2`, residual `se`, `slope_se`, `intercept_se`, and means.
-- **Financial Functions** — `pmt`, `fv`, `pv`, `npv`, `irr`, and `compound`.
-- **No Required Dependencies** — The library has no required dependencies. The optional `live-rates` feature fetches exchange rates by running the system `curl`; `repl` (`rustyline`) and `serde` are optional.
-- **Modular Cargo Features & Serde** — Feature flags for each subsystem (see [Cargo Features](#cargo-features)).
+- Parsing: operator precedence, implicit multiplication (`5(2 + 3)`), compound measurements (`5 ft 3 in`), property access with `.`, and conversions with `as`, `in` or `to`. An expression can be compiled once and evaluated many times. Errors point at the part of the input that caused them. Lexing is linear in the input length, and recursion depth is limited by a configurable maximum and a check on remaining stack.
+- Units: SI, US customary, imperial, astronomical, nautical, CGS, engineering, storage, typographic and historical units. Dimension exponents are stored as fixed-point integers (`[i32; 9]`, scaled by 27720, so any fraction with a denominator up to 12 is exact). The arithmetic is checked, so an overflow gives an error instead of a wrong answer.
+- Derived units: composite results reduce to named SI units (`10 N * 5 m` gives `50 J`). A unit you typed yourself, such as `1 atm`, is kept as written.
+- Intervals: `[1, 10]` or `1..10`, with or without units. Bounds are rounded outward, so each result contains the exact result of the operation. Dividing by an interval that contains zero gives `[-inf, inf]`.
+- Dates and times: dates, times, timezones, calendar months and years, and relative phrases such as `last thursday at 3pm + 2 weeks`. `now` and `today` use the local timezone, read from `TZ` or the system zoneinfo.
+- Business days: `07-08-2026 + 5 business days`, `workdays(start, end)`, configurable weekends, and workday/weekend predicates.
+- Statistics: descriptive statistics, covariance, correlation, skewness, kurtosis, z-scores and quantiles, plus the Normal, Student's t, chi-squared, F, binomial, Poisson, geometric, hypergeometric, exponential and uniform distributions, computed to near full double precision.
+- Hypothesis tests and confidence intervals in the style of the TI-84, with separate functions for raw data and summary statistics.
+- Linear regression: `linreg` keeps units and returns the slope, intercept, `r`, `r2`, standard errors and means.
+- Financial functions: `pmt`, `fv`, `pv`, `npv`, `irr` and `compound`.
+- The library has no required dependencies. Each subsystem is behind a Cargo feature (see [Cargo Features](#cargo-features)); the `live-rates` feature runs the system `curl` to fetch exchange rates.
 
 ---
 
@@ -68,11 +67,11 @@ fn main() {
 }
 ```
 
-Numbers print in their shortest round-trip form, except that float noise in the last couple of bits is hidden (`0.1 + 0.2` prints `0.3`, `5 lb to kg` prints `2.26796185 kg`). Interval bounds always print exactly, so outward rounding stays visible: `[0.1, 0.1] + [0.2, 0.2]` is `[0.3, 0.30000000000000004]`.
+Numbers print in their shortest round-trip form, with float noise in the last couple of bits hidden, so `0.1 + 0.2` prints `0.3`. Interval bounds always print exactly, so the outward rounding stays visible: `[0.1, 0.1] + [0.2, 0.2]` is `[0.3, 0.30000000000000004]`.
 
 ### Compiled Expressions & Diagnostics
 
-Parse an expression once with `compile` and evaluate it repeatedly with `eval_compiled`. It sees the engine's current variable values and settings, and is several times faster than re-evaluating the text:
+`compile` parses an expression once and `eval_compiled` evaluates it against the engine's current variables and settings. This is several times faster than evaluating the text again:
 
 ```rust
 use abacus::Abacus;
@@ -85,9 +84,9 @@ for t in [0.0, 1.0, 2.0] {
 }
 ```
 
-A compiled expression always gives the same result as `eval` on its source. It is re-read from the source only when the engine changed in a way that affects how the text is read (a variable now shadows, or stops shadowing, a unit name the expression uses; or units, operators or input settings changed), or when it contains date literals. Changing variable values, or defining unrelated ones, never forces a re-read.
+A compiled expression always gives the same result as `eval` on its source. The source is parsed again only if it contains date literals, or if the engine changed in a way that affects parsing: a variable starts or stops shadowing a unit name the expression uses, or the units, operators or input settings changed. Changing variable values, or defining unrelated variables, does not cause a re-parse.
 
-`eval_detailed` (and `eval_mut_detailed`) return a `Diagnostic` that locates the error; its `Display` points at it:
+`eval_detailed` and `eval_mut_detailed` return a `Diagnostic` whose `Display` shows where the error is:
 
 ```rust
 use abacus::Abacus;
@@ -102,9 +101,7 @@ println!("{err}");
 
 ### Engine Configuration
 
-Configure engine behavior, trigonometry modes, dimensional safety, calendar/timezones, recursion limits, and output formatting on the `Abacus` instance.
-
-Every setting has a consuming builder `with_*`, an in-place `set_*` (returning `&mut Self`), and a getter of the same name as the setting (`calc.angle_mode()`). Optional settings accept a value or `None`: `with_decimal_places(2)`, `set_decimal_places(None)`. `Abacus::new()` and `Abacus::default()` are the standard engine; `Abacus::empty()` starts with bare registries.
+Settings live on the `Abacus` instance. Each one has a consuming builder `with_*`, an in-place `set_*` that returns `&mut Self`, and a getter named after the setting (`calc.angle_mode()`). Optional settings take a value or `None`: `with_decimal_places(2)`, `set_decimal_places(None)`. `Abacus::new()` and `Abacus::default()` return the standard engine; `Abacus::empty()` starts with empty registries.
 
 ```rust
 use abacus::{Abacus, AngleMode};
@@ -226,7 +223,7 @@ println!("{}", calc_us.eval("08-07-2026").unwrap()); // 08-07-2026 (August 7)
 
 #### Unit naming conventions
 
-Some common names mean different things in different countries. Abacus picks one meaning and provides explicit names for the others:
+Some names mean different things in different countries. Abacus uses one meaning and gives the others their own names:
 
 | Name                                    | Meaning                                         | Alternatives                                                        |
 | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------------------------ |
@@ -240,7 +237,7 @@ Some common names mean different things in different countries. Abacus picks one
 
 ### World Currencies & Conversions
 
-Abacus supports 30 world currencies with prefix symbol formatting (`$100`, `€50`), cross-currency conversions, and currency-appropriate decimal display. Results below use the bundled fallback rates (dated 2026-10-20); see [Exchange Rates](#exchange-rates) for live rates.
+Abacus has 30 currencies. Symbols print as prefixes (`$100`), and each currency shows its usual number of decimals. Results below use the bundled fallback rates, dated 2026-10-20; see [Exchange Rates](#exchange-rates) for live rates.
 
 | Expression                  | Result      | Description                                           |
 | :-------------------------- | :---------- | :---------------------------------------------------- |
@@ -257,7 +254,7 @@ Abacus supports 30 world currencies with prefix symbol formatting (`$100`, `€5
 
 ### Number Scales, Natural Articles & Division ("per")
 
-Write math in conversational English with scale words, articles, and `per`:
+Scale words, `a`/`an` and `per` are understood:
 
 | Expression                              | Result          | Description                             |
 | :-------------------------------------- | :-------------- | :-------------------------------------- |
@@ -280,9 +277,9 @@ Write math in conversational English with scale words, articles, and `per`:
 | `$50 per hour * 8 hours`                | `$400`          | Wage calculation                        |
 | `100 per 4`                             | `25`            | Dimensionless ratio                     |
 
-`a`/`an` only act as `1` (or as "per") in these conversational positions; `A` is always the ampere (`10 V / A` → `10 Ω`).
+`a` and `an` are read as `1` or as "per" only in positions like these. `A` is always the ampere (`10 V / A` → `10 Ω`).
 
-### Conversational Percentage Engine
+### Percentages
 
 | Expression                         | Result    | Description                                    |
 | :--------------------------------- | :-------- | :--------------------------------------------- |
@@ -321,11 +318,11 @@ Write math in conversational English with scale words, articles, and `per`:
 | `calc.eval("pi * r^2")`       | `78.53981633974483 m^2` | Variable evaluation with physical units |
 | `calc.eval_mut("w = 10 m")`   | `10 m`                  | Inline assignment syntax                |
 
-Variables shadow units of the same name, with or without a space (`2h` and `2 h` both use a variable `h` if one is defined); conversion targets after `in`/`to` always refer to units.
+A variable shadows a unit with the same name, so if `h` is defined, both `2h` and `2 h` use the variable. Conversion targets after `in` or `to` always refer to units.
 
 ### Unit Display Overrides
 
-A display alias system lets composite units render with colloquial abbreviations:
+Composite units can be displayed under a different name:
 
 ```rust
 let calc = Abacus::standard()
@@ -345,7 +342,7 @@ let calc = Abacus::standard().with_common_speed_overrides();
 
 ### Interval Arithmetic
 
-Intervals support bracket syntax `[a, b]` and range syntax `a..b`:
+Write intervals as `[a, b]` or `a..b`:
 
 ```text
 [1 m, 2 m] + [3 m, 4 m]   -> [4 m, 6 m]
@@ -358,11 +355,11 @@ Intervals support bracket syntax `[a, b]` and range syntax `a..b`:
 [0.1, 0.1] + [0.2, 0.2]   -> [0.3, 0.30000000000000004]
 ```
 
-**What is guaranteed:** for `+`, `-`, `*`, `/` and powers, each result encloses the exact real-number result of that single operation on the input bounds (inexact bounds are rounded outward by one ulp). As with all naive interval arithmetic, the *dependency problem* applies (`[1, 2] - [1, 2]` is `[-1, 1]`, not `[0, 0]`), so repeated variables widen results. Unary functions applied to intervals are evaluated at the endpoints and are only exact for monotonic functions. Inside function calls, write compound range endpoints in parentheses (`max(1..(2*3))`).
+For `+`, `-`, `*`, `/` and powers, each result contains the exact real-number result of that one operation on the input bounds; inexact bounds are rounded outward by one ulp. Operations don't know when two intervals are the same quantity, so `[1, 2] - [1, 2]` is `[-1, 1]`, not `[0, 0]`, and using a variable more than once widens the result. Functions of one argument are evaluated at the endpoints, which is only correct for monotonic functions. Inside function calls, put compound range endpoints in parentheses: `max(1..(2*3))`.
 
 ### Dates, Relative Time & Business Calendars
 
-Outputs below are shown with the clock at **Tuesday, September 1, 2026 09:00** local time (`Abacus::with_now` pins the clock).
+These outputs assume the local time is Tuesday, September 1, 2026 09:00. `Abacus::with_now` sets the clock.
 
 ```text
 // Date arithmetic
@@ -393,18 +390,18 @@ next friday                        -> September 4, 2026
 2026-08-07 10:00 +0530 in UTC      -> August 7, 2026 04:30:00 UTC
 ```
 
-**Date semantics**
+How dates are read:
 
-- **Local time:** `now` is the current instant and `today` is local midnight. The local UTC offset (including DST) comes from the `TZ` environment variable or `/etc/localtime` (TZif zoneinfo), falling back to UTC.
-- **Numeric dates:** `YYYY-MM-DD` is always year-month-day. Ambiguous `NN-NN-YYYY` is read as **day-month-year** by default, and as month-day-year when the engine uses `DateFormat::MMDDYYYY`, so output round-trips. Invalid dates such as `2026-02-30` are errors.
-- **Durations:** `month(s)`/`mo` and `year(s)`/`yr` added to a date move by calendar months, clamped to month end. Converted to fixed units they use the Gregorian averages (year = 365.2425 d, month = year / 12). `Date - Date` gives whole days in `d` when exact, otherwise `h`, `min` or `s`.
-- **`workdays(a, b)`:** counts business days after `a` up to and including `b`, consistent with `a + n business days`; it is negative when `b` is before `a`.
-- **`next X` / `last X`:** the occurrence strictly after or before today. `this X` is X in the current Monday–Sunday week.
-- **Timezones:** zones are fixed-offset abbreviations; DST is not inferred, so write `EDT` for US Eastern summer time. Ambiguous abbreviations resolve to IST = India (+05:30), CST = US Central (−06:00), and BST = British Summer Time (+01:00). Numeric offsets (`+02:00`, `-0400`) must be within ±14:00.
+- `now` is the current instant and `today` is local midnight. The local UTC offset, including DST, comes from the `TZ` environment variable or `/etc/localtime`, and falls back to UTC.
+- `YYYY-MM-DD` is always year-month-day. `NN-NN-YYYY` is day-month-year by default, or month-day-year when the engine uses `DateFormat::MMDDYYYY`, so output can be read back in. Invalid dates such as `2026-02-30` are errors.
+- Adding `month(s)`/`mo` or `year(s)`/`yr` to a date moves by calendar months, clamped to the end of the month. Converted to fixed units, they use Gregorian averages (year = 365.2425 d, month = year / 12). Subtracting two dates gives whole days in `d` when exact, otherwise `h`, `min` or `s`.
+- `workdays(a, b)` counts business days after `a` up to and including `b`, matching `a + n business days`. It is negative when `b` is before `a`.
+- `next X` and `last X` are the nearest occurrence strictly after or before today. `this X` is X in the current Monday-to-Sunday week.
+- Timezone abbreviations are fixed offsets and DST is not inferred, so write `EDT` for US Eastern summer time. IST is India (+05:30), CST is US Central (−06:00) and BST is British Summer Time (+01:00). Numeric offsets (`+02:00`, `-0400`) must be within ±14:00.
 
-### Event Calculations & Conversational Dates
+### Events and Named Dates
 
-Results shown with the clock at Tuesday, September 1, 2026 09:00:
+Same clock as above:
 
 | Expression                                            | Example Result          | Description                                     |
 | :---------------------------------------------------- | :---------------------- | :---------------------------------------------- |
@@ -454,13 +451,13 @@ chisqcdf(1e6, 1e6)                 -> 0.5001880631966019
 
 - `std`/`var` are sample statistics; `std_p`/`var_p` are population statistics.
 - `iqr` and quantiles use linear interpolation (Excel `QUARTILE.INC`). `skew`/`kurt` are the sample-adjusted forms used by Excel's `SKEW`/`KURT`.
-- Spreads of temperatures (std, range, …) are temperature differences, so they are reported in K for °C readings and °R for °F readings (matching `30 °F - 20 °F` = `10 °R`).
-- Integer-valued parameters (counts, `n`, factorial/nCr arguments) must be whole numbers; non-integers are errors, not silently rounded.
-- **Accuracy:** distribution functions are accurate to about 1e-13 relative or better for ordinary parameters. With extremely large parameters, the CDFs built on the incomplete beta/gamma functions (`fcdf`, `binomcdf`, `hypgeomcdf`, `poissoncdf`) lose precision gradually: errors are about 1e-13 up to ~1e6, about 1e-12–1e-10 around 1e8–1e12, and about 1e-8 at 1e15 (e.g. `binomcdf(1e15, 0.5, 5e14)`). Student's t (`tcdf`, `invt`, `tpdf`) and `chisqcdf` stay accurate at any degrees of freedom (worst observed: ~3e-13 for `chisqcdf` near 1e9). Inputs that cannot be evaluated return an error rather than a wrong value.
+- The spread of a set of temperatures (std, range and so on) is a temperature difference, so it is given in K for °C readings and °R for °F readings, as with `30 °F - 20 °F` = `10 °R`.
+- Parameters that must be integers (counts, `n`, factorial and nCr arguments) are errors when they are not whole numbers. They are not rounded.
+- Distribution functions have a relative error of about 1e-13 or better for ordinary parameters. The CDFs built on the incomplete beta and gamma functions (`fcdf`, `binomcdf`, `hypgeomcdf`, `poissoncdf`) lose precision slowly as parameters grow: about 1e-13 up to ~1e6, 1e-12 to 1e-10 around 1e8 to 1e12, and about 1e-8 at 1e15 (`binomcdf(1e15, 0.5, 5e14)`). Student's t (`tcdf`, `invt`, `tpdf`) and `chisqcdf` stay accurate at any degrees of freedom; the worst error observed is ~3e-13, for `chisqcdf` near 1e9. Inputs that cannot be evaluated return an error, not a wrong value.
 
 ### Hypothesis Testing & Confidence Intervals
 
-TI-84-style tests return hashes with the test statistic, the two-sided p-value (`p` / `p_value`), and sample estimates. Each function name has exactly one signature: summary-statistics ("Stats") and raw-data ("Data") inputs use different names.
+Tests follow the TI-84 and return a hash with the test statistic, the two-sided p-value (`p` or `p_value`) and the sample estimates. Each function has one signature, so summary-statistics ("Stats") and raw-data ("Data") versions have different names.
 
 | Function                          | Arguments                               | Notes                         |
 | :-------------------------------- | :-------------------------------------- | :---------------------------- |
@@ -484,7 +481,7 @@ TI-84-style tests return hashes with the test statistic, the two-sided p-value (
 | `moe`                             | `(x₁, x₂, …, [C%])`                     | t-based margin of error       |
 | `tmoe` / `zmoe`                   | `(s, n, [C])` / `(σ, n, [C])`           |                               |
 
-The confidence level defaults to 95%. Stats forms accept `0.9` or `90%`; **Data forms accept only a percentage** (`TInterval(10 m, 12 m, 11 m, 14 m, 90%)`), so a data value between 0 and 1 is never mistaken for a confidence level.
+The confidence level defaults to 95%. Stats forms accept `0.9` or `90%`. Data forms accept only a percentage (`TInterval(10 m, 12 m, 11 m, 14 m, 90%)`), so a data value between 0 and 1 is never taken as a confidence level.
 
 ```text
 ZTestData(10 m, 2 m, 12 m, 14 m, 10 m, 16 m)
@@ -500,7 +497,7 @@ ZInterval(100 m, 15 m, 100)                          -> [97.06005402318992 m, 10
 
 ### Dimension-Aware Linear Regression
 
-`linreg(x₁, …, xₙ, y₁, …, yₙ)` keeps physical dimensions for slopes, intercepts, standard errors, and predictions. `se` is the residual standard error; `slope_se` and `intercept_se` are the standard errors of the coefficients.
+`linreg(x₁, …, xₙ, y₁, …, yₙ)` keeps units on the slope, intercept, standard errors and predictions. `se` is the residual standard error; `slope_se` and `intercept_se` are the standard errors of the coefficients.
 
 ```text
 linreg(1 s, 2 s, 3 s, 4 s, 10 m, 20 m, 30 m, 40 m)
@@ -514,7 +511,7 @@ predict(5, 1, 2, 3, 2, 4, 6)                                       -> 10
 
 ### Financial Functions
 
-Excel sign conventions; `npv` discounts the first cash flow (like Excel's `NPV`).
+These use Excel's sign conventions. Like Excel's `NPV`, `npv` discounts the first cash flow.
 
 ```text
 pmt(0.05/12, 360, 200000)          -> -1073.6432460242781
@@ -528,11 +525,11 @@ irr(-100, 60, 60)                  -> 0.13066238629180754
 
 ## Exchange Rates
 
-With the `currencies` feature, conversions use bundled fallback rates (dated `currency::FALLBACK_RATES_DATE`); `currency::is_using_fallback_rates(calc.units())` reports whether they are still in use. Nothing touches the network or disk unless you opt in:
+With the `currencies` feature, conversions use bundled fallback rates dated `currency::FALLBACK_RATES_DATE`. `currency::is_using_fallback_rates(calc.units())` tells you whether they are still in use. Abacus does not use the network or disk unless you ask it to:
 
-- `with_live_rates(true)` / `update_daily_rates()` fetch rates (with the non-default `live-rates` feature; without it they only load a fresh cache file) from the Frankfurter API (`https://api.frankfurter.dev/v1/latest?base=USD`) by running the system `curl` over HTTPS (`--fail --proto =https --tlsv1.2`, 4 s connect timeout, 8 s total). Responses are validated (USD base, finite positive rates). The fetch blocks; `try_set_live_rates` returns errors instead of ignoring them.
-- Fetched rates are cached on disk and reused while the file is under 24 hours old **and** its ECB reference date is recent. Writes are atomic (temp file + rename). The cache path is the one passed to `with_currency_cache`, else `ABACUS_CURRENCY_CACHE`, `$ABACUS_CACHE_DIR/currency_rates.json`, `$XDG_CACHE_HOME/abacus/currency_rates.json`, `~/.cache/abacus/currency_rates.json` (`%LOCALAPPDATA%\abacus\…` on Windows), and finally a private (`0700`) per-user directory under the system temp dir.
-- `update_rates_from_json(json)` loads rates you fetched yourself; it only writes to disk when a cache path was configured with `with_currency_cache`.
+- `with_live_rates(true)` and `update_daily_rates()` fetch rates from the Frankfurter API (`https://api.frankfurter.dev/v1/latest?base=USD`) by running the system `curl` over HTTPS (`--fail --proto =https --tlsv1.2`, 4 s connect timeout, 8 s total). This needs the `live-rates` feature, which is off by default; without it they only load a cache file if it is fresh. The response must have a USD base and finite positive rates. The fetch blocks. `try_set_live_rates` returns errors instead of ignoring them.
+- Fetched rates are cached on disk and reused while the file is less than 24 hours old and its ECB reference date is recent. The file is written to a temporary path and renamed into place. The cache path is the first of: the path passed to `with_currency_cache`, `ABACUS_CURRENCY_CACHE`, `$ABACUS_CACHE_DIR/currency_rates.json`, `$XDG_CACHE_HOME/abacus/currency_rates.json`, `~/.cache/abacus/currency_rates.json` (`%LOCALAPPDATA%\abacus\…` on Windows), and a private (`0700`) per-user directory under the system temp directory.
+- `update_rates_from_json(json)` loads rates you fetched yourself. It writes to disk only if a cache path was set with `with_currency_cache`.
 
 ---
 
@@ -560,7 +557,7 @@ error: cannot perform operation on incompatible dimensions
 1
 ```
 
-Variables assigned with `name = expr` persist across expressions. Options configure the engine:
+Variables assigned with `name = expr` carry over to later expressions. Options configure the engine:
 
 ```sh
 $ abacus --degrees --decimals 3 "sin 40"
@@ -570,7 +567,7 @@ $ abacus --notation eng --date-format iso "45000 m" "07-08-2026 + 1 day"
 2026-08-08
 ```
 
-`--degrees`/`--radians`/`--gradians`, `--decimals N`, `--sig-figs N`, `--notation standard|scientific|engineering`, `--timezone TZ`, `--date-format long|iso|us|eu`, `--strict`, `--no-implicit` and `--exact` (no cancellation snapping) are available. `abacus --demo` prints a tour of features; `--help` and `--version` are also available.
+The options are `--degrees`/`--radians`/`--gradians`, `--decimals N`, `--sig-figs N`, `--notation standard|scientific|engineering`, `--timezone TZ`, `--date-format long|iso|us|eu`, `--strict`, `--no-implicit`, `--exact` (no cancellation snapping), `--demo` (prints a tour of the features), `--help` and `--version`.
 
 ### REPL
 
@@ -578,7 +575,7 @@ $ abacus --notation eng --date-format iso "45000 m" "07-08-2026 + 1 day"
 cargo run --bin repl --features=repl
 ```
 
-The REPL takes the same options as `abacus` (`repl --degrees --decimals 3`) and keeps persistent history. Highlighting and Tab completion come from the engine itself, so a name is coloured as a unit, variable or function exactly as it will be read, and unknown names are underlined while you type. `ans` is the last result.
+The REPL takes the same options as `abacus` and saves its history. Highlighting and Tab completion use the engine's own parser, so a name is coloured as a unit, variable or function the same way it will be evaluated, and unknown names are underlined as you type. `ans` is the last result.
 
 ```text
 › x = 5 m
@@ -637,9 +634,9 @@ cargo test --no-default-features --features stats       # any feature subset als
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-`tests/readme_examples_tests.rs` checks that every example output in this README matches the engine. See [CHANGELOG.md](CHANGELOG.md) for behaviour changes.
+`tests/readme_examples_tests.rs` checks every example output in this README against the engine.
 
-Coverage-guided fuzzing uses [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) (nightly toolchain). Two targets exist: `fuzz_eval` (raw expressions) and `fuzz_eval_config` (expressions under varied engine settings). `fuzz/abacus.dict` holds expression keywords to steer the fuzzer:
+Fuzzing uses [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) on a nightly toolchain. There are two targets: `fuzz_eval` takes raw expressions and `fuzz_eval_config` also varies the engine settings. `fuzz/abacus.dict` lists expression keywords for the fuzzer:
 
 ```sh
 cargo install cargo-fuzz
@@ -649,4 +646,4 @@ cargo +nightly fuzz run fuzz_eval -- -dict=abacus.dict -max_len=256 -timeout=2
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

@@ -1,4 +1,4 @@
-// Represents a scalar prefix used for unit conversion
+// A unit prefix (`kilo`/`k`) and its scale factor.
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct ScalarPrefix {
@@ -7,7 +7,7 @@ pub struct ScalarPrefix {
     pub alias: &'static str,
 }
 
-// Generates a static array of ScalarPrefix structs from a macro invocation
+// Builds a static `ScalarPrefix` slice from `name, alias, scalar;` triples.
 macro_rules! gen_prefixes {
     ( $( $name:expr, $alias:expr, $scalar:expr );* $(;)? ) => {
         &[

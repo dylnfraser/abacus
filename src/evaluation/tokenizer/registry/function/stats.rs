@@ -137,7 +137,7 @@ fn median_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(location_value(median_val, first_unit))
 }
 
-/// mode(data...) — the most frequent value.
+/// `mode(data...)`: the most frequent value.
 ///
 /// Values are compared with a relative tolerance of 1e-12 (so `0.1 + 0.2` and `0.3` count as
 /// equal). If several values are equally frequent, the smallest is returned. If every value
@@ -170,8 +170,8 @@ fn mode_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(location_value(best.0, first_unit))
 }
 
-/// Splits interleaved args into two equal halves: `(x_data, y_data, n)`.
-/// Checks element count and verifies intra-slice unit consistency.
+/// Splits `args` into equal halves, x values then y values: `(x_data, y_data, n)`.
+/// Requires at least two pairs and consistent units within each half.
 pub fn parse_paired_data(args: &[Value]) -> Result<(&[Value], &[Value], usize), AbacusError> {
     if args.len() < 4 || !args.len().is_multiple_of(2) {
         return Err(AbacusError::IncompatibleFunctionArguments);
@@ -189,7 +189,7 @@ pub fn compute_mean(args: &[Value]) -> f64 {
     args.iter().map(|v| v.canonical).sum::<f64>() / (args.len() as f64)
 }
 
-/// Computes the variance of a single dataset with delta-degrees-of-freedom `ddof`.
+/// Variance with delta degrees of freedom `ddof`.
 /// `ddof = 1` → sample variance, `ddof = 0` → population variance.
 #[must_use]
 pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
@@ -199,7 +199,7 @@ pub fn compute_variance(args: &[Value], ddof: f64) -> f64 {
     scale * scale * values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - ddof)
 }
 
-/// Computes Pearson correlation coefficient between two datasets.
+/// Pearson correlation coefficient of paired data.
 pub fn compute_pearson_r(x_data: &[Value], y_data: &[Value]) -> Result<f64, AbacusError> {
     let x_mean = compute_mean(x_data);
     let y_mean = compute_mean(y_data);
@@ -225,7 +225,7 @@ pub fn compute_pearson_r(x_data: &[Value], y_data: &[Value]) -> Result<f64, Abac
     Ok(sxy / denom)
 }
 
-/// Computes the covariance and its unit (product of the two spread units) for paired data.
+/// Covariance of paired data and its unit (the product of the two spread units).
 fn compute_covariance(x_data: &[Value], y_data: &[Value], ddof: f64) -> (f64, Arc<Unit>) {
     let n = x_data.len() as f64;
     let x_mean = compute_mean(x_data);
@@ -320,17 +320,17 @@ fn quantile_with_scale(args: &[Value], scale: f64) -> Result<Value, AbacusError>
     Ok(location_value(val, first_unit))
 }
 
-/// quantile(data..., q) where q in [0, 1]
+/// `quantile(data..., q)` with q in [0, 1].
 fn quantile_fn(args: &[Value]) -> Result<Value, AbacusError> {
     quantile_with_scale(args, 1.0)
 }
 
-/// percentile(data..., p) where p in [0, 100]
+/// `percentile(data..., p)` with p in [0, 100].
 fn percentile_fn(args: &[Value]) -> Result<Value, AbacusError> {
     quantile_with_scale(args, 100.0)
 }
 
-/// iqr(data...) -> Q3 - Q1
+/// `iqr(data...)` = Q3 - Q1.
 fn iqr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
     let (mut values, scale) = spread_basis(args);
@@ -339,7 +339,7 @@ fn iqr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(spread_value(iqr * scale, first_unit))
 }
 
-/// `corr(x_range`, `y_range`) or corr(x1..xN, y1..yN)
+/// `corr(x_range, y_range)` or `corr(x1..xN, y1..yN)`.
 fn corr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (x_data, y_data, _) = parse_paired_data(args)?;
     let r = compute_pearson_r(x_data, y_data)?;
@@ -384,7 +384,7 @@ fn harmean_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(location_value(n / inv_sum, first_unit))
 }
 
-/// Returns `(n, Σ((x - mean)/s)^power)` with `s` the sample standard deviation.
+/// `(n, Σ((x - mean)/s)^power)` with `s` the sample standard deviation.
 fn standardized_moment_sum(args: &[Value], power: i32) -> Result<(f64, f64), AbacusError> {
     check_compatible_units(args)?;
     let n = args.len() as f64;
@@ -402,7 +402,7 @@ fn standardized_moment_sum(args: &[Value], power: i32) -> Result<(f64, f64), Aba
     Ok((n, sum))
 }
 
-/// skew(data...) — sample skewness `n / ((n-1)(n-2)) · Σ((x - x̄)/s)³` (Excel `SKEW`).
+/// `skew(data...)`: sample skewness `n / ((n-1)(n-2)) · Σ((x - x̄)/s)³` (Excel `SKEW`).
 fn skew_fn(args: &[Value]) -> Result<Value, AbacusError> {
     if args.len() < 3 {
         return Err(AbacusError::IncompatibleFunctionArguments);
@@ -411,7 +411,7 @@ fn skew_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(n / ((n - 1.0) * (n - 2.0)) * m3))
 }
 
-/// kurt(data...) — sample excess kurtosis (Excel `KURT`):
+/// `kurt(data...)`: sample excess kurtosis (Excel `KURT`):
 /// `n(n+1) / ((n-1)(n-2)(n-3)) · Σ((x - x̄)/s)⁴ − 3(n-1)² / ((n-2)(n-3))`.
 fn kurt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     if args.len() < 4 {
@@ -423,7 +423,7 @@ fn kurt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(a * m4 - b))
 }
 
-/// mad(data...) — mean absolute deviation around the mean.
+/// `mad(data...)`: mean absolute deviation around the mean.
 fn mad_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let first_unit = check_compatible_units(args)?;
     let n = args.len() as f64;
@@ -440,7 +440,7 @@ fn rms_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(location_value(mean_sq.sqrt(), first_unit))
 }
 
-/// zscore(x, mean, std) — `std` must be positive.
+/// `zscore(x, mean, std)`. `std` must be positive.
 fn zscore_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let x = &args[0];
     let mean = &args[1];

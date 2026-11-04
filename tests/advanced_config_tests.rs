@@ -27,7 +27,7 @@ fn test_angle_mode_degrees() {
     let tan_45 = calc.eval("tan(45)").unwrap();
     assert!((tan_45.into_scalar().unwrap().canonical - 1.0).abs() < 1e-10);
 
-    // Inverse trig converts back to degrees
+    // Inverse trig returns degrees.
     let asin_1 = calc.eval("asin(1)").unwrap();
     assert_eq!(asin_1.to_display(), "90 deg");
 
@@ -37,7 +37,7 @@ fn test_angle_mode_degrees() {
     let atan_1 = calc.eval("atan(1)").unwrap();
     assert_eq!(atan_1.to_display(), "45 deg");
 
-    // Explicit angle unit overrides bare interpretation
+    // An explicit angle unit overrides the angle mode.
     let sin_explicit = calc.eval("sin(90 deg)").unwrap();
     assert!((sin_explicit.into_scalar().unwrap().canonical - 1.0).abs() < 1e-10);
 }
@@ -75,14 +75,14 @@ fn test_strict_dimension_checking() {
     let loose = Abacus::standard();
     assert!(!loose.strict_dimensions());
 
-    // In loose mode, dimensionless promotion succeeds
+    // Loose mode gives a bare number the other operand's unit.
     let promoted = loose.eval("5 m + 5").unwrap();
     assert_eq!(promoted.to_display(), "10 m");
 
     let promoted_interval = loose.eval("[1 m, 2]").unwrap();
     assert_eq!(promoted_interval.to_display(), "[1 m, 2 m]");
 
-    // In strict mode, mixing dimensions fails with IncompatibleDimensions
+    // Strict mode rejects mixed dimensions.
     let strict = Abacus::standard().with_strict_dimensions(true);
     assert!(strict.strict_dimensions());
 
@@ -107,7 +107,7 @@ fn test_strict_dimension_checking() {
         Err(AbacusError::IncompatibleDimensions)
     ));
 
-    // Percentage arithmetic is still allowed because % modifies the base quantity
+    // `%` is still allowed: it scales the base quantity.
     let pct = strict.eval("100 m + 10%").unwrap();
     assert_eq!(pct.to_display(), "110 m");
 }
@@ -118,15 +118,13 @@ fn test_decimal_places_configuration() {
     let calc = Abacus::standard().with_decimal_places(2);
     assert_eq!(calc.decimal_places(), Some(2));
 
-    // 10 / 3 = 3.3333... -> 3.33
     let res = calc.eval("10 / 3").unwrap();
     assert_eq!(res.to_display(), "3.33");
 
-    // 1.23456 m -> 1.23 m
     let res_m = calc.eval("1.23456 m").unwrap();
     assert_eq!(res_m.to_display(), "1.23 m");
 
-    // Trailing zero formatting with format_result
+    // `format_result` pads to the configured number of places.
     let res_five = calc.eval("5").unwrap();
     assert_eq!(calc.format_result(&res_five), "5.00");
 }
@@ -169,12 +167,11 @@ fn test_default_timezone_configuration() {
     let calc = Abacus::standard().with_default_timezone(est);
     assert_eq!(calc.default_timezone().as_ref().unwrap().name, "EST");
 
-    // Bare date evaluates and displays with default timezone
+    // A bare date takes the default timezone.
     let res = calc.eval("07-08-2026").unwrap();
     assert_eq!(res.to_display(), "August 7, 2026 EST");
 
-    // Timezone conversion from default timezone to UTC:
-    // EST is UTC-5, so 00:00:00 EST becomes 05:00:00 UTC
+    // EST is UTC-5, so midnight EST is 05:00 UTC.
     let res_utc = calc.eval("07-08-2026 to UTC").unwrap();
     assert_eq!(res_utc.to_display(), "August 7, 2026 05:00:00 UTC");
 }
@@ -185,22 +182,21 @@ fn test_custom_weekend_workweek_configuration() {
     let calc = Abacus::standard().with_weekend(WeekendDays::FridaySaturday);
     assert_eq!(calc.weekend(), WeekendDays::FridaySaturday);
 
-    // 07-08-2026 is a Friday.
-    // In FridaySaturday, Friday is weekend and NOT a workday.
+    // 07-08-2026 is a Friday, a weekend day under FridaySaturday.
     let res_fri = calc.eval("07-08-2026.is_weekend").unwrap();
     assert_eq!(res_fri.to_display(), "1");
     let res_work = calc.eval("07-08-2026.is_workday").unwrap();
     assert_eq!(res_work.to_display(), "0");
 
-    // 09-08-2026 is Sunday. In FridaySaturday, Sunday IS a workday!
+    // 09-08-2026 is a Sunday, a workday under FridaySaturday.
     let res_sun = calc.eval("09-08-2026.is_workday").unwrap();
     assert_eq!(res_sun.to_display(), "1");
 
-    // Adding 1 business day from Thursday (06-08-2026) skips Friday & Saturday, landing on Sunday (09-08-2026)
+    // Thursday 06-08-2026 + 1 business day skips Friday and Saturday, landing on Sunday.
     let res_add = calc.eval("06-08-2026 + 1 business day").unwrap();
     assert_eq!(res_add.to_display(), "August 9, 2026");
 
-    // Standard Western (Saturday-Sunday) lands on Friday (07-08-2026)
+    // With the default Saturday-Sunday weekend it lands on Friday.
     let standard_calc = Abacus::standard();
     let std_add = standard_calc.eval("06-08-2026 + 1 business day").unwrap();
     assert_eq!(std_add.to_display(), "August 7, 2026");
@@ -272,12 +268,12 @@ fn test_in_place_mutator_methods() {
 #[cfg(feature = "units")]
 #[test]
 fn test_max_exponent_configuration() {
-    // Default max exponent is 1000.0
+    // The default limit is 1000.
     let calc = Abacus::standard();
     assert_eq!(calc.max_exponent(), 1000.0);
     assert_eq!(calc.eval("2 ^ 10").unwrap().to_display(), "1024");
 
-    // Configured low max exponent (e.g. 5)
+    // A limit of 5.
     let low_calc = Abacus::standard().with_max_exponent(5.0);
     assert_eq!(low_calc.max_exponent(), 5.0);
     assert_eq!(low_calc.eval("2 ^ 5").unwrap().to_display(), "32");
@@ -294,13 +290,13 @@ fn test_max_exponent_configuration() {
         Err(AbacusError::ExponentLimitExceeded)
     ));
 
-    // Interval exponent limit
+    // The limit applies to interval exponents ...
     assert!(matches!(
         low_calc.eval("[1, 2] ^ [6, 7]"),
         Err(AbacusError::ExponentLimitExceeded)
     ));
 
-    // Exponent unit limit
+    // ... and to unit exponents.
     assert!(matches!(
         low_calc.eval("10 m^100000"),
         Err(AbacusError::ExponentLimitExceeded)

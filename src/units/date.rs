@@ -8,7 +8,7 @@ use crate::units::dimensions::Dimensions;
 use crate::units::unit::Unit;
 use crate::units::value::Value;
 
-/// Enum representing days of the week.
+/// A day of the week.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DayOfWeek {
@@ -56,7 +56,7 @@ impl fmt::Display for DayOfWeek {
     }
 }
 
-/// Definition of weekend days for business day calculations.
+/// Which days count as the weekend in business-day calculations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeekendDays {
@@ -92,7 +92,7 @@ impl WeekendDays {
     }
 }
 
-/// Structure representing a `TimeZone` with offset in minutes relative to UTC.
+/// A named timezone with a fixed offset from UTC, in minutes.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TimeZone {
@@ -232,7 +232,7 @@ impl TimeZone {
         Err(AbacusError::InvalidDate(format!("unknown timezone: '{s}'")))
     }
 
-    /// Returns `true` if `s` is a numeric offset in an unambiguous literal form (`±HH:MM`, `±HHMM`,
+    /// Whether `s` is a numeric offset in an unambiguous literal form (`±HH:MM`, `±HHMM`,
     /// `UTC±H`), as accepted directly after a time literal.
     #[must_use]
     pub(crate) fn is_literal_offset(s: &str) -> bool {
@@ -248,7 +248,7 @@ impl TimeZone {
         (explicit_prefix || digits.contains(':') || digits.len() == 4) && Self::parse(s).is_ok()
     }
 
-    /// Returns the system's local timezone at the current instant (abbreviation and offset,
+    /// The system's local timezone at the current instant (abbreviation and offset,
     /// including DST), resolved from `TZ` / `/etc/localtime`; UTC when unavailable.
     #[must_use]
     pub fn local() -> Self {
@@ -277,7 +277,7 @@ impl fmt::Display for TimeZone {
     }
 }
 
-/// Structure representing a time of day with millisecond resolution.
+/// A time of day with millisecond resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Time {
@@ -505,7 +505,7 @@ impl Time {
             return None;
         }
 
-        // A trailing digit/colon run (e.g. "10:00:00:00", "25:61") must not be silently truncated.
+        // A trailing digit/colon run ("10:00:00:00", "25:61") must not be silently truncated.
         if s[current_end..]
             .chars()
             .next()
@@ -576,13 +576,13 @@ impl FromStr for Time {
     }
 }
 
-/// Helper function to check if a year is a leap year in the Gregorian calendar.
+/// Whether `year` is a leap year in the Gregorian calendar.
 #[must_use]
 pub fn is_leap_year(year: i32) -> bool {
     (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
-/// Helper function to return the number of days in a given month of a year.
+/// Days in `month` of `year`, or 0 for an invalid month.
 #[must_use]
 pub fn days_in_month(year: i32, month: u32) -> u32 {
     match month {
@@ -599,7 +599,7 @@ pub fn days_in_month(year: i32, month: u32) -> u32 {
     }
 }
 
-/// Check if year, month, day form a valid calendar date.
+/// Whether year, month and day form a valid calendar date.
 #[must_use]
 pub fn is_valid_date(year: i32, month: u32, day: u32) -> bool {
     if !(1..=12).contains(&month) || day < 1 {
@@ -608,7 +608,7 @@ pub fn is_valid_date(year: i32, month: u32, day: u32) -> bool {
     day <= days_in_month(year, month)
 }
 
-/// Helper function to return the English full name of a month.
+/// The English name of `month` (1-12), or `""` if out of range.
 #[must_use]
 pub fn month_name(month: u32) -> &'static str {
     match month {
@@ -628,7 +628,7 @@ pub fn month_name(month: u32) -> &'static str {
     }
 }
 
-/// Convert (year, month, day) to days since Unix epoch 1970-01-01 (Proleptic Gregorian algorithm).
+/// Days since 1970-01-01 for a date in the proleptic Gregorian calendar.
 #[must_use]
 pub fn date_to_epoch_days(year: i32, month: u32, day: u32) -> i64 {
     let y = if month <= 2 {
@@ -648,7 +648,7 @@ pub fn date_to_epoch_days(year: i32, month: u32, day: u32) -> i64 {
     era * 146097 + doe - 719468
 }
 
-/// Convert days since Unix epoch 1970-01-01 to (year, month, day).
+/// The (year, month, day) that is `epoch_days` days after 1970-01-01.
 #[must_use]
 pub fn epoch_days_to_date(epoch_days: i64) -> (i32, u32, u32) {
     let z = epoch_days.saturating_add(719468);
@@ -668,7 +668,7 @@ pub fn epoch_days_to_date(epoch_days: i64) -> (i32, u32, u32) {
     (year as i32, m as u32, d as u32)
 }
 
-/// Structure representing a calendar Date with Time and optional `TimeZone`.
+/// A calendar date and time of day, with an optional timezone.
 ///
 /// A date without a timezone is a *floating local* wall-clock time: arithmetic between two
 /// floating dates is pure wall-clock arithmetic, while comparing or mixing a floating date with a
@@ -692,14 +692,14 @@ pub struct Date {
 
 /// The time was written with an explicit AM/PM marker.
 pub(crate) const FLAG_EXPLICIT_MERIDIEM: u8 = 1;
-/// The literal was a bare time of day (e.g. `3pm`, `15:00`) anchored to the reference date.
+/// The literal was a bare time of day (`3pm`) anchored to the reference date.
 pub(crate) const FLAG_TIME_ONLY: u8 = 2;
-/// The display format was chosen explicitly (e.g. via `format_date`) and must not be overridden.
+/// The display format was chosen explicitly (via `format_date`) and must not be overridden.
 pub(crate) const FLAG_EXPLICIT_FORMAT: u8 = 4;
 
 impl Date {
     /// Total-order key used by `Eq`, `Ord` and `Hash`: the instant first, then whether the date
-    /// is floating (no timezone), then — for floating dates — the wall-clock time. Zoned dates
+    /// is floating (no timezone), then, for floating dates, the wall-clock time. Zoned dates
     /// compare purely by instant (`10:00 EST == 15:00 UTC`), while distinct floating wall times
     /// never collapse together, even when a DST gap maps them to the same local instant.
     fn order_key(&self) -> (i64, bool, i64) {
@@ -847,7 +847,7 @@ impl Date {
         }
     }
 
-    /// Returns `true` if this date's display format was explicitly chosen (e.g. by `format_date`).
+    /// Whether the display format was chosen explicitly (by `format_date`).
     #[must_use]
     pub fn has_explicit_format(&self) -> bool {
         self.flags & FLAG_EXPLICIT_FORMAT != 0
@@ -880,7 +880,7 @@ impl Date {
     ///   unambiguous reading is used.
     ///
     /// Returns `Ok(None)` if `s` doesn't look like a numeric date and `Err` if it has the shape of
-    /// a date (four-digit year) but is not a valid calendar date (e.g. `2026-02-30`).
+    /// a date (four-digit year) but is not a valid calendar date (`2026-02-30`).
     pub fn parse_ymd_components_with(
         s: &str,
         month_first: bool,
@@ -936,15 +936,15 @@ impl Date {
         } else {
             let (n1, n2, yr) = (num(p1), num(p2), num(p3) as i32);
             if n1 <= 12 && n2 > 12 {
-                // e.g. 05-16-2010 -> month = 5, day = 16 (unambiguous)
+                // 05-16-2010: month 5, day 16 (unambiguous)
                 (yr, n1, n2)
             } else if n1 > 12 && n2 <= 12 {
-                // e.g. 16-05-2010 -> month = 5, day = 16 (unambiguous)
+                // 16-05-2010: month 5, day 16 (unambiguous)
                 (yr, n2, n1)
             } else if month_first {
                 (yr, n1, n2)
             } else {
-                // Ambiguous e.g. 07-08-2026 -> default DD-MM-YYYY
+                // Ambiguous (07-08-2026): read as DD-MM-YYYY
                 (yr, n2, n1)
             }
         };
@@ -964,7 +964,7 @@ impl Date {
     }
 
     /// Shifts this date by a duration. Business-day units step over weekends (and must be whole),
-    /// `month`/`year` units are calendar months/years (clamping the day to the month's end, e.g.
+    /// `month`/`year` units are calendar months/years (clamping the day to the month's end, so
     /// Jan 31 + 1 month = Feb 28) and must be whole, and other time units shift by their exact
     /// length. Non-finite or astronomically large shifts are rejected.
     pub fn apply_time_value_with(
@@ -1010,7 +1010,8 @@ impl Date {
         Ok(result)
     }
 
-    /// Retrieves a numerical property value from this Date by property name using custom weekend rules.
+    /// A numeric property by name (`year`, `day_of_week`, `is_weekend`, …), using `weekend`
+    /// for the weekend and business-day properties.
     #[must_use]
     pub fn get_property_with(&self, prop: &str, weekend: WeekendDays) -> Option<f64> {
         match prop {
@@ -1042,7 +1043,7 @@ impl Date {
         }
     }
 
-    /// Retrieves a numerical property value from this Date by property name.
+    /// A numeric property by name, with a Saturday-Sunday weekend.
     #[must_use]
     pub fn get_property(&self, prop: &str) -> Option<f64> {
         self.get_property_with(prop, WeekendDays::SaturdaySunday)
@@ -1337,7 +1338,7 @@ impl Date {
         let mut cur = self.clone();
         let mut remaining = n.abs();
 
-        // If starting on weekend, advance to the first business day
+        // Starting on a weekend, first move to a business day in the direction of travel.
         while !cur.is_business_day_with(weekend) {
             cur = cur.add_days(step);
             if cur.is_business_day_with(weekend) {
@@ -1414,18 +1415,18 @@ impl Date {
     }
 }
 
-/// Date format style enum for displaying dates.
+/// How dates are displayed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DateFormat {
-    /// Month Day, Year format (e.g. "May 16, 2010" / "August 7, 2026") - Default!
+    /// "August 7, 2026" (the default).
     #[default]
     MonthDayYear,
-    /// DD-MM-YYYY format (e.g. 07-08-2026)
+    /// DD-MM-YYYY, as in 07-08-2026.
     DDMMYYYY,
-    /// YYYY-MM-DD format (e.g. 2026-08-07)
+    /// YYYY-MM-DD, as in 2026-08-07.
     YYYYMMDD,
-    /// MM-DD-YYYY format (e.g. 08-07-2026)
+    /// MM-DD-YYYY, as in 08-07-2026.
     MMDDYYYY,
 }
 
@@ -1452,7 +1453,7 @@ impl FromStr for Date {
             return Err(AbacusError::InvalidDate("empty string".to_string()));
         }
 
-        // Handle ISO T separator: e.g. "2026-08-07T10:00:00Z"
+        // Accept the ISO `T` separator ("2026-08-07T10:00:00Z").
         let normalized = if !s.contains(' ') && s.contains('T') {
             s.replace('T', " ")
         } else {
@@ -1552,8 +1553,8 @@ pub(crate) fn duration_between(from: &Date, to: &Date) -> Value {
 impl Sub<&Date> for &Date {
     type Output = Value;
 
-    /// The duration from `rhs` to `self`, expressed in days when it is a whole (non-zero) number of
-    /// days and in hours otherwise.
+    /// The duration from `rhs` to `self`: whole days in `d`, otherwise the largest of `h`,
+    /// `min` or `s` that keeps the magnitude at least 1.
     fn sub(self, rhs: &Date) -> Self::Output {
         duration_between(rhs, self)
     }

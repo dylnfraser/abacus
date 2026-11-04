@@ -17,7 +17,6 @@ use std::sync::Arc;
 #[cfg(feature = "units")]
 #[test]
 fn test_standard_unit_registry_lookups() {
-    // Verifies that the standard UnitRegistry contains base metric, imperial, and derived units
     let registry = UnitRegistry::standard();
 
     assert!(registry.contains("m"));
@@ -29,7 +28,7 @@ fn test_standard_unit_registry_lookups() {
     assert!(registry.contains("J"));
     assert!(registry.contains("W"));
 
-    // Scalars are relative to canonical SI units (with the gram as the mass base).
+    // Scalars are relative to SI base units, with the gram as the mass base.
     assert_eq!(registry.unit("km").unwrap().scalar, 1000.0);
     assert_eq!(registry.unit("hour").unwrap().scalar, 3600.0);
     assert_eq!(registry.unit("kg").unwrap().scalar, 1000.0);
@@ -43,7 +42,7 @@ fn test_standard_unit_registry_lookups() {
 #[cfg(feature = "units")]
 #[test]
 fn test_unit_lookup_returns_arc() {
-    // Verifies memory efficiency: repeated unit lookups return shared Arc pointers
+    // Repeated lookups share one `Arc` instead of allocating.
     let registry = UnitRegistry::standard();
     let unit1 = registry.unit("km").unwrap();
     let unit2 = registry.unit("km").unwrap();
@@ -54,7 +53,6 @@ fn test_unit_lookup_returns_arc() {
 
 #[test]
 fn test_unknown_unit_lookup_fails() {
-    // Verifies returning AbacusError::UnknownUnit for unregistered unit symbols
     let registry = UnitRegistry::standard();
     let res = registry.unit("invalid_unit");
 
@@ -67,7 +65,6 @@ fn test_unknown_unit_lookup_fails() {
 #[cfg(feature = "units")]
 #[test]
 fn test_custom_unit_insertion() {
-    // Tests registering new custom units into a fresh or existing UnitRegistry
     let mut registry = UnitRegistry::new();
     assert!(!registry.contains("custom_meter"));
 
@@ -82,7 +79,7 @@ fn test_custom_unit_insertion() {
 #[cfg(feature = "units")]
 #[test]
 fn test_exponent_units_resolution() {
-    // Tests dynamic on-the-fly parsing and caching of exponent units (e.g. m^2, m^3)
+    // Powers like `m^2` aren't registered; they're built on lookup.
     let registry = UnitRegistry::standard();
 
     let m2 = registry.unit("m^2").unwrap();

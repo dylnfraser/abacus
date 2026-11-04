@@ -4,7 +4,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// ln(x) — Natural logarithm
+/// Natural logarithm, `ln(x)`.
 fn ln_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(args)?;
     let x = args[0].canonical;
@@ -14,7 +14,7 @@ fn ln_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(x.ln()))
 }
 
-/// log10(x) — Base-10 logarithm
+/// Base-10 logarithm, `log10(x)`.
 fn log10_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(args)?;
     let x = args[0].canonical;
@@ -24,7 +24,7 @@ fn log10_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(x.log10()))
 }
 
-/// log2(x) — Base-2 logarithm
+/// Base-2 logarithm, `log2(x)`.
 fn log2_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(args)?;
     let x = args[0].canonical;
@@ -34,7 +34,7 @@ fn log2_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(x.log2()))
 }
 
-/// log(x) [base 10] or log(x, base)
+/// `log(x)` (base 10) or `log(x, base)`.
 fn log_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(args)?;
     let x = args[0].canonical;
@@ -53,14 +53,14 @@ fn log_fn(args: &[Value]) -> Result<Value, AbacusError> {
     }
 }
 
-/// exp(x) — Exponential e^x
+/// `exp(x)` = e^x.
 fn exp_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(args)?;
     let x = args[0].canonical;
     Ok(Value::dimensionless(x.exp()))
 }
 
-/// abs(x) — Absolute value (preserves unit)
+/// Absolute value, `abs(x)`. Keeps the unit.
 fn abs_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
     if val.unit.is_affine() {
@@ -73,7 +73,7 @@ fn abs_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// floor(x) — Floor function (preserves unit)
+/// `floor(x)`. Keeps the unit.
 fn floor_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
     let unit_amount = val.amount();
@@ -81,7 +81,7 @@ fn floor_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::new(floored_amount, Arc::clone(&val.unit)))
 }
 
-/// ceil(x) — Ceiling function (preserves unit)
+/// `ceil(x)`. Keeps the unit.
 fn ceil_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
     let unit_amount = val.amount();
@@ -89,7 +89,7 @@ fn ceil_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::new(ceiled_amount, Arc::clone(&val.unit)))
 }
 
-/// round(x) — Rounding function (preserves unit)
+/// `round(x)`. Keeps the unit.
 fn round_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
     let unit_amount = val.amount();
@@ -97,7 +97,7 @@ fn round_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::new(rounded_amount, Arc::clone(&val.unit)))
 }
 
-/// sign(x) — Signum (1.0, 0.0, -1.0)
+/// `sign(x)`: 1, 0 or -1.
 fn sign_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let val = &args[0];
     if val.unit.is_affine() {

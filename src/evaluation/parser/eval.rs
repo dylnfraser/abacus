@@ -176,7 +176,7 @@ impl<'a> Evaluator<'a> {
         Ok(())
     }
 
-    // ── Prefix forms ──
+    // Prefix forms
 
     fn eval_rel_prefix(&mut self, op: RelPrefix, operand: NodeId) -> Result<EvalResult, Located> {
         let rhs = self.eval(operand)?;
@@ -201,7 +201,7 @@ impl<'a> Evaluator<'a> {
         })
     }
 
-    // ── Function calls ──
+    // Function calls
 
     fn eval_call(&mut self, func: &crate::FunctionOp, args: Slice) -> Result<EvalResult, Located> {
         let args = self.ast.args(args);
@@ -246,7 +246,7 @@ impl<'a> Evaluator<'a> {
         Ok(res)
     }
 
-    // ── Infix and postfix operations ──
+    // Infix and postfix operations
 
     fn apply_led(&mut self, acc: EvalResult, led: &'a Led) -> Result<EvalResult, Located> {
         Ok(match &led.kind {
@@ -370,7 +370,7 @@ impl<'a> Evaluator<'a> {
             .map_err(|error| units_note(error, op, &note_units.0, &note_units.1))
     }
 
-    // ── Relative time ──
+    // Relative time
 
     /// `x after y`: date arithmetic when `x` is a duration, otherwise a percentage increase
     /// (`$50 after 15% tax`) or decrease (`$50 after 20% off`).
@@ -466,7 +466,7 @@ impl<'a> Evaluator<'a> {
         ))
     }
 
-    // ── Conversions ──
+    // Conversions
 
     fn eval_conversion(
         &mut self,
@@ -499,7 +499,7 @@ impl<'a> Evaluator<'a> {
             } => (self.eval(*node)?, *has_magnitude),
         };
 
-        // Rate accumulation over an explicit duration (e.g. "5 usd per second in 20 days" ->
+        // A rate over an explicit duration accumulates ("5 usd per second in 20 days" =
         // $8640000). A bare unit target (`5 m/s in s`, `1 kHz in ms`) is a plain conversion and
         // must fail on incompatible dimensions rather than silently multiplying.
         if has_magnitude
@@ -610,7 +610,7 @@ impl<'a> Evaluator<'a> {
                 .is_ok_and(|u| u.dimensions == Dimensions::TIME)
         });
 
-        // Without a single time unit to cancel in the denominator (e.g. `kHz`, `m/s^2`), fall
+        // Without a single time unit to cancel in the denominator (`kHz`, `m/s^2`), fall
         // back to plain multiplication so the resulting display always matches its dimensions.
         let Some(idx) = time_denom_idx else {
             return rate * duration;
@@ -722,10 +722,12 @@ fn with_units_note(
     units_note(error, op, lhs.unit(), rhs.unit())
 }
 
-/// Duration of the span `start to end`. When `end` is a bare time of day (e.g. `3:00`, `1am`) that
-/// would fall before `start` on the same date, the span rolls forward: if neither side used AM/PM
-/// and both read as 12-hour clock times (e.g. `12:00 to 3:00`), `end` moves 12 hours later;
-/// otherwise it moves to the next day (`11pm to 1am` = 2 h, `13:00 to 09:00` = 20 h).
+/// Duration of the span `start to end`.
+///
+/// When `end` is a bare time of day that would fall before `start` on the same date, the span
+/// rolls forward. If neither side used AM/PM and both read as 12-hour clock times
+/// (`12:00 to 3:00`), `end` moves 12 hours later. Otherwise it moves to the next day
+/// (`11pm to 1am` = 2 h, `13:00 to 09:00` = 20 h).
 fn time_span(start: &Date, mut end: Date) -> Value {
     use crate::units::date::{FLAG_EXPLICIT_MERIDIEM, FLAG_TIME_ONLY};
     if end.flags & FLAG_TIME_ONLY != 0 && end < *start {

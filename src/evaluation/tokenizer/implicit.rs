@@ -7,7 +7,7 @@ use crate::{
     },
 };
 
-/// Returns scale multiplier for natural number words (e.g. "million" -> 1e6).
+/// The multiplier for a number word ("million" -> 1e6).
 #[must_use]
 pub fn number_scale_factor(word: &str) -> Option<f64> {
     match word {
@@ -29,7 +29,7 @@ pub fn number_scale_factor(word: &str) -> Option<f64> {
     }
 }
 
-/// Returns true if `c` is a supported currency symbol.
+/// Whether `c` is a supported currency symbol.
 #[inline]
 #[must_use]
 pub fn is_currency_symbol(c: char) -> bool {
@@ -38,8 +38,8 @@ pub fn is_currency_symbol(c: char) -> bool {
 
 /// Folds a compound measurement such as `5 ft 3 in` or `1 h 30 min` into a single value.
 ///
-/// Only applies to adjacent values of identical dimensions written largest unit first, and never
-/// to percentages, currencies, or affine (offset) units, where juxtaposition has no
+/// Only applies to adjacent values of the same dimensions written largest unit first. Never
+/// applies to percentages, currencies or affine (offset) units, where juxtaposition has no
 /// conventional "sum" reading.
 fn fold_compound_measurement(lhs: &Value, rhs: &Value) -> Option<Value> {
     let foldable = |v: &Value| {
@@ -62,10 +62,10 @@ fn fold_compound_measurement(lhs: &Value, rhs: &Value) -> Option<Value> {
     }
 }
 
-/// Combines adjacent `Float + Unit` tokens and inserts implicit `BinaryOp("*")` between adjacent terms.
+/// Folds numbers into their units and inserts implicit `BinaryOp("*")` between adjacent terms.
 ///
-/// Two bare numbers next to each other (`1 000`, `2 3`, `5 m 3`) are rejected rather than
-/// silently multiplied, since they almost always indicate a typo or a thousands separator.
+/// Two bare numbers next to each other (`1 000`, `5 m 3`) are rejected rather than silently
+/// multiplied: they almost always mean a typo or a thousands separator.
 pub(crate) fn resolve_tokens<'a>(
     lexed: Lexed<'a>,
     unit_registry: &UnitRegistry,
@@ -77,9 +77,8 @@ pub(crate) fn resolve_tokens<'a>(
         mut tokens,
         mut spans,
     } = lexed;
-    // 1. Combine adjacent Float + Unit into Val if separated by space (e.g. `5.0` + `km`),
-    // fold prefix currency units (e.g. `$50`, `€ 100`, `$ 3 million`),
-    // and scale numbers with scale words (e.g. `3 million`, `3 million km`) if enabled.
+    // 1. Fold a number and a following unit into a `Val` (`5.0 km`), fold prefix currency
+    // (`€ 100`, `$ 3 million`), and apply scale words (`3 million km`) if enabled.
     //
     // Done in place: `tokens[..w]` is the resolved output and `tokens[r..]` the unread input.
     // Each step reads at least one token and writes at most one, so `w < r` whenever a token is
@@ -92,7 +91,7 @@ pub(crate) fn resolve_tokens<'a>(
         r += 1;
         // Span of the input tokens consumed so far by this step.
         let consumed = |r: usize, spans: &[Span]| spans[first].to(spans[r - 1]);
-        // Prefix currency: e.g. `$ 50`, `€100`, `$ 3 million`
+        // Prefix currency: `$ 50`, `€100`, `$ 3 million`
         if let Token::Unit(unit_sym) = tok
             && let Ok(unit) = unit_registry.unit(unit_sym)
             && unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY
@@ -126,7 +125,7 @@ pub(crate) fn resolve_tokens<'a>(
 
         if let Token::Float(mut num) = tok {
             if number_scales {
-                // Fold chained number scale words: e.g. `3 million`, `100 thousand million`
+                // Chained scale words: `100 thousand million`
                 while let Some(Token::Unit(unit_sym)) = tokens.get(r) {
                     if let Some(scale) = number_scale_factor(unit_sym) {
                         r += 1;
@@ -137,7 +136,7 @@ pub(crate) fn resolve_tokens<'a>(
                 }
             }
 
-            // Check if followed by a physical unit (e.g. `5.0 km`, or `3 million km`)
+            // A following unit: `5.0 km`, `3 million km`
             if let Some(&Token::Unit(unit_sym)) = tokens.get(r)
                 && let Ok(unit) = unit_registry.unit(unit_sym)
                 && (!number_scales || number_scale_factor(unit_sym).is_none())
@@ -161,8 +160,8 @@ pub(crate) fn resolve_tokens<'a>(
     spans.truncate(w);
     let mut resolved = tokens;
 
-    // Reject juxtaposed bare numbers (`1 000`, `1.2.3`, `2 3`, `5 m 3`) and stray trailing
-    // currency symbols (`$5 $`), which would otherwise be silently multiplied.
+    // Reject juxtaposed bare numbers (`1 000`, `1.2.3`, `5 m 3`) and stray trailing currency
+    // symbols (`$5 $`), which would otherwise be silently multiplied.
     for (i, pair) in resolved.windows(2).enumerate() {
         let at = spans[i + 1];
         match (&pair[0], &pair[1]) {
@@ -200,7 +199,7 @@ pub(crate) fn resolve_tokens<'a>(
         });
     }
 
-    // 2. Insert implicit multiplication `BinaryOp("*")` between adjacent terms (e.g. `5(2+3)`, `2 sqrt(9)`, `2 pi`, `2x`)
+    // 2. Insert implicit multiplication between adjacent terms (`5(2+3)`, `2 sqrt(9)`, `2x`).
     let is_left = |tok: &Token<'a>| {
         matches!(
             tok,
@@ -303,12 +302,12 @@ mod reference_tests {
     use super::*;
     use std::sync::Arc;
 
-    // The previous (allocating, three-vector) implementation, kept to check that the in-place
-    // version produces identical tokens and errors.
-    /// Combines adjacent `Float + Unit` tokens and inserts implicit `BinaryOp("*")` between adjacent terms.
+    // A straightforward allocating implementation, used to check that the in-place version
+    // produces identical tokens and errors.
+    /// Folds numbers into their units and inserts implicit `BinaryOp("*")` between adjacent terms.
     ///
-    /// Two bare numbers next to each other (`1 000`, `2 3`, `5 m 3`) are rejected rather than
-    /// silently multiplied, since they almost always indicate a typo or a thousands separator.
+    /// Two bare numbers next to each other (`1 000`, `5 m 3`) are rejected rather than silently
+    /// multiplied: they almost always mean a typo or a thousands separator.
     fn resolve_tokens_reference<'a>(
         mut tokens: Vec<Token<'a>>,
         unit_registry: &UnitRegistry,
@@ -316,14 +315,13 @@ mod reference_tests {
         implicit_multiplication: bool,
         number_scales: bool,
     ) -> Result<Vec<Token<'a>>, AbacusError> {
-        // 1. Combine adjacent Float + Unit into Val if separated by space (e.g. `5.0` + `km`),
-        // fold prefix currency units (e.g. `$50`, `€ 100`, `$ 3 million`),
-        // and scale numbers with scale words (e.g. `3 million`, `3 million km`) if enabled.
+        // 1. Fold a number and a following unit into a `Val` (`5.0 km`), fold prefix currency
+        // (`€ 100`, `$ 3 million`), and apply scale words (`3 million km`) if enabled.
         let mut resolved: Vec<Token<'a>> = Vec::with_capacity(tokens.len());
         // Drain (rather than consume) so `tokens`' buffer can be reused for the final output.
         let mut iter = tokens.drain(..).peekable();
         while let Some(tok) = iter.next() {
-            // Prefix currency: e.g. `$ 50`, `€100`, `$ 3 million`
+            // Prefix currency: `$ 50`, `€100`, `$ 3 million`
             if let Token::Unit(unit_sym) = tok
                 && let Ok(unit) = unit_registry.unit(unit_sym)
                 && unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY
@@ -349,7 +347,7 @@ mod reference_tests {
 
             if let Token::Float(mut num) = tok {
                 if number_scales {
-                    // Fold chained number scale words: e.g. `3 million`, `100 thousand million`
+                    // Chained scale words: `100 thousand million`
                     while let Some(Token::Unit(unit_sym)) = iter.peek() {
                         if let Some(scale) = number_scale_factor(unit_sym) {
                             iter.next();
@@ -360,7 +358,7 @@ mod reference_tests {
                     }
                 }
 
-                // Check if followed by a physical unit (e.g. `5.0 km`, or `3 million km`)
+                // A following unit: `5.0 km`, `3 million km`
                 if let Some(Token::Unit(unit_sym)) = iter.peek()
                     && let Ok(unit) = unit_registry.unit(unit_sym)
                     && (!number_scales || number_scale_factor(unit_sym).is_none())
@@ -378,8 +376,8 @@ mod reference_tests {
         }
         drop(iter);
 
-        // Reject juxtaposed bare numbers (`1 000`, `1.2.3`, `2 3`, `5 m 3`) and stray trailing
-        // currency symbols (`$5 $`), which would otherwise be silently multiplied.
+        // Reject juxtaposed bare numbers (`1 000`, `1.2.3`, `5 m 3`) and stray trailing currency
+        // symbols (`$5 $`), which would otherwise be silently multiplied.
         for pair in resolved.windows(2) {
             match (&pair[0], &pair[1]) {
                 (Token::Float(_) | Token::Val(_), Token::Float(n)) => {
@@ -407,7 +405,7 @@ mod reference_tests {
             return Ok(resolved);
         }
 
-        // 2. Insert implicit multiplication `BinaryOp("*")` between adjacent terms (e.g. `5(2+3)`, `2 sqrt(9)`, `2 pi`, `2x`)
+        // 2. Insert implicit multiplication between adjacent terms (`5(2+3)`, `2 sqrt(9)`, `2x`).
         let is_left = |tok: &Token<'a>| {
             matches!(
                 tok,

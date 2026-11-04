@@ -11,7 +11,7 @@ const LN_SQRT_2PI: f64 = 0.918_938_533_204_672_8;
 const TINY: f64 = 1e-300;
 const EPS: f64 = 1e-16;
 
-/// Computes n! as f64. Returns 1.0 for n=0 and `inf` once the result overflows.
+/// n! as f64: 1 for n = 0, `inf` once the result overflows.
 #[must_use]
 pub fn factorial(n: u64) -> f64 {
     if n > 170 {
@@ -20,7 +20,7 @@ pub fn factorial(n: u64) -> f64 {
     (1..=n).fold(1.0, |acc, x| acc * (x as f64))
 }
 
-// ── Error function ──
+// Error function
 
 /// erf(x) for |x| < 2.5 via the non-alternating series
 /// `erf(x) = 2/√π · e^{-x²} · Σ (2x²)^n x / (1·3·…·(2n+1))`, which has no cancellation.
@@ -186,7 +186,7 @@ pub fn norm_ppf(p: f64) -> f64 {
     }
 }
 
-// ── Gamma function family ──
+// Gamma function family
 
 /// Stirling-series correction `ln Γ(x) - [(x - ½) ln x - x + ½ ln 2π]`, for x ≥ 10
 /// (seven terms; the truncation error is below 1e-16 there).
@@ -261,7 +261,7 @@ fn gamma_log_prefactor(a: f64, x: f64) -> f64 {
 
 fn iteration_budget(scale: f64) -> u64 {
     // Convergent cases need far fewer iterations than this even at scale 1e15; the cap only
-    // bounds hopeless inputs (e.g. `fcdf(1e30, 1e30, 1)`) to ~0.1 s before reporting failure.
+    // bounds hopeless inputs (such as `fcdf(1e30, 1e30, 1)`) to ~0.1 s before reporting failure.
     (500.0 + 50.0 * scale.max(0.0).sqrt()).min(1e7) as u64
 }
 
@@ -375,7 +375,7 @@ pub fn gamma_q(a: f64, x: f64) -> Option<f64> {
     }
 }
 
-// ── Beta function family ──
+// Beta function family
 
 /// `ln(x^a y^b / B(a, b))` with `y = 1 - x`, the prefactor of the incomplete beta continued
 /// fraction. Taking `y` separately lets callers pass an exactly computed complement.
@@ -459,7 +459,7 @@ fn beta_cf(a: f64, b: f64, x: f64) -> Option<f64> {
     None
 }
 
-/// `I_x(a, b)` given both `x` and `y = 1 - x`. Supplying an exactly computed `y` (e.g.
+/// `I_x(a, b)` given both `x` and `y = 1 - x`. Supplying an exactly computed `y` (such as
 /// `t²/(ν + t²)` for Student's t, or `p` for the binomial) avoids the rounding of `1 - x`,
 /// which matters when a or b is large.
 #[must_use]
@@ -482,7 +482,7 @@ pub fn beta_inc_xy(a: f64, b: f64, x: f64, y: f64) -> Option<f64> {
     }
 }
 
-// ── Saddle-point (Loader) machinery for discrete pmfs ──
+// Saddle-point (Loader) machinery for discrete pmfs
 
 /// `ln(n!) - [(n + ½) ln n - n + ½ ln 2π]` for n > 0.
 ///
@@ -571,7 +571,7 @@ pub fn poisson_pmf_raw(x: f64, lambda: f64) -> f64 {
     (-stirlerr(x) - bd0(x, lambda)).exp() / (2.0 * PI * x).sqrt()
 }
 
-// ── Root finding ──
+// Root finding
 
 /// Solves `f(x) = 0` for a function increasing in x on `(lo, hi)`, using Newton steps with
 /// derivative `df` safeguarded by bisection. The bracket is widened geometrically from

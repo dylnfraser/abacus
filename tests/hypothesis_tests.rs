@@ -25,30 +25,26 @@ fn eval_hash(expr: &str) -> Result<Hash, AbacusError> {
     Abacus::standard().eval_hash(expr)
 }
 
-// ── 1. ZTest ──
+// ZTest
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_section4_hypothesis_testing_expanded() {
     let calc = Abacus::standard();
 
-    // ZTest(100 m, 105 m, 15 m, 50) and dot property access .p_value
     let p_val = calc
         .eval_scalar("ZTest(100 m, 105 m, 15 m, 50).p_value")
         .unwrap();
     assert!((p_val.canonical - 0.018_422_125_454_099_01).abs() < 1e-14);
 
-    // TTest(100 m, 105 m, 15 m, 25)
     let t_hash = calc.eval_hash("TTest(100 m, 105 m, 15 m, 25)").unwrap();
     assert_eq!(t_hash.get("df").unwrap().canonical, 24.0);
 
-    // 2-SampTTest(100 m, 15 m, 25, 90 m, 10 m, 30)
     let samp2 = calc
         .eval_hash("2-SampTTest(100 m, 15 m, 25, 90 m, 10 m, 30)")
         .unwrap();
     assert!(samp2.get("p_value").unwrap().canonical < 0.01);
 
-    // Chi2Test(15, 25, 10, 30).p_value
     let chi2_p = calc
         .eval_scalar("Chi2Test(15, 25, 10, 30).p_value")
         .unwrap();
@@ -75,7 +71,6 @@ fn test_z_test_summary_stats() {
         p
     );
 
-    // Test dot property access on ZTest
     let z_prop = eval_scalar("ZTest(100 m, 105 m, 15 m, 50).z").unwrap();
     assert!((z_prop.canonical - 2.357_022_603_955_158).abs() < 1e-12);
 }
@@ -92,7 +87,7 @@ fn test_z_test_data_list() {
     assert!((z - 3.0).abs() < 1e-5);
 }
 
-// ── 2. TTest ──
+// TTest
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -128,7 +123,7 @@ fn test_t_test_data_list() {
     assert!((p - 0.102_728_078_858_399).abs() < 1e-13);
 }
 
-// ── 3. 1-PropZTest ──
+// 1-PropZTest
 
 #[cfg(feature = "stats")]
 #[test]
@@ -142,12 +137,12 @@ fn test_1_prop_z_test() {
     assert!((z - (-1.0)).abs() < 1e-5);
     assert!((phat - 0.45).abs() < 1e-5);
 
-    // Test alias 1PropZTest and propztest
+    // Aliases
     let z_alias = eval_scalar("propztest(0.5, 45, 100).z").unwrap();
     assert!((z_alias.canonical - (-1.0)).abs() < 1e-5);
 }
 
-// ── 4. 2-SampZTest ──
+// 2-SampZTest
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -162,7 +157,7 @@ fn test_2_samp_z_test() {
     assert!((z - 10.0 / 6.5_f64.sqrt()).abs() < 1e-12);
 }
 
-// ── 5. 2-SampTTest ──
+// 2-SampTTest
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -187,7 +182,7 @@ fn test_2_samp_t_test() {
     assert!((p - 0.006_891_426_705_032_224).abs() < 1e-14);
 }
 
-// ── 6. 2-PropZTest ──
+// 2-PropZTest
 
 #[cfg(feature = "stats")]
 #[test]
@@ -202,12 +197,12 @@ fn test_2_prop_z_test() {
     assert!((z - 2.191).abs() < 0.02, "Expected z ≈ 2.191, got {}", z);
 }
 
-// ── 7. Chi2Test ──
+// Chi2Test
 
 #[cfg(feature = "stats")]
 #[test]
 fn test_chi2_test() {
-    // Chi2Test(obs1: 15, obs2: 25, exp1: 10, exp2: 30) — observed counts first, then expected
+    // Chi2Test(obs1: 15, obs2: 25, exp1: 10, exp2: 30): observed counts first, then expected
     let hash = eval_hash("Chi2Test(15, 25, 10, 30)").unwrap();
     let chi2 = hash.get("chi2").unwrap().canonical;
     let df = hash.get("df").unwrap().canonical;
@@ -220,7 +215,7 @@ fn test_chi2_test() {
     assert!((p_val.canonical - 0.067_889_154_861_829_02).abs() < 1e-14);
 }
 
-// ── Error handling ──
+// Error handling
 
 #[test]
 fn test_hypothesis_error_cases() {

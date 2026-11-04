@@ -88,7 +88,7 @@ pub(crate) fn parse_number_token<'a>(
         return Ok((Token::Float(val), end));
     }
 
-    // An unspaced unit identifier (e.g. 5km, 10m, 1s^-1).
+    // An unspaced unit (`5km`, `1s^-1`).
     let rest = &input[end..];
     if rest.starts_with(|c: char| {
         c.is_alphabetic()

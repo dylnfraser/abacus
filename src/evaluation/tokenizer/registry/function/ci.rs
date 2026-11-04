@@ -99,7 +99,7 @@ fn sample_summary(data: &[Value]) -> (f64, f64, f64) {
     )
 }
 
-// ── TInterval / TIntervalData(x₁, x₂, …, [C%]) ──
+// TInterval / TIntervalData(x₁, x₂, …, [C%])
 fn t_interval_data_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (data, conf) = split_data_and_confidence(args, 2)?;
     let (mean, s, n) = sample_summary(data);
@@ -107,7 +107,7 @@ fn t_interval_data_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     interval_around(mean, moe, &data[0].unit)
 }
 
-// ── TIntervalStats(x̄, s, n, [C]) ──
+// TIntervalStats(x̄, s, n, [C])
 fn t_interval_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mean = &args[0];
     let s = positive_spread(&args[1], &mean.unit)?;
@@ -117,7 +117,7 @@ fn t_interval_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     interval_around(mean.canonical, moe, &mean.unit)
 }
 
-// ── ZInterval / ZIntervalStats(x̄, σ, n, [C]) ──
+// ZInterval / ZIntervalStats(x̄, σ, n, [C])
 fn z_interval_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let mean = &args[0];
     let sigma = positive_spread(&args[1], &mean.unit)?;
@@ -127,7 +127,7 @@ fn z_interval_stats_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     interval_around(mean.canonical, moe, &mean.unit)
 }
 
-// ── ZIntervalData(σ, x₁, x₂, …, [C%]) ──
+// ZIntervalData(σ, x₁, x₂, …, [C%])
 fn z_interval_data_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (data, conf) = split_data_and_confidence(&args[1..], 1)?;
     let sigma = positive_spread(&args[0], &data[0].unit)?;
@@ -146,7 +146,7 @@ fn count_and_size(x: &Value, n: &Value) -> Result<(f64, f64), AbacusError> {
     Ok((x, n))
 }
 
-// ── 1-PropZInt(x, n, [C]) — Wald interval p̂ ± z*·√(p̂(1−p̂)/n), as on the TI-84 ──
+// 1-PropZInt(x, n, [C]): Wald interval p̂ ± z*·√(p̂(1−p̂)/n), as on the TI-84
 fn one_prop_z_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (x, n) = count_and_size(&args[0], &args[1])?;
     let conf = optional_confidence(args, 2)?;
@@ -176,7 +176,7 @@ fn two_sample_args(
     Ok((mean1.canonical, s1, n1, mean2.canonical, s2, n2))
 }
 
-// ── 2-SampTInt(x̄₁, s₁, n₁, x̄₂, s₂, n₂, [C]) — interval for μ₁ − μ₂ (Welch) ──
+// 2-SampTInt(x̄₁, s₁, n₁, x̄₂, s₂, n₂, [C]): interval for μ₁ − μ₂ (Welch)
 fn two_samp_t_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (m1, s1, n1, m2, s2, n2) = two_sample_args(args, 2)?;
     let conf = optional_confidence(args, 6)?;
@@ -194,7 +194,7 @@ fn two_samp_t_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     interval_around(m1 - m2, moe, &delta_unit(&args[0].unit))
 }
 
-// ── 2-SampZInt(x̄₁, σ₁, n₁, x̄₂, σ₂, n₂, [C]) — interval for μ₁ − μ₂ ──
+// 2-SampZInt(x̄₁, σ₁, n₁, x̄₂, σ₂, n₂, [C]): interval for μ₁ − μ₂
 fn two_samp_z_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (m1, s1, n1, m2, s2, n2) = two_sample_args(args, 1)?;
     let conf = optional_confidence(args, 6)?;
@@ -204,7 +204,7 @@ fn two_samp_z_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     interval_around(m1 - m2, moe, &delta_unit(&args[0].unit))
 }
 
-// ── 2-PropZInt(x₁, n₁, x₂, n₂, [C]) — Wald interval for p₁ − p₂ ──
+// 2-PropZInt(x₁, n₁, x₂, n₂, [C]): Wald interval for p₁ − p₂
 fn two_prop_z_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     let (x1, n1) = count_and_size(&args[0], &args[1])?;
     let (x2, n2) = count_and_size(&args[2], &args[3])?;
@@ -221,7 +221,7 @@ fn two_prop_z_int_fn(args: &[Value]) -> Result<EvalResult, AbacusError> {
     Ok(EvalResult::Interval(Interval::new(lo, hi)?))
 }
 
-// ── moe(x₁, x₂, …, [C%]) — t-based margin of error of the sample mean ──
+// moe(x₁, x₂, …, [C%]): t-based margin of error of the sample mean
 fn moe_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (data, conf) = split_data_and_confidence(args, 2)?;
     let (_, s, n) = sample_summary(data);
@@ -229,7 +229,7 @@ fn moe_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::from_canonical(moe, delta_unit(&data[0].unit)))
 }
 
-// ── tmoe(s, n, [C]) ──
+// tmoe(s, n, [C])
 fn tmoe_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let unit = &args[0].unit;
     let s = positive_spread(&args[0], unit)?;
@@ -239,7 +239,7 @@ fn tmoe_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::from_canonical(moe, delta_unit(unit)))
 }
 
-// ── zmoe(σ, n, [C]) ──
+// zmoe(σ, n, [C])
 fn zmoe_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let unit = &args[0].unit;
     let sigma = positive_spread(&args[0], unit)?;

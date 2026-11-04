@@ -1,6 +1,6 @@
 //! Every example output shown in README.md, asserted against the engine.
 //!
-//! If one of these fails, either the engine regressed or the README needs updating — keep the
+//! If one of these fails, either the engine regressed or the README needs updating. Keep the
 //! two in sync. Relative-date examples use a fixed clock (Tuesday 2026-09-01 09:00) and
 //! currency examples use the bundled fallback rates, so the suite is deterministic.
 #![cfg(all(

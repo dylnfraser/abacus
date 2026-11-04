@@ -1,5 +1,5 @@
-//! Regression tests for the accuracy sweep fixes (display, financial, `%`, nCr, roots,
-//! overflow). Reference values come from mpmath at 40+ digits.
+//! Numerical accuracy: display of long numbers, financial functions at tiny rates, `%`,
+//! nCr, real roots of negatives and overflow. Reference values come from mpmath at 40+ digits.
 
 #[cfg(feature = "units")]
 use abacus::eval;
@@ -36,7 +36,7 @@ fn long_numbers_keep_their_fractional_digits() {
     assert_eq!(show("9460730472580.8"), "9460730472580.8");
     assert_eq!(show("1234567890123.4"), "1234567890123.4");
     assert_eq!(show("1 ly in km"), "9460730472580.8 km");
-    // Float noise right next to an integer is still hidden.
+    // Float noise right next to an integer is hidden.
     assert_eq!(show("2.9999999999999996"), "3");
     assert_eq!(show("0.1 * 3 * 10"), "3");
 }
@@ -44,7 +44,7 @@ fn long_numbers_keep_their_fractional_digits() {
 #[test]
 #[cfg(feature = "financial")]
 fn financial_functions_are_accurate_at_tiny_rates() {
-    // Previously fv(1e-12, 360, -100) was 36003.2 and pmt was off in the 5th digit.
+    // Naive formulas lose most of their digits here (fv gives about 36003.2).
     assert_rel("fv(1e-12, 360, -100)", 36_000.000_006_461_996, 1e-14);
     assert_rel("pv(1e-12, 360, -100)", 35_999.999_993_501_995, 1e-14);
     assert_rel("pmt(1e-12, 360, 200000)", -555.555_555_655_833_3, 1e-14);
@@ -53,7 +53,7 @@ fn financial_functions_are_accurate_at_tiny_rates() {
         1_000.000_030_000_000_4,
         1e-14,
     );
-    // Ordinary rates are unchanged (and correctly rounded).
+    // Ordinary rates are correctly rounded.
     assert_rel("pmt(0.05/12, 360, 200000)", -1_073.643_246_024_278, 1e-15);
     assert_rel("fv(0.5, 12, -100)", 25_749.267_578_125, 1e-15);
 }
@@ -72,7 +72,7 @@ fn modulo_with_a_signed_divisor() {
 #[test]
 #[cfg(feature = "stats")]
 fn n_cr_is_correctly_rounded() {
-    // These all match mpmath's exact binomial rounded to f64.
+    // Each matches mpmath's exact binomial rounded to f64.
     assert_eq!(num("nCr(1000, 500)"), 2.702_882_409_454_365_5e299);
     assert_eq!(num("nCr(200, 100)"), 9.054_851_465_610_328e58);
     assert_eq!(num("nCr(1029, 514)"), 1.429_820_686_498_904e308);

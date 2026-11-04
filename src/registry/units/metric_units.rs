@@ -91,7 +91,8 @@ pub static BASE_METRIC_UNITS: &[MetricBaseUnit] = generate_base_units! {
 
 const CELSIUS_ALIASES: &[&str] = &["celsius", "degC", "°C"];
 
-// Declares a public function that returns a map of base and prefixed metric units.
+// Builds the full standard unit table: the SI base units with their prefixes, plus every
+// other unit module.
 #[must_use]
 pub fn register_metric_units() -> HashMap<String, Arc<Unit>> {
     let mut map: HashMap<String, Arc<Unit>> = HashMap::new();
@@ -180,7 +181,7 @@ pub fn register_metric_units() -> HashMap<String, Arc<Unit>> {
         );
     }
 
-    // `as` is always the conversion keyword (e.g. `5 km as m`), never the attosecond.
+    // `as` is always the conversion keyword (`5 km as m`), never the attosecond.
     // The attosecond remains available as `attosecond(s)`.
     map.remove("as");
 
@@ -191,7 +192,7 @@ pub fn register_metric_units() -> HashMap<String, Arc<Unit>> {
 /// the canonical U+03BC GREEK SMALL LETTER MU used for display.
 const MICRO_SIGN: &str = "\u{b5}";
 
-/// Helper function to register metric prefixed units across modules.
+/// Registers `base_alias` under every metric prefix (`km`, `mm`, …).
 pub fn register_metric_prefixed_units(
     map: &mut HashMap<String, Arc<Unit>>,
     base_name: Option<&str>,

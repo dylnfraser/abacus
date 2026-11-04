@@ -64,20 +64,17 @@ fn test_date_creation_and_validation() {
 
 #[test]
 fn test_day_of_week_and_year() {
-    // 2026-08-07 is Friday
     let d = Date::new(2026, 8, 7);
     assert_eq!(d.day_of_week(), DayOfWeek::Friday);
     assert_eq!(d.day_of_week().name(), "Friday");
 
-    // 2026-01-01 is Day 1 of year
     let d_start = Date::new(2026, 1, 1);
     assert_eq!(d_start.day_of_year(), 1);
 
-    // 2026-12-31 is Day 365 of non-leap year
+    // 2026 is not a leap year; 2024 is.
     let d_end = Date::new(2026, 12, 31);
     assert_eq!(d_end.day_of_year(), 365);
 
-    // 2024-12-31 is Day 366 of leap year
     let leap_end = Date::new(2024, 12, 31);
     assert_eq!(leap_end.day_of_year(), 366);
 }
@@ -109,18 +106,16 @@ fn test_epoch_conversions_roundtrip() {
 fn test_date_arithmetic_days_months_years() {
     let d = Date::new(2026, 8, 7);
 
-    // Add/sub days
     assert_eq!(d.add_days(10), Date::new(2026, 8, 17));
     assert_eq!(d.sub_days(7), Date::new(2026, 7, 31));
 
-    // Add months with clamping
+    // Adding months clamps to the end of a shorter month.
     let d_jan = Date::new(2024, 1, 31);
     assert_eq!(d_jan.add_months(1), Date::new(2024, 2, 29)); // Leap year Feb
 
     let d_jan_non_leap = Date::new(2025, 1, 31);
     assert_eq!(d_jan_non_leap.add_months(1), Date::new(2025, 2, 28)); // Non-leap year Feb
 
-    // Add years
     let leap_bday = Date::new(2024, 2, 29);
     assert_eq!(leap_bday.add_years(1), Date::new(2025, 2, 28));
     assert_eq!(leap_bday.add_years(4), Date::new(2028, 2, 29));
@@ -130,11 +125,9 @@ fn test_date_arithmetic_days_months_years() {
 fn test_date_time_overflow_across_midnight() {
     let d = Date::new_with_hms(2026, 8, 7, 23, 30, 0);
 
-    // Adding 1 hour crosses midnight to next day 00:30:00
     let d_next = d.add_hours(1);
     assert_eq!(d_next, Date::new_with_hms(2026, 8, 8, 0, 30, 0));
 
-    // Adding 48 hours moves 2 days forward
     let d_2days = d.add_hours(48);
     assert_eq!(d_2days, Date::new_with_hms(2026, 8, 9, 23, 30, 0));
 }
@@ -148,7 +141,7 @@ fn test_date_difference() {
     assert_eq!(d2.days_between(&d1), -10);
     assert_eq!(d1.seconds_between(&d2), 10 * 86_400);
 
-    // Operator subtraction: d2 - d1 -> 10 days (864,000 s), shown in days
+    // `-` gives a duration in seconds, shown in days.
     let diff_val = &d2 - &d1;
     assert_eq!(diff_val.canonical, 864_000.0);
     assert_eq!(diff_val.to_display(), "10 d");
@@ -172,7 +165,7 @@ fn test_date_and_value_arithmetic() {
     let d_minus_2 = (&d - &two_days).unwrap();
     assert_eq!(d_minus_2, Date::new(2026, 8, 5));
 
-    // Adding non-time value should fail
+    // Only durations can be added to a date.
     let five_meters = reg.value(5.0, "m").unwrap();
     let err = (&d + &five_meters).unwrap_err();
     assert_eq!(err, AbacusError::IncompatibleDimensions);
@@ -195,7 +188,6 @@ fn test_date_parsing_iso() {
     let d3 = Date::from_str("2026-08-07T10:54:49.123").unwrap();
     assert_eq!(d3, Date::new_full(2026, 8, 7, 10, 54, 49, 123));
 
-    // Invalid dates return error
     assert!(Date::from_str("invalid-date").is_err());
     assert!(Date::from_str("2025-02-29").is_err());
 }

@@ -47,22 +47,17 @@ fn test_unspaced_number_scales() {
 #[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_number_scale_arithmetic() {
-    // Addition
     assert_eq!(
         eval("3 million + 500 thousand").unwrap().to_display(),
         "3500000"
     );
 
-    // Division
     assert_eq!(eval("5 billion / 2 million").unwrap().to_display(), "2500");
 
-    // Multiplication
     assert_eq!(eval("3 million * 4").unwrap().to_display(), "12000000");
 
-    // Percentage of scale
     assert_eq!(eval("10% of 2 million").unwrap().to_display(), "200000");
 
-    // Chained scales
     assert_eq!(
         eval("100 thousand million").unwrap().to_display(),
         "100000000000"
@@ -72,18 +67,15 @@ fn test_number_scale_arithmetic() {
 #[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_number_scales_with_physical_units() {
-    // 3 million km
     let dist = eval("3 million km").unwrap();
     assert_eq!(dist.to_display(), "3000000 km");
 
-    // Conversion of scaled physical units
     let in_meters = eval("3 million km to m").unwrap();
     assert_eq!(in_meters.to_display(), "3000000000 m");
 
     let speed = eval("10 thousand m / 2 s").unwrap();
     assert_eq!(speed.to_display(), "5000 m/s");
 
-    // Unspaced scale with unit
     let unspaced_dist = eval("3million km").unwrap();
     assert_eq!(unspaced_dist.to_display(), "3000000 km");
 }
@@ -91,28 +83,23 @@ fn test_number_scales_with_physical_units() {
 #[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_conversions_to_and_from_scales() {
-    // 3 million in thousand
     assert_eq!(
         eval("3 million in thousand").unwrap().to_display(),
         "3000 thousand"
     );
 
-    // 5000000 to million
     assert_eq!(
         eval("5000000 to million").unwrap().to_display(),
         "5 million"
     );
 
-    // 24 to dozen
     assert_eq!(eval("24 to dozen").unwrap().to_display(), "2 dozen");
 
-    // 3.5 billion in million
     assert_eq!(
         eval("3.5 billion in million").unwrap().to_display(),
         "3500 million"
     );
 
-    // (3 million + 500 thousand) in million
     assert_eq!(
         eval("(3 million + 500 thousand) in million")
             .unwrap()
@@ -124,7 +111,7 @@ fn test_conversions_to_and_from_scales() {
 #[cfg(all(feature = "units", feature = "number-scales"))]
 #[test]
 fn test_standalone_scale_words() {
-    // Standalone million evaluates to unit million (canonical 1,000,000)
+    // A bare scale word is a unit worth 1,000,000.
     let five_million = eval("million * 5").unwrap();
     assert_eq!(five_million.to_display(), "5 million");
     assert_eq!(five_million.into_scalar().unwrap().canonical, 5000000.0);
@@ -170,7 +157,7 @@ fn test_number_scales_config_option() {
 
     // Disabled via builder
     let disabled_calc = Abacus::standard().with_number_scales(false);
-    // When disabled, "3 million" is treated as Value(3, unit: million) rather than scalar 3000000
+    // With scales off, `million` stays a unit instead of multiplying.
     let res = disabled_calc.eval("3 million").unwrap();
     assert_eq!(res.to_display(), "3 million");
 

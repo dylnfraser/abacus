@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-/// Units that are NOT given metric prefixes.
+/// Units without metric prefixes.
 const CGS_SIMPLE: &[UnitDefinition] = &[
     // Angstrom: 1e-10 m
     UnitDefinition {
@@ -55,7 +55,7 @@ const CGS_SIMPLE: &[UnitDefinition] = &[
     },
 ];
 
-/// Units that ARE given metric prefixes (base key → display symbol → scalar → dimensions).
+/// Units that take metric prefixes (base key → display symbol → scalar → dimensions).
 struct PrefixableCgs {
     keys: &'static [&'static str],
     display: &'static str,

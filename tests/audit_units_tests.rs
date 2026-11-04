@@ -1,4 +1,5 @@
-//! Regression tests for the core units / values / intervals audit findings.
+//! Units, values and intervals: dimension arithmetic, display, derived-unit reduction,
+//! temperatures, percentages, equality and output settings.
 // Helpers and imports are only used by tests gated on default features.
 #![cfg_attr(
     not(all(
@@ -21,7 +22,7 @@ fn show(expr: &str) -> String {
         .to_display()
 }
 
-// --- Dimensions: no overflow, exact rational exponents -------------------------------------
+// Dimensions: no overflow, exact rational exponents
 
 #[cfg(feature = "units")]
 #[test]
@@ -49,7 +50,7 @@ fn fractional_exponents_round_trip() {
     assert_eq!(show("(8 m^3)^(1/3)"), "2 m");
 }
 
-// --- Display -----------------------------------------------------------------------------------
+// Display
 
 #[cfg(feature = "units")]
 #[test]
@@ -99,7 +100,7 @@ fn consolidation_has_no_float_noise() {
     assert_eq!(show("1 m * 1 ft"), "0.3048 m^2");
 }
 
-// --- Derived-unit reduction --------------------------------------------------------------------
+// Derived-unit reduction
 
 #[cfg(feature = "units")]
 #[test]
@@ -125,7 +126,7 @@ fn composite_units_still_reduce() {
     assert_eq!(show("1 N/m^2"), "1 Pa");
 }
 
-// --- Affine temperatures -----------------------------------------------------------------------
+// Affine temperatures
 
 #[cfg(feature = "units")]
 #[test]
@@ -157,7 +158,7 @@ fn affine_exponent_units() {
     ));
 }
 
-// --- Exponent unit parsing & cache -------------------------------------------------------------
+// Exponent unit parsing & cache
 
 #[test]
 fn nan_exponents_are_rejected() {
@@ -184,7 +185,7 @@ fn exponent_cache_is_bounded_and_normalized() {
     );
 }
 
-// --- Intervals ---------------------------------------------------------------------------------
+// Intervals
 
 #[test]
 fn per_division_checks_the_singularity() {
@@ -228,7 +229,7 @@ fn percent_intervals_with_negative_endpoints() {
     assert!(i.hi.canonical >= 2.2);
 }
 
-// --- Percent arithmetic ------------------------------------------------------------------------
+// Percent arithmetic
 
 #[cfg(feature = "units")]
 #[test]
@@ -241,7 +242,7 @@ fn percent_arithmetic_is_consistent() {
     assert_eq!(show("20 less than 10%"), "18");
 }
 
-// --- Equality ----------------------------------------------------------------------------------
+// Equality
 
 #[cfg(feature = "units")]
 #[test]
@@ -252,7 +253,7 @@ fn value_equality_is_reflexive_and_relative() {
     assert_eq!(eval("1 km").unwrap(), eval("1000 m").unwrap());
 }
 
-// --- Output settings apply to display only -----------------------------------------------------
+// Output settings apply to display only
 
 #[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
@@ -274,7 +275,7 @@ fn decimal_rounding_does_not_overflow() {
     assert_eq!(calc.eval("1e300 m").unwrap().to_display(), "1e300 m");
 }
 
-// --- API consistency ---------------------------------------------------------------------------
+// API consistency
 
 #[test]
 fn scalar_extraction_errors_match() {

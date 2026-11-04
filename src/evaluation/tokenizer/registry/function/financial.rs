@@ -4,7 +4,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// `(1 + rate)^n`. When `1 + rate` is exactly representable (e.g. 0.5) `powf` is used as is;
+/// `(1 + rate)^n`. When `1 + rate` is exactly representable (such as 0.5) `powf` is used as is;
 /// otherwise `exp(n·ln_1p(rate))` avoids amplifying the rounding of `1 + rate` by `n`.
 fn growth(rate: f64, n: f64) -> f64 {
     if rate > -1.0 && (1.0 + rate) - 1.0 != rate {
@@ -15,7 +15,7 @@ fn growth(rate: f64, n: f64) -> f64 {
 }
 
 /// Annuity factor `((1 + rate)^n − 1) / rate`. When `(1 + rate)^n` is close to 1, subtracting 1
-/// cancels catastrophically (`fv(1e-12, 360, -100)` came out as 36003.2 instead of
+/// cancels catastrophically (the naive form gives `fv(1e-12, 360, -100)` = 36003.2 instead of
 /// 36000.000006), so that regime uses `exp_m1`.
 fn annuity_factor(rate: f64, n: f64) -> f64 {
     if rate > -1.0 {
@@ -27,7 +27,7 @@ fn annuity_factor(rate: f64, n: f64) -> f64 {
     (growth(rate, n) - 1.0) / rate
 }
 
-/// pmt(rate, nper, pv) or pmt(rate, nper, pv, fv)
+/// `pmt(rate, nper, pv)` or `pmt(rate, nper, pv, fv)`.
 fn pmt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(&args[0..2])?;
     let rate = args[0].canonical;
@@ -58,7 +58,7 @@ fn pmt_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// fv(rate, nper, pmt, pv)
+/// `fv(rate, nper, pmt, pv)`.
 fn fv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(&args[0..2])?;
     let rate = args[0].canonical;
@@ -86,7 +86,7 @@ fn fv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// pv(rate, nper, pmt, fv)
+/// `pv(rate, nper, pmt, fv)`.
 fn pv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     check_dimensionless(&args[0..2])?;
     let rate = args[0].canonical;
@@ -114,7 +114,7 @@ fn pv_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// npv(rate, cashflow1, cashflow2, ...)
+/// `npv(rate, cashflow1, cashflow2, ...)`.
 ///
 /// Uses the Excel convention: the first cash flow is discounted by one period (t = 1).
 /// To include an undiscounted initial outlay, add it outside: `cf0 + npv(rate, cf1, …)`.
@@ -150,7 +150,7 @@ fn npv_at(cfs: &[f64], r: f64) -> f64 {
     total
 }
 
-/// Σ |cf| / (1 + r)^t — the scale against which an NPV of "zero" is judged.
+/// Σ |cf| / (1 + r)^t, the scale against which an NPV of "zero" is judged.
 fn discounted_magnitude(cfs: &[f64], r: f64) -> f64 {
     let factor = 1.0 / (1.0 + r);
     let mut discount = 1.0;
@@ -192,7 +192,7 @@ fn bisect_root(cfs: &[f64], a: f64, b: f64) -> f64 {
     0.5 * (lo + hi)
 }
 
-/// irr(cashflow0, cashflow1, cashflow2, ...) — internal rate of return.
+/// Internal rate of return, `irr(cashflow0, cashflow1, cashflow2, ...)`.
 ///
 /// The first cash flow is at t = 0. Requires at least one positive and one negative cash
 /// flow. Newton's method is tried first from a 10% guess (Excel's default), so when several
@@ -211,7 +211,6 @@ fn irr_fn(args: &[Value]) -> Result<Value, AbacusError> {
 
     let cfs: Vec<f64> = args.iter().map(|v| v.canonical).collect();
     if !cfs.iter().any(|&c| c > 0.0) || !cfs.iter().any(|&c| c < 0.0) {
-        // IRR needs at least one positive and one negative cash flow.
         return Err(AbacusError::IncompatibleFunctionArguments);
     }
     // Newton from 10%. Convergence is measured against the size of the *discounted* cash
@@ -239,8 +238,8 @@ fn irr_fn(args: &[Value]) -> Result<Value, AbacusError> {
         r = next;
     }
 
-    // 2. Sweep outwards from 10% — downwards towards -100% and upwards towards 1e6 — for a
-    //    sign change of the NPV, then bisect it.
+    // Newton failed: sweep outwards from 10% (down towards -100%, up towards 1e6) for a sign
+    // change of the NPV, then bisect it.
     let downward = std::iter::successors(Some(0.1_f64), |&x| Some(-1.0 + (x + 1.0) * 0.8))
         .take_while(|&x| x > -1.0 + 1e-12);
     let upward =
@@ -262,7 +261,7 @@ fn irr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     ))
 }
 
-/// compound(principal, rate, time) or compound(principal, rate, time, n)
+/// `compound(principal, rate, time)` or `compound(principal, rate, time, n)`.
 fn compound_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let principal = &args[0];
     check_dimensionless(&args[1..=2])?;

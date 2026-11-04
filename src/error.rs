@@ -1,6 +1,6 @@
 use std::fmt;
 
-// Error enum for evaluation/tokenization errors
+// Errors from tokenizing, parsing and evaluating expressions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AbacusError {
@@ -28,7 +28,6 @@ pub enum AbacusError {
     CurrencyRateError(String),
 }
 
-// Display implementation for `AbacusError`
 impl fmt::Display for AbacusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

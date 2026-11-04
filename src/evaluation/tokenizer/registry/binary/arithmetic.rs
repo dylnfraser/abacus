@@ -38,7 +38,7 @@ pub(crate) fn div(a: Value, b: Value) -> Result<Value, AbacusError> {
 }
 
 /// `x^e` with a real result where one exists: a negative base raised to `p/q` with `q` odd
-/// (`1/3`, `2/3`, `-1/5`, …) is real — `(-8)^(1/3)` = -2 — whereas `powf` returns NaN.
+/// (`1/3`, `2/3`, `-1/5`, …) is real (`(-8)^(1/3)` = -2), whereas `powf` returns NaN.
 /// Even denominators (`(-8)^(1/2)`) have no real value and stay NaN.
 #[must_use]
 pub fn real_powf(x: f64, e: f64) -> f64 {
@@ -107,7 +107,7 @@ pub(crate) fn pow(a: Value, b: Value) -> Result<Value, AbacusError> {
     })
 }
 
-/// Built-in binary operators that need special handling (e.g. sound interval arithmetic).
+/// Built-in binary operators that need special handling, such as sound interval arithmetic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpKind {
     Add,
@@ -124,7 +124,7 @@ pub enum OpKind {
 /// Built-ins are identified by the address of this shared `BinaryOp` rather than by comparing
 /// function pointers, which Rust does not guarantee to be unique (identical functions may be
 /// merged) or stable (one function may have several addresses across codegen units). Operators
-/// registered by users — including ones that copy a built-in's `func` — are custom (`None`).
+/// registered by users are custom (`None`), even if they copy a built-in's `func`.
 ///
 /// [`TokenRegistry`]: crate::evaluation::tokenizer::registry::token_registry::TokenRegistry
 pub(crate) fn standard_binary_ops() -> &'static [(Arc<BinaryOp>, Option<OpKind>)] {
@@ -150,9 +150,9 @@ pub(crate) fn standard_binary_ops() -> &'static [(Arc<BinaryOp>, Option<OpKind>)
 
 /// The built-in kind of `op`, or `None` for custom operators.
 ///
-/// Built-ins are recognised by the identity of the shared operator instances installed by
-/// `TokenRegistry::standard()`, not by comparing function pointers; operators registered by
-/// users are always custom, even if they reuse a built-in's `func`.
+/// Built-ins are recognised by the identity of the shared instances installed by
+/// `TokenRegistry::standard()`, not by function pointer, so user-registered operators are
+/// always custom.
 #[must_use]
 pub fn op_kind(op: &BinaryOp) -> Option<OpKind> {
     standard_binary_ops()

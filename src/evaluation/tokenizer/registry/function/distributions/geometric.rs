@@ -16,7 +16,7 @@ fn parse_geom_args(args: &[Value]) -> Result<(f64, f64), AbacusError> {
     Ok((p, k))
 }
 
-/// geompdf(p, k) = (1-p)^(k-1) · p — probability the first success is on trial k.
+/// `geompdf(p, k)` = (1-p)^(k-1) · p, the probability that the first success is on trial k.
 fn geompdf_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (p, k) = parse_geom_args(args)?;
     let pdf = if p == 1.0 {

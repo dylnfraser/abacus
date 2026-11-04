@@ -5,14 +5,13 @@ pub const DIMENSION_COUNT: usize = 9;
 /// Fixed-point denominator for dimension exponents.
 ///
 /// `27720 = lcm(1..=12)`, so every rational exponent whose denominator is at most 12
-/// (halves, thirds, quarters, sevenths, ...) is represented exactly and round-trips
-/// (e.g. `((2 m)^(1/7))^7` is exactly `m`).
+/// is represented exactly and round-trips: `((2 m)^(1/7))^7` is exactly `m`.
 pub const SCALE: i32 = 27_720;
 
 /// Largest exponent magnitude representable in a single dimension slot (≈ 77 471).
 pub const MAX_REPRESENTABLE_EXPONENT: f64 = (i32::MAX / SCALE) as f64;
 
-/// Dimensions represented as fixed-point integers (scaled by [`Dimensions::SCALE`]) across 9 base dimensions:
+/// Exponents of the 9 base dimensions, as fixed-point integers scaled by [`Dimensions::SCALE`]:
 /// [length, mass, time, current, temperature, amount, luminous intensity, information, currency].
 ///
 /// The representation is `[i32; 9]` (36 bytes). The `+`, `-` and `* f64` operators saturate
@@ -40,8 +39,8 @@ impl Dimensions {
     /// Largest exponent magnitude the fixed-point representation can hold.
     pub const MAX_EXPONENT: f64 = MAX_REPRESENTABLE_EXPONENT;
 
-    /// Create a `Dimensions` instance from the 8 physical base dimensions (length, mass, time,
-    /// current, temperature, amount, luminous intensity, information). Currency is set to 0.
+    /// Builds dimensions from the 8 physical base exponents (length, mass, time, current,
+    /// temperature, amount, luminous intensity, information). Currency is 0.
     #[must_use]
     pub const fn from_f64(arr: [f64; 8]) -> Self {
         let mut out = [0i32; DIMENSION_COUNT];
@@ -53,7 +52,7 @@ impl Dimensions {
         Self(out)
     }
 
-    /// Create a `Dimensions` instance from all 9 dimensions including currency.
+    /// Builds dimensions from all 9 exponents, including currency.
     #[must_use]
     pub const fn from_f64_9(arr: [f64; DIMENSION_COUNT]) -> Self {
         let mut out = [0i32; DIMENSION_COUNT];
@@ -65,7 +64,7 @@ impl Dimensions {
         Self(out)
     }
 
-    /// Dimensionless unit (all dimensions are 0)
+    /// All exponents 0.
     pub const DIMENSIONLESS: Self = Self([0; DIMENSION_COUNT]);
 
     pub const LENGTH: Self = Self::from_f64([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);

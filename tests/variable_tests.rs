@@ -21,15 +21,12 @@ fn test_standard_constant_pi() {
     let upper_pi = eval("PI").unwrap();
     assert!((upper_pi.into_scalar().unwrap().canonical - std::f64::consts::PI).abs() < 1e-12);
 
-    // sin(pi / 2) == 1
     let sin_pi_half = eval("sin(pi / 2)").unwrap();
     assert!((sin_pi_half.into_scalar().unwrap().canonical - 1.0).abs() < 1e-12);
 
-    // cos(pi) == -1
     let cos_pi = eval("cos(pi)").unwrap();
     assert!((cos_pi.into_scalar().unwrap().canonical - (-1.0)).abs() < 1e-12);
 
-    // 2 * pi
     let two_pi = eval("2 * pi").unwrap();
     assert!((two_pi.into_scalar().unwrap().canonical - 2.0 * std::f64::consts::PI).abs() < 1e-12);
 }
@@ -42,11 +39,9 @@ fn test_standard_constant_e() {
     let upper_e = eval("E").unwrap();
     assert!((upper_e.into_scalar().unwrap().canonical - std::f64::consts::E).abs() < 1e-12);
 
-    // ln(e) == 1
     let ln_e = eval("ln(e)").unwrap();
     assert!((ln_e.into_scalar().unwrap().canonical - 1.0).abs() < 1e-12);
 
-    // e^2
     let e_squared = eval("e^2").unwrap();
     assert!(
         (e_squared.into_scalar().unwrap().canonical - std::f64::consts::E.powi(2)).abs() < 1e-12
@@ -65,27 +60,25 @@ fn test_standard_constants_tau_and_phi() {
     let expected_phi = (1.0 + 5.0_f64.sqrt()) / 2.0;
     assert!((phi_res.into_scalar().unwrap().canonical - expected_phi).abs() < 1e-12);
 
-    // Golden ratio identity: phi^2 - phi - 1 == 0
+    // Golden ratio identity: phi^2 - phi - 1 = 0
     let phi_identity = eval("phi^2 - phi - 1").unwrap();
     assert!(phi_identity.into_scalar().unwrap().canonical.abs() < 1e-12);
 }
 
 #[test]
 fn test_implicit_multiplication_with_constants() {
-    // 2pi == 2 * pi
     let res1 = eval("2pi").unwrap();
     assert!((res1.into_scalar().unwrap().canonical - 2.0 * std::f64::consts::PI).abs() < 1e-12);
 
-    // 2 pi
     let res2 = eval("2 pi").unwrap();
     assert!((res2.into_scalar().unwrap().canonical - 2.0 * std::f64::consts::PI).abs() < 1e-12);
 
-    // `4 e` == 4 * e (spaced); unspaced `4e` is a truncated exponent literal and is rejected
+    // Spaced `4 e` is 4 * e. Unspaced `4e` is an incomplete exponent literal and is rejected.
     let res3 = eval("4 e").unwrap();
     assert!((res3.into_scalar().unwrap().canonical - 4.0 * std::f64::consts::E).abs() < 1e-12);
     assert!(eval("4e").is_err());
 
-    // Scientific notation 4e2 must still be 400.0, NOT 4 * e^2
+    // `4e2` is scientific notation (400), not 4 * e^2.
     let res4 = eval("4e2").unwrap();
     assert_eq!(res4.into_scalar().unwrap().canonical, 400.0);
 }
@@ -100,7 +93,7 @@ fn test_programmatic_variable_definition() {
     assert_eq!(calc.eval("x * 2").unwrap().to_display(), "84");
     assert_eq!(calc.eval("x - y").unwrap().to_display(), "34");
 
-    // Implicit multiplication with variables: 2x, x y
+    // Implicit multiplication with variables
     assert_eq!(calc.eval("2x").unwrap().to_display(), "84");
     assert_eq!(calc.eval("x y").unwrap().to_display(), "336");
 }
@@ -150,16 +143,13 @@ fn test_variables_with_dates() {
 fn test_eval_mut_assignment_syntax() {
     let mut calc = Abacus::standard();
 
-    // Assignment creates variable
     let assign_res = calc.eval_mut("r = 5 m").unwrap();
     assert_eq!(assign_res.to_display(), "5 m");
     assert!(calc.has_variable("r"));
 
-    // Variable can be referenced in subsequent evals
     let area = calc.eval("pi * r^2").unwrap();
     assert_eq!(area.to_display(), "78.53981633974483 m^2");
 
-    // Multiple chained assignments
     calc.eval_mut("w = 10 m").unwrap();
     calc.eval_mut("h = 2 m").unwrap();
     calc.eval_mut("volume = r * w * h").unwrap();
@@ -177,7 +167,7 @@ fn test_variable_management_methods() {
     assert!(removed.is_some());
     assert!(!calc.has_variable("temp_var"));
 
-    // Clear and reset standard variables
+    // `clear_variables` also removes the built-in constants; `reset_standard_variables` restores them.
     calc.set_variable("custom", 123.0);
     calc.clear_variables();
     assert!(!calc.has_variable("custom"));

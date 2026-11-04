@@ -32,7 +32,7 @@ fn parse_n_r(args: &[Value]) -> Result<(u64, u64), AbacusError> {
     Ok((n, r))
 }
 
-/// factorial(n) for integer 0 ≤ n ≤ 170 (171! overflows f64).
+/// `factorial(n)` for integer 0 ≤ n ≤ 170 (171! overflows f64).
 fn factorial_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let n = integer_arg(&args[0])?;
     if n > 170 {
@@ -85,7 +85,7 @@ fn n_cr_double_double(n: u64, k: u64) -> f64 {
     hi + lo
 }
 
-/// nCr(n, r) or comb(n, r)
+/// `nCr(n, r)` or `comb(n, r)`.
 fn n_cr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (n, r) = parse_n_r(args)?;
     let c = exact_n_cr(n, r);
@@ -95,7 +95,7 @@ fn n_cr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     Ok(Value::dimensionless(c))
 }
 
-/// nPr(n, r) or perm(n, r)
+/// `nPr(n, r)` or `perm(n, r)`.
 fn n_pr_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let (n, r) = parse_n_r(args)?;
     let p = n_pr(n, r);

@@ -18,19 +18,16 @@ use abacus::{Abacus, Date, eval};
 fn test_section6_date_functionality_expanded() {
     let calc = Abacus::standard();
 
-    // 07-08-2026 + 5 days = 12-08-2026
     assert_eq!(
         calc.eval("07-08-2026 + 5 days").unwrap().to_display(),
         "August 12, 2026"
     );
 
-    // 2026/08/07 - 2 weeks = 24-07-2026
     assert_eq!(
         calc.eval("2026/08/07 - 2 weeks").unwrap().to_display(),
         "July 24, 2026"
     );
 
-    // 2026-08-07 10:30:00 + 3 hours = 07-08-2026 13:30:00
     assert_eq!(
         calc.eval("2026-08-07 10:30:00 + 3 hours")
             .unwrap()
@@ -38,19 +35,17 @@ fn test_section6_date_functionality_expanded() {
         "August 7, 2026 13:30:00"
     );
 
-    // 07-08-2026 02:30 PM = 07-08-2026 14:30:00
     assert_eq!(
         calc.eval("07-08-2026 02:30 PM").unwrap().to_display(),
         "August 7, 2026 14:30:00"
     );
 
-    // Timezone subtraction: 07-08-2026 10:00 AM EST - 07-08-2026 07:00 AM PST -> 0 s
+    // 10:00 AM EST and 07:00 AM PST are the same instant.
     let diff = calc
         .eval("07-08-2026 10:00 AM EST - 07-08-2026 07:00 AM PST")
         .unwrap();
     assert_eq!(diff.to_display(), "0 s");
 
-    // date(2026, 8, 7, 10, 54, 49) = 07-08-2026 10:54:49
     assert_eq!(
         calc.eval("date(2026, 8, 7, 10, 54, 49)")
             .unwrap()

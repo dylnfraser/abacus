@@ -18,15 +18,15 @@ use abacus::{Abacus, IntervalStyle};
 fn test_single_unit_display_override_mph() {
     let calc = Abacus::standard().with_unit_display_override("mi/h", "mph");
 
-    // Division with 'per'
+    // `per`
     let speed1 = calc.eval("60 miles per hour").unwrap();
     assert_eq!(speed1.to_display(), "60 mph");
 
-    // Explicit division
+    // Spaced division
     let speed2 = calc.eval("60 mi / 1 h").unwrap();
     assert_eq!(speed2.to_display(), "60 mph");
 
-    // Raw slash
+    // Compact slash
     let speed3 = calc.eval("60 mi/h").unwrap();
     assert_eq!(speed3.to_display(), "60 mph");
 }
@@ -114,11 +114,10 @@ fn test_dimensional_preservation_with_override() {
 
     calc.set_variable("v", speed);
 
-    // Multiplying speed by time and converting to miles
     let dist = calc.eval("v * 2 h in mi").unwrap();
     assert_eq!(dist.to_display(), "120 mi");
 
-    // Converting speed to m/s should work
+    // Converting to another unit drops the override.
     let ms = calc.eval("v in m/s").unwrap();
     assert_eq!(ms.to_display(), "26.8224 m/s");
 }

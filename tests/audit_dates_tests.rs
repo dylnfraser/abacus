@@ -1,4 +1,4 @@
-//! Regression tests for the date/time audit fixes. Every test uses a fixed anchor (or explicit
+//! Date and time parsing and arithmetic. Every test uses a fixed anchor (or explicit
 //! timezones) so results never depend on the wall clock or the machine's local zone.
 // Helpers and imports are only used by tests gated on default features.
 #![cfg_attr(
@@ -45,7 +45,7 @@ fn is_invalid_date<T: std::fmt::Debug>(r: Result<T, AbacusError>) -> bool {
     matches!(r, Err(AbacusError::InvalidDate(_)))
 }
 
-// Finding 1: month/year durations
+// Month/year durations
 #[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn month_and_year_are_calendar_durations() {
@@ -72,13 +72,13 @@ fn month_and_year_are_calendar_durations() {
     assert_eq!(ymd_hm(&date(&c, "today + 1 year")), (2027, 10, 21, 0, 0));
     assert_eq!(ymd_hm(&date(&c, "3 months ago")), (2026, 7, 21, 9, 30));
     assert_eq!(ymd_hm(&date(&c, "1 yr from now")), (2027, 10, 21, 9, 30));
-    // month()/year() functions still work on dates
+    // The month() and year() functions are unaffected.
     assert_eq!(c.eval_scalar("month(07-08-2026)").unwrap().canonical, 8.0);
     assert_eq!(c.eval_scalar("year(07-08-2026)").unwrap().canonical, 2026.0);
     assert!(is_invalid_date(c.eval("2026-01-15 + 1.5 months")));
 }
 
-// Findings 2-4: now/today, default timezone conversion
+// now/today, default timezone conversion
 #[cfg(feature = "units")]
 #[test]
 fn now_is_the_instant_and_today_is_midnight() {
@@ -126,7 +126,7 @@ fn system_clock_helpers_are_consistent() {
     );
 }
 
-// Finding 5: invalid numeric literals are errors, not subtraction
+// Invalid numeric literals are errors, not subtraction
 #[test]
 fn invalid_numeric_dates_are_errors() {
     let c = calc();
@@ -143,7 +143,7 @@ fn invalid_numeric_dates_are_errors() {
     assert_eq!(ymd_hm(&date(&c, "2000-02-29")), (2000, 2, 29, 0, 0));
 }
 
-// Findings 6-7: time spans and rollover
+// Time spans and rollover
 #[test]
 fn time_spans_roll_over_sensibly() {
     let c = calc();
@@ -158,7 +158,7 @@ fn time_spans_roll_over_sensibly() {
     assert_eq!(display(&c, "2026-08-07 10:00 to 2026-08-07 09:00"), "-1 h");
 }
 
-// Finding 8: equality/ordering by instant; holidays by calendar date
+// Equality/ordering by instant; holidays by calendar date
 #[test]
 fn dates_compare_by_instant() {
     let a = Date::from_str("2026-08-07 10:00 EST").unwrap();
@@ -183,7 +183,7 @@ fn holiday_on_the_day_is_this_year() {
     assert_eq!(ymd_hm(&date(&c2, "thanksgiving")), (2026, 11, 26, 0, 0));
 }
 
-// Findings 9-10: anchor date for standalone times; midnight for day keywords
+// Anchor date for standalone times; midnight for day keywords
 #[test]
 fn standalone_times_and_weekdays_use_the_anchor() {
     let c = Abacus::standard().with_now(Date::new_full(2020, 6, 15, 9, 30, 0, 0)); // Monday
@@ -198,7 +198,7 @@ fn standalone_times_and_weekdays_use_the_anchor() {
     assert_eq!(ymd_hm(&date(&c, "tomorrow at 3pm")), (2020, 6, 16, 15, 0));
 }
 
-// Finding 11: textual dates followed by a time
+// Textual dates followed by a time
 #[test]
 fn textual_dates_followed_by_times() {
     let c = calc();
@@ -214,7 +214,7 @@ fn textual_dates_followed_by_times() {
     assert_ne!(parsed.year, 10);
 }
 
-// Finding 12: DateFormat controls ambiguous NN-NN-YYYY input
+// DateFormat controls ambiguous NN-NN-YYYY input
 #[test]
 fn ambiguous_dates_follow_the_configured_format() {
     let us = Abacus::standard().with_date_format(DateFormat::MMDDYYYY);
@@ -231,7 +231,7 @@ fn ambiguous_dates_follow_the_configured_format() {
     assert_eq!(default.eval_date("01-13-2026").unwrap().day, 13);
 }
 
-// Finding 13: AM/PM after a space
+// AM/PM after a space
 #[test]
 fn spaced_meridiem_times() {
     let c = calc();
@@ -242,7 +242,7 @@ fn spaced_meridiem_times() {
     assert_eq!(ymd_hm(&date(&c, "9:15 am")), (2026, 10, 21, 9, 15));
 }
 
-// Finding 14: offsets
+// Offsets
 #[cfg(feature = "units")]
 #[test]
 fn timezone_offsets_are_validated() {
@@ -261,7 +261,7 @@ fn timezone_offsets_are_validated() {
     assert_eq!(ymd_hm(&d), (2026, 8, 7, 4, 30));
 }
 
-// Finding 15: additional abbreviations
+// Additional abbreviations
 #[test]
 fn additional_timezone_abbreviations() {
     for (name, off) in [
@@ -277,7 +277,7 @@ fn additional_timezone_abbreviations() {
     }
 }
 
-// Finding 16: strict parsing
+// Strict parsing
 #[test]
 fn from_str_rejects_trailing_garbage_and_bad_times() {
     assert!(Date::from_str("2026-01-01 10:00 garbage").is_err());
@@ -294,7 +294,7 @@ fn from_str_rejects_trailing_garbage_and_bad_times() {
     assert_eq!(iso.timezone.unwrap().offset_minutes, 0);
 }
 
-// Finding 17: no silent truncation/saturation
+// No silent truncation/saturation
 #[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn date_arguments_and_shifts_are_validated() {
@@ -313,7 +313,7 @@ fn date_arguments_and_shifts_are_validated() {
     );
 }
 
-// Finding 18: durations in sensible units
+// Durations in sensible units
 #[test]
 fn date_differences_use_sensible_units() {
     let c = calc();
@@ -332,7 +332,7 @@ fn date_differences_use_sensible_units() {
     );
 }
 
-// Finding 19: workdays() counts (start, end]
+// workdays() counts (start, end]
 #[cfg(all(feature = "units", feature = "date"))]
 #[test]
 fn workdays_counts_end_but_not_start() {
@@ -355,7 +355,7 @@ fn workdays_counts_end_but_not_start() {
     );
 }
 
-// Finding 20: weekday abbreviations don't hijack units after a number
+// Weekday abbreviations don't hijack units after a number
 #[test]
 fn weekday_abbreviations_after_numbers_are_not_dates() {
     let c = calc();
@@ -367,7 +367,7 @@ fn weekday_abbreviations_after_numbers_are_not_dates() {
     assert_eq!(date(&c, "sun").day_of_week(), DayOfWeek::Sunday);
 }
 
-// Finding 22: misc
+// Miscellaneous
 #[test]
 fn nonexistent_textual_dates_are_errors() {
     let c = calc();

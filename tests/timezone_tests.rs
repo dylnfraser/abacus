@@ -86,7 +86,7 @@ fn test_timezone_conversions_expression() {
 fn test_date_difference_across_timezones() {
     let abacus = Abacus::standard();
 
-    // 10:00 AM EST is identical absolute time as 07:00 AM PST
+    // 10:00 AM EST and 07:00 AM PST are the same instant.
     let diff = abacus
         .eval_scalar("07-08-2026 10:00 AM EST - 07-08-2026 07:00 AM PST")
         .unwrap();

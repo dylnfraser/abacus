@@ -1,4 +1,5 @@
-//! Regression tests for the unit-data / currency / tooling audit fixes.
+//! Unit data and currencies: pound vs GBP, US and imperial volumes, less common units, and
+//! exchange-rate parsing and caching.
 // Helpers and imports are only used by tests gated on default features.
 #![cfg_attr(
     not(all(
@@ -34,10 +35,7 @@ fn assert_amount(expr: &str, expected: f64, unit: &str) {
         "`{expr}`: got {got}, expected {expected}"
     );
 }
-
-// ---------------------------------------------------------------------------------------------
 // pound means mass, not GBP
-// ---------------------------------------------------------------------------------------------
 
 #[cfg(all(feature = "units", feature = "currencies"))]
 #[test]
@@ -56,10 +54,7 @@ fn pound_is_mass() {
         Err(AbacusError::IncompatibleDimensions)
     ));
 }
-
-// ---------------------------------------------------------------------------------------------
 // US customary vs imperial volumes, tons
-// ---------------------------------------------------------------------------------------------
 
 #[cfg(feature = "units")]
 #[test]
@@ -74,7 +69,7 @@ fn volumes_default_to_us_customary() {
     assert_amount("1 cup in fl oz", 8.0, "fl oz");
     assert_amount("1 gal in qt", 4.0, "qt");
     assert_amount("1 gal in floz", 128.0, "fl oz");
-    // us_* aliases are kept.
+    // `us_*` aliases also work.
     assert_amount("1 us_gal in gal", 1.0, "gal");
 }
 
@@ -104,10 +99,7 @@ fn ton_variants() {
     assert_amount("1 kt in m/s", 1_852.0 / 3_600.0, "m/s");
     assert_amount("1 ft in m", 0.3048, "m");
 }
-
-// ---------------------------------------------------------------------------------------------
-// Newly added units
-// ---------------------------------------------------------------------------------------------
+// Other units
 
 #[cfg(feature = "units")]
 #[test]
@@ -210,10 +202,7 @@ mod currency {
         FALLBACK_RATES_DATE, FIXED_EXCHANGE_RATES, is_using_fallback_rates, load_rates_from_cache,
         parse_frankfurter_json, save_rates_to_cache,
     };
-
-    // ---------------------------------------------------------------------------------------------
     // Currency: parsing, validation, caching
-    // ---------------------------------------------------------------------------------------------
 
     struct TempPath(std::path::PathBuf);
 

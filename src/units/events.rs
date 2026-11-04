@@ -1,9 +1,7 @@
 use crate::error::AbacusError;
 use crate::units::date::{Date, DayOfWeek, days_in_month};
 
-/// Computes the nth occurrence of a weekday in a given year and month.
-///
-/// `n` must be 1, 2, 3, 4, 5, or -1 (representing "last").
+/// The `n`th `dow` of a month, where `n` is 1 to 5 or -1 for the last one.
 pub fn nth_weekday_of_month(
     year: i32,
     month: u32,
@@ -32,7 +30,7 @@ pub fn nth_weekday_of_month(
         }
         Ok(Date::new(year, month, day))
     } else {
-        // n == -1 => last occurrence in the month
+        // n == -1: the last occurrence in the month.
         let total_days = days_in_month(year, month);
         let last_dow = Date::new(year, month, total_days).day_of_week() as u32;
         let offset = (last_dow as i32 - target_dow_num as i32).rem_euclid(7) as u32;
@@ -41,7 +39,7 @@ pub fn nth_weekday_of_month(
     }
 }
 
-/// Returns the calendar quarter index (1, 2, 3, or 4) for a given date.
+/// The calendar quarter (1 to 4) containing `date`.
 #[must_use]
 pub fn quarter_of(date: &Date) -> u32 {
     match date.month {
@@ -52,7 +50,7 @@ pub fn quarter_of(date: &Date) -> u32 {
     }
 }
 
-/// Returns the start date of a given calendar quarter.
+/// The first day of `quarter` in `year`.
 #[must_use]
 pub fn quarter_start_date(quarter: u32, year: i32) -> Date {
     match quarter {
@@ -63,7 +61,7 @@ pub fn quarter_start_date(quarter: u32, year: i32) -> Date {
     }
 }
 
-/// Returns the end date of a given calendar quarter.
+/// The last day of `quarter` in `year`.
 #[must_use]
 pub fn quarter_end_date(quarter: u32, year: i32) -> Date {
     match quarter {
@@ -74,13 +72,13 @@ pub fn quarter_end_date(quarter: u32, year: i32) -> Date {
     }
 }
 
-/// Returns the end date of the current quarter relative to `ref_date`.
+/// The last day of the quarter containing `ref_date`.
 #[must_use]
 pub fn end_of_quarter(ref_date: &Date) -> Date {
     quarter_end_date(quarter_of(ref_date), ref_date.year)
 }
 
-/// Returns the end date of the next quarter relative to `ref_date`.
+/// The last day of the quarter after the one containing `ref_date`.
 #[must_use]
 pub fn end_of_next_quarter(ref_date: &Date) -> Date {
     let q = quarter_of(ref_date);
@@ -91,7 +89,7 @@ pub fn end_of_next_quarter(ref_date: &Date) -> Date {
     }
 }
 
-/// Returns the start date of the next quarter relative to `ref_date`.
+/// The first day of the quarter after the one containing `ref_date`.
 #[must_use]
 pub fn start_of_next_quarter(ref_date: &Date) -> Date {
     let q = quarter_of(ref_date);
@@ -102,7 +100,7 @@ pub fn start_of_next_quarter(ref_date: &Date) -> Date {
     }
 }
 
-/// Returns the end date of the month relative to `ref_date`.
+/// The last day of `ref_date`'s month.
 #[must_use]
 pub fn end_of_month(ref_date: &Date) -> Date {
     Date::new(
@@ -112,13 +110,13 @@ pub fn end_of_month(ref_date: &Date) -> Date {
     )
 }
 
-/// Returns the start date of the month relative to `ref_date`.
+/// The first day of `ref_date`'s month.
 #[must_use]
 pub fn start_of_month(ref_date: &Date) -> Date {
     Date::new(ref_date.year, ref_date.month, 1)
 }
 
-/// Returns the end date of the next month relative to `ref_date`.
+/// The last day of the month after `ref_date`'s.
 #[must_use]
 pub fn end_of_next_month(ref_date: &Date) -> Date {
     let (year, month) = if ref_date.month == 12 {
@@ -129,27 +127,25 @@ pub fn end_of_next_month(ref_date: &Date) -> Date {
     Date::new(year, month, days_in_month(year, month))
 }
 
-/// Returns the end date of the year relative to `ref_date`.
+/// December 31 of `ref_date`'s year.
 #[must_use]
 pub fn end_of_year(ref_date: &Date) -> Date {
     Date::new(ref_date.year, 12, 31)
 }
 
-/// Returns the start date of the year relative to `ref_date`.
+/// January 1 of `ref_date`'s year.
 #[must_use]
 pub fn start_of_year(ref_date: &Date) -> Date {
     Date::new(ref_date.year, 1, 1)
 }
 
-/// Returns the start date of the next year relative to `ref_date`.
+/// January 1 of the year after `ref_date`'s.
 #[must_use]
 pub fn start_of_next_year(ref_date: &Date) -> Date {
     Date::new(ref_date.year + 1, 1, 1)
 }
 
-// ─────────────────────────────────────────────────────────────
-// Named Holidays & Annual Events
-// ─────────────────────────────────────────────────────────────
+// Named holidays and annual events
 
 #[must_use]
 pub fn christmas(year: i32) -> Date {
@@ -241,7 +237,7 @@ pub fn veterans_day(year: i32) -> Date {
     Date::new(year, 11, 11)
 }
 
-/// Anonymous Gregorian Computus algorithm for Easter Sunday.
+/// Easter Sunday, by the anonymous Gregorian computus.
 #[must_use]
 pub fn easter(year: i32) -> Date {
     let a = year % 19;

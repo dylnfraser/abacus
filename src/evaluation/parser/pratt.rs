@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
         self.ast
     }
 
-    // ── Token access ──
+    // Token access
 
     #[inline(always)]
     fn peek(&self) -> Option<&'a Token<'a>> {
@@ -204,7 +204,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // ── Binding powers ──
+    // Binding powers
 
     /// (`left_bp`, `right_bp`) of a binary operator, derived from its precedence
     /// (`+ -` = 0 -> (2, 3), `* / % of` = 1 -> (4, 5), `^` = 3 right-assoc -> (9, 8)).
@@ -225,7 +225,7 @@ impl<'a> Parser<'a> {
             .map_or(10, |op| op.precedence.saturating_mul(2).saturating_add(2))
     }
 
-    // ── Expressions ──
+    // Expressions
 
     /// Parses the whole token stream.
     pub(crate) fn parse(&mut self) -> Result<NodeId, Located> {
@@ -514,7 +514,7 @@ impl<'a> Parser<'a> {
         Ok((lo, hi))
     }
 
-    // ── Function calls ──
+    // Function calls
 
     fn parse_function_call(
         &mut self,
@@ -644,9 +644,9 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // ── Conversions ──
+    // Conversions
 
-    /// Returns true if `tokens[start..end]` contains a written unit (`m`, `%`, `5 kg`, `$3`).
+    /// Whether `tokens[start..end]` contains a written unit (`m`, `%`, `5 kg`, `$3`).
     fn tokens_contain_unit(&self, start: usize, end: usize) -> bool {
         self.tokens[start..end.min(self.tokens.len())]
             .iter()

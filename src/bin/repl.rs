@@ -281,7 +281,7 @@ fn render_error(diagnostic: &Diagnostic) -> String {
     out
 }
 
-// ── Highlighting ──
+// Highlighting
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Style {
@@ -434,7 +434,7 @@ fn highlight(calc: &Abacus, line: &str) -> String {
     out
 }
 
-// ── Completion ──
+// Completion
 
 /// Names starting with the word before byte `pos`: commands, then variables and functions,
 /// then units (once two characters are typed, as there are hundreds).

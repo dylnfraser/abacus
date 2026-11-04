@@ -1,16 +1,14 @@
 use crate::units::value::Value;
 use std::collections::HashMap;
 
-/// A map of named key-value pairs representing structured calculation outputs (e.g. regression model results, inference test results).
+/// Named values returned together by one calculation, such as the fields of a regression result.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Hash {
     pub values: HashMap<String, Value>,
 }
 
-// Implementation functions for Hash
 impl Hash {
-    // Default constructor for the Hash
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -55,7 +53,7 @@ impl Hash {
         self.to_string()
     }
 
-    /// Returns a new `Hash` with all numeric values rounded to `sig_figs` significant figures.
+    /// Rounds every value to `sig_figs` significant figures.
     #[must_use]
     pub fn round_to_sig_figs(&self, sig_figs: usize) -> Self {
         let mut new_values = HashMap::new();
@@ -65,13 +63,13 @@ impl Hash {
         Self { values: new_values }
     }
 
-    /// Formats all entries in the hash formatted to `sig_figs` significant figures.
+    /// Formats all entries with `sig_figs` significant figures.
     #[must_use]
     pub fn to_display_with_sig_figs(&self, sig_figs: usize) -> String {
         self.render_with(|v| v.to_display_with_sig_figs(sig_figs))
     }
 
-    /// Returns a new `Hash` with all numeric values rounded to `decimals` decimal places.
+    /// Rounds every value to `decimals` decimal places.
     #[must_use]
     pub fn round_to_decimals(&self, decimals: usize) -> Self {
         let mut new_values = HashMap::new();
@@ -81,7 +79,7 @@ impl Hash {
         Self { values: new_values }
     }
 
-    /// Returns a new `Hash` with display overrides applied to each contained `Value`.
+    /// Applies unit display overrides to every value.
     #[must_use]
     pub fn with_display_override(&self, overrides: &HashMap<String, String>) -> Self {
         let mut new_values = HashMap::with_capacity(self.values.len());
@@ -91,7 +89,7 @@ impl Hash {
         Self { values: new_values }
     }
 
-    /// Formats all entries in the hash formatted to `decimals` decimal places.
+    /// Formats all entries with `decimals` decimal places.
     #[must_use]
     pub fn to_display_with_decimals(&self, decimals: usize) -> String {
         self.render_with(|v| v.to_display_with_decimals(decimals))
@@ -138,8 +136,7 @@ impl Default for Hash {
     }
 }
 
-/// Display implementation for `Hash`
-/// Formats the `Hash` as a human-readable string
+/// Formats the entries sorted by key.
 impl std::fmt::Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ ")?;

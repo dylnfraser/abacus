@@ -4,7 +4,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// Validates that all values in the slice are dimensionless.
+/// Checks that every value is dimensionless.
 pub fn check_dimensionless(args: &[Value]) -> Result<(), AbacusError> {
     if args.iter().all(|a| a.unit.is_dimensionless()) {
         Ok(())
@@ -13,11 +13,11 @@ pub fn check_dimensionless(args: &[Value]) -> Result<(), AbacusError> {
     }
 }
 
-/// Returns the unit to use for a *difference* (spread) of values measured in `unit`.
+/// Unit for a *difference* (spread) of values measured in `unit`.
 ///
-/// For affine units such as °C or °F, a difference is not itself a temperature reading, so it
-/// is reported in the matching difference unit — K for °C, °R for °F — exactly as
-/// subtraction (`30 °F - 20 °F` → `10 °R`) does. Other units are returned unchanged.
+/// For affine units such as °C or °F, a difference is not a temperature reading, so it is
+/// reported in the matching difference unit (K for °C, °R for °F), as subtraction does:
+/// `30 °F - 20 °F` → `10 °R`. Other units are returned unchanged.
 #[must_use]
 pub fn delta_unit(unit: &Arc<Unit>) -> Arc<Unit> {
     if unit.is_affine() {
@@ -27,8 +27,8 @@ pub fn delta_unit(unit: &Arc<Unit>) -> Arc<Unit> {
     }
 }
 
-/// Interprets a value as a difference/spread (e.g. a standard deviation) and returns its
-/// canonical magnitude. For affine units, `2 °C` as a spread means 2 K, not 275.15 K.
+/// Canonical magnitude of a value read as a spread, such as a standard deviation. For affine
+/// units, `2 °C` as a spread means 2 K, not 275.15 K.
 #[inline]
 #[must_use]
 pub fn delta_canonical(value: &Value) -> f64 {
@@ -51,8 +51,8 @@ pub fn positive_spread(value: &Value, unit: &Unit) -> Result<f64, AbacusError> {
 /// Largest integer that f64 represents exactly (2^53).
 const MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 
-/// Returns `x` as a non-negative integer, rejecting fractional, negative, non-finite, or
-/// inexact (> 2^53) input with `IncompatibleFunctionArguments`.
+/// `x` as a non-negative integer. Fractional, negative, non-finite and inexact (> 2^53) input
+/// is rejected with `IncompatibleFunctionArguments`.
 ///
 /// Error convention for the function registry: invalid *arguments* (out of domain, wrong
 /// sign, non-integer) are `IncompatibleFunctionArguments`; failures of the *computation*
@@ -107,13 +107,13 @@ fn integer_magnitude(value: &Value) -> Result<u64, AbacusError> {
     non_negative_integer(value.canonical.abs())
 }
 
-/// clamp(x, min, max) — clamps x within [min, max]
+/// `clamp(x, min, max)`: `x` limited to [min, max].
 fn clamp_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let x = &args[0];
     let min = &args[1];
     let max = &args[2];
 
-    // Check unit compatibility or promote dimensionless bounds
+    // A dimensionless bound takes the unit of `x`.
     let min_canonical = if min.unit.is_compatible_with(&x.unit) {
         min.canonical
     } else if min.unit.is_dimensionless() && !x.unit.is_dimensionless() {
@@ -144,14 +144,14 @@ fn clamp_fn(args: &[Value]) -> Result<Value, AbacusError> {
     })
 }
 
-/// gcd(a, b) — Greatest Common Divisor of two integers
+/// Greatest common divisor of two integers, `gcd(a, b)`.
 fn gcd_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let a = integer_magnitude(&args[0])?;
     let b = integer_magnitude(&args[1])?;
     Ok(Value::dimensionless(gcd_u64(a, b) as f64))
 }
 
-/// lcm(a, b) — Least Common Multiple of two integers; errors if the result overflows u64.
+/// Least common multiple of two integers, `lcm(a, b)`. Errors if the result overflows u64.
 fn lcm_fn(args: &[Value]) -> Result<Value, AbacusError> {
     let a = integer_magnitude(&args[0])?;
     let b = integer_magnitude(&args[1])?;

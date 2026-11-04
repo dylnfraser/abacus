@@ -16,15 +16,15 @@ use abacus::{Abacus, AbacusError, eval};
 #[cfg(feature = "units")]
 #[test]
 fn test_fractional_exponent_dimensions() {
-    // Square root of m^4 / s^2 is m^2/s
+    // sqrt(m^4/s^2) is m^2/s
     let res = eval("sqrt(9 m^4 / s^2)").unwrap();
     assert_eq!(res.to_display(), "3 m^2/s");
 
-    // Power with fractional exponents
+    // Fractional exponents
     let res2 = Abacus::standard().eval_scalar("(16 m^2)^0.5").unwrap();
     assert_eq!(res2.canonical, 4.0);
 
-    // Negative exponent
+    // Reciprocal of a fractional power
     let res3 = Abacus::standard().eval_scalar("1 / (4 s^2)^0.5").unwrap();
     assert_eq!(res3.canonical, 0.5);
 }
@@ -32,7 +32,7 @@ fn test_fractional_exponent_dimensions() {
 #[cfg(feature = "units")]
 #[test]
 fn test_mixed_prefix_and_unit_conversion_chains() {
-    // Mixed metric prefix addition: km + m + cm -> m
+    // Mixed prefixes (km + m + cm) give metres.
     let res = eval("(1 km + 500 m + 2500 cm) as m").unwrap();
     assert_eq!(res.to_display(), "1525 m");
 
@@ -55,7 +55,7 @@ fn test_affine_temperature_conversions_and_protections() {
     assert_eq!(eval("100 °C as K").unwrap().to_display(), "373.15 K");
     assert_eq!(eval("98.6 °F as °C").unwrap().to_display(), "37 °C");
 
-    // Disallowed affine arithmetic (e.g. adding two affine temperatures directly)
+    // Two affine temperatures can't be added directly.
     assert!(matches!(
         eval("20 °C + 10 °C"),
         Err(AbacusError::AffineUnitOperation(_))
@@ -94,7 +94,7 @@ fn test_cgs_and_astronomical_physics_conversions() {
     let au = eval("1 au to km").unwrap();
     assert_eq!(au.to_display(), "149597870.7 km");
 
-    // CGS Physics: bar to Pa
+    // CGS: bar to Pa
     let bar = eval("1 bar to Pa").unwrap();
     assert_eq!(bar.to_display(), "100000 Pa");
 }
@@ -102,10 +102,10 @@ fn test_cgs_and_astronomical_physics_conversions() {
 #[cfg(feature = "units")]
 #[test]
 fn test_complex_implicit_multiplication() {
-    // 2(3 + 4)(5 + 6) = 2 * 7 * 11 = 154
+    // 2 * 7 * 11 = 154
     assert_eq!(eval("2(3 + 4)(5 + 6)").unwrap().to_display(), "154");
 
-    // Juxtaposition with functions: 2 sqrt(16 m^2) 3 = 2 * 4 m * 3 = 24 m
+    // 2 * 4 m * 3 = 24 m
     assert_eq!(eval("2 sqrt(16 m^2) 3").unwrap().to_display(), "24 m");
 
     // Double parentheses juxtaposition
@@ -118,7 +118,7 @@ fn test_complex_implicit_multiplication() {
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_statistical_dispersion_and_multi_unit_ranges() {
-    // Mean of mixed compatible units: 1 m, 100 cm, 2000 mm -> 4/3 m = 1.3333333333333333 m
+    // Mean of 1 m, 100 cm and 2000 mm is 4/3 m.
     let m = Abacus::standard()
         .eval_scalar("mean(1 m, 100 cm, 2000 mm)")
         .unwrap();
@@ -128,7 +128,7 @@ fn test_statistical_dispersion_and_multi_unit_ranges() {
     let q = eval("quantile(1 m .. 9 m, 0.5)").unwrap();
     assert_eq!(q.to_display(), "5 m");
 
-    // Pearson Correlation
+    // Pearson correlation
     let corr_pos = Abacus::standard()
         .eval_scalar("corr(1..5, 10..14)")
         .unwrap()
@@ -145,7 +145,7 @@ fn test_statistical_dispersion_and_multi_unit_ranges() {
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
 fn test_custom_range_step_expansion_edge_cases() {
-    // Step expansion with units: 0 m .. 10 m .. 2.5 m -> sum = 0 + 2.5 + 5 + 7.5 + 10 = 25 m
+    // 0 + 2.5 + 5 + 7.5 + 10 = 25 m
     assert_eq!(
         eval("sum(0 m .. 10 m .. 2.5 m)").unwrap().to_display(),
         "25 m"
@@ -170,21 +170,21 @@ fn test_advanced_trigonometric_angle_units() {
 #[cfg(feature = "financial")]
 #[test]
 fn test_financial_npv_irr_and_tvm() {
-    // Net Present Value (NPV): rate = 10%, CFs = [-1000, 300, 400, 500] -> -19.124434
+    // NPV at 10% of [-1000, 300, 400, 500] is about -19.124434.
     let npv_val = Abacus::standard()
         .eval_scalar("npv(0.1, -1000, 300, 400, 500)")
         .unwrap()
         .canonical;
     assert!((npv_val - (-19.124434)).abs() < 1e-3);
 
-    // Internal Rate of Return (IRR): CFs = [-100, 60, 60] -> ~13.066%
+    // IRR of [-100, 60, 60] is about 13.066%.
     let irr_val = Abacus::standard()
         .eval_scalar("irr(-100, 60, 60)")
         .unwrap()
         .canonical;
     assert!((irr_val - 0.13066).abs() < 1e-3);
 
-    // Future Value (FV)
+    // Future value
     let fv_val = Abacus::standard()
         .eval_scalar("fv(0.05, 10, -1000, -10000)")
         .unwrap()
@@ -231,7 +231,6 @@ fn test_chained_unary_incrementers_and_factorials() {
     // Double negation: - - 5 = 5
     assert_eq!(eval("- - 5").unwrap().to_display(), "5");
 
-    // Factorial of 5 = 120
     assert_eq!(eval("5!").unwrap().to_display(), "120");
 }
 
@@ -272,26 +271,23 @@ fn test_niche_relative_date_and_time_edge_cases() {
     let today = anchor.start_of_day();
     let tomorrow = today.add_days(1);
 
-    // Crossing midnight backwards: 3 hours before tmr at 1am -> today at 22:00
+    // 3 hours before tomorrow at 1am is today at 22:00.
     let d_cross_back = abacus.eval_date("3 hours before tmr at 1am").unwrap();
     assert_eq!(d_cross_back.day, today.day);
     assert_eq!(d_cross_back.time.hour, 22);
 
-    // Crossing midnight forwards: 25 hours after tdy at 11pm -> day after tomorrow at 00:00
+    // 25 hours after today at 11pm is midnight the day after tomorrow.
     let d_cross_fw = abacus.eval_date("25 hours after tdy at 11pm").unwrap();
     let day_after_tomorrow = tomorrow.add_days(1);
     assert_eq!(d_cross_fw.day, day_after_tomorrow.day);
     assert_eq!(d_cross_fw.time.hour, 0);
 
-    // Exact difference between tmr and tdy in hours
     let diff_hrs = abacus.eval("tdy at 3pm to tmr at 3pm in hours").unwrap();
     assert_eq!(diff_hrs.to_display(), "24 h");
 
-    // Exact difference in days
     let diff_days = abacus.eval("tdy to tmr in days").unwrap();
     assert_eq!(diff_days.to_display(), "1 d");
 
-    // Interval from 3 hours ago to in 3 hours -> 6 hours
     let interval_diff = abacus
         .eval("((3 hours ago) to (in 3 hours)) in hours")
         .unwrap();
@@ -310,22 +306,22 @@ fn test_niche_relative_date_and_time_edge_cases() {
 fn test_niche_unparenthesized_function_chaining() {
     let abacus = Abacus::standard();
 
-    // Nested unparenthesized calls: ln exp 5 -> 5
+    // Nested calls without parentheses: ln exp 5 = 5
     let ln_exp = abacus.eval_scalar("ln exp 5").unwrap().canonical;
     assert!((ln_exp - 5.0).abs() < 1e-5);
 
-    // Double unparenthesized sqrt: sqrt sqrt 81 -> 3
+    // sqrt sqrt 81 = 3
     assert_eq!(abacus.eval("sqrt sqrt 81").unwrap().to_display(), "3");
 
-    // Trigonometric unparenthesized with unit conversion: acos -1 in deg -> 180 deg
+    // acos -1 in deg = 180 deg
     let acos_deg = abacus.eval("acos -1 in deg").unwrap();
     assert_eq!(acos_deg.to_display(), "180 deg");
 
-    // Floor and ceil unparenthesized with physical units
+    // floor and ceil without parentheses, on values with units
     assert_eq!(abacus.eval("floor 5.9 m").unwrap().to_display(), "5 m");
     assert_eq!(abacus.eval("ceil 3.1 s").unwrap().to_display(), "4 s");
 
-    // Unparenthesized abs with energy reduction: abs -10 N * 2 m -> 20 J
+    // abs -10 N * 2 m = 20 J
     assert_eq!(abacus.eval("abs -10 N * 2 m").unwrap().to_display(), "20 J");
 }
 
@@ -334,7 +330,7 @@ fn test_niche_unparenthesized_function_chaining() {
 fn test_numerical_stability_edge_cases() {
     let abacus = Abacus::standard();
 
-    // 1. Poisson PMF and CDF with k > 170
+    // Poisson PMF and CDF with k > 170 (past where k! overflows f64)
     let p_pdf = abacus
         .eval_scalar("poissonpdf(200, 200)")
         .unwrap()
@@ -348,11 +344,11 @@ fn test_numerical_stability_edge_cases() {
         .canonical;
     assert!(p_cdf.is_finite() && (p_cdf - 0.5188).abs() < 1e-2);
 
-    // 2. Hypergeometric rejection of negative / invalid arguments
+    // Hypergeometric rejects negative arguments.
     assert!(abacus.eval("hypgeompdf(-10, -5, -2, -1)").is_err());
     assert!(abacus.eval("hypgeomcdf(-10, -5, -2, -1)").is_err());
 
-    // 3. IRR divergence handling when no rate exists
+    // IRR fails when no rate exists.
     assert!(abacus.eval("irr(100, 200, 300)").is_err());
 }
 
@@ -361,15 +357,15 @@ fn test_numerical_stability_edge_cases() {
 fn test_code_review_findings_cr_001_through_cr_006() {
     let abacus = Abacus::standard();
 
-    // CR-001: Range overflow in RangeSeq::new on massive bounds
+    // Ranges with huge bounds are an error, not an overflow.
     assert!(abacus.eval("mean(0..1e308)").is_err());
     assert!(abacus.eval("sum(1..1e300)").is_err());
 
-    // CR-002: Interval division singularity with non-SI units preserves correct canonical scaling
+    // Division by an interval containing zero keeps the non-SI units' scaling.
     let int_div = abacus.eval("[10 km, 20 km] / [0 h, 2 h]").unwrap();
     assert_eq!(int_div.to_display(), "[5 km/h, inf km/h]");
 
-    // CR-003: Affine units rejected by abs and sign
+    // abs and sign reject affine units.
     assert!(matches!(
         abacus.eval("abs(-20 °C)"),
         Err(AbacusError::AffineUnitOperation(_))
@@ -379,18 +375,18 @@ fn test_code_review_findings_cr_001_through_cr_006() {
         Err(AbacusError::AffineUnitOperation(_))
     ));
 
-    // CR-004: Unary sqrt unit simplification doesn't drop units in compound products
+    // sqrt of a compound product keeps both units.
     let sqrt_res = abacus.eval("sqrt(4 m * s)").unwrap();
     assert_eq!(sqrt_res.to_display(), "2 m^0.5*s^0.5");
 
-    // CR-005: Significant figure rounding when decade shifts
+    // Sig-fig rounding that shifts the decade (0.0999 -> 0.10, 9.99 -> 10)
     let calc = Abacus::standard().with_significant_figures(2);
     let sf2_a = calc.eval("0.0999").unwrap();
     assert_eq!(calc.format_result(&sf2_a), "0.10");
     let sf2_b = calc.eval("9.99").unwrap();
     assert_eq!(calc.format_result(&sf2_b), "10");
 
-    // CR-006: Clamp with NaN bounds returns Err instead of panicking
+    // clamp with NaN bounds is an error, not a panic.
     assert!(abacus.eval("clamp(5, 0/0, 10)").is_err());
     assert!(abacus.eval("clamp(5, 0, 0/0)").is_err());
 }
@@ -400,7 +396,7 @@ fn test_code_review_findings_cr_001_through_cr_006() {
 fn test_code_review_findings_cr_007_through_cr_009() {
     let abacus = Abacus::standard();
 
-    // CR-007: round_to_decimals with decimals >= 308 does not produce NaN
+    // Rounding to 308 or more decimals leaves the value unchanged instead of giving NaN.
     let val = abacus::Value::dimensionless(123.456);
     let rounded = val.round_to_decimals(400);
     assert_eq!(rounded.canonical, 123.456);
@@ -413,7 +409,7 @@ fn test_code_review_findings_cr_007_through_cr_009() {
         assert!(!v.canonical.is_nan());
     }
 
-    // CR-008: UnitRegistry inherits and enforces configured max_exponent
+    // The unit registry enforces the engine's max_exponent.
     let low_exp_calc = Abacus::standard().with_max_exponent(5.0);
     assert_eq!(low_exp_calc.units().max_exponent(), 5.0);
     assert!(low_exp_calc.eval("5 m^5").is_ok());
@@ -426,7 +422,7 @@ fn test_code_review_findings_cr_007_through_cr_009() {
         Err(AbacusError::ExponentLimitExceeded)
     ));
 
-    // CR-009: Date arithmetic does not overflow or panic on extreme bounds
+    // Date arithmetic at extreme bounds must not overflow or panic.
     let d = abacus::Date::new(2025, 1, 1);
     let _ = d.add_days(i64::MAX);
     let _ = d.add_days(i64::MIN);

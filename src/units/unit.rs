@@ -17,7 +17,7 @@ pub struct UnitExpr {
     pub denominator: SymList,
 }
 
-/// A list of unit symbols with inline storage for the overwhelmingly common zero- and
+/// A list of unit symbols with inline storage for the common zero- and
 /// one-symbol cases (`km`, `h`, `m/s`), so cloning and combining typical units never touches
 /// the heap. Derefs to `[Sym]`.
 #[derive(Clone, Default)]
@@ -428,14 +428,14 @@ impl UnitExpr {
         }
     }
 
-    /// Returns `true` if this expression is exactly the single symbol `sym`.
+    /// Whether this expression is exactly the single symbol `sym`.
     #[must_use]
     pub fn is_single(&self, sym: &str) -> bool {
         self.denominator.is_empty() && self.numerator.len() == 1 && self.numerator[0] == sym
     }
 
-    /// Returns `true` if this expression is a single plain unit symbol (no denominator,
-    /// no exponent), e.g. `atm` or `GHz` but not `m^2` or `m/s`.
+    /// Whether this expression is a single plain symbol with no denominator or exponent:
+    /// `atm`, but not `m^2` or `m/s`.
     #[must_use]
     pub fn is_atomic(&self) -> bool {
         self.denominator.is_empty() && self.numerator.len() == 1 && !self.numerator[0].contains('^')
@@ -486,7 +486,7 @@ impl UnitExpr {
         expr
     }
 
-    /// Raises every unit in this expression to `exp`, e.g. `(m^2/s)^0.5` → `m/s^0.5`.
+    /// Raises every unit in this expression to `exp` (`(m^2/s)^0.5` → `m/s^0.5`).
     #[must_use]
     pub fn powf(&self, exp: f64) -> Self {
         let exps: Vec<(&str, f64)> = self
@@ -592,7 +592,7 @@ impl std::fmt::Display for UnitList<'_> {
 
 /// Largest scale ratio between two units that may be merged for display. Beyond this,
 /// converting into the leading unit produces amounts that round to zero or show
-/// spurious precision (e.g. `au*cm`), so the units are left as written.
+/// spurious precision (`au*cm`), so the units are left as written.
 const MAX_CONSOLIDATION_RATIO: f64 = 1e6;
 
 /// Whether a unit has a fixed, well-defined conversion factor that makes it safe to
@@ -711,7 +711,7 @@ impl Unit {
         self.dimensions == Dimensions::DIMENSIONLESS
     }
 
-    /// Returns `true` for a plain dimensionless unit with no display (a bare number).
+    /// Whether this is a plain dimensionless unit with no display (a bare number).
     #[must_use]
     pub fn is_plain_number(&self) -> bool {
         self.is_dimensionless() && self.display.is_empty() && self.scalar == 1.0

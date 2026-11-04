@@ -47,15 +47,13 @@ fn test_configurable_date_format() {
 fn test_date_to_date_time_between_conversion() {
     let abacus = Abacus::standard();
 
-    // 07-08-2026 to 17-08-2026 is a whole number of days, so it is shown in days by default
+    // A whole number of days is shown in days by default.
     let res_days_default = abacus.eval("07-08-2026 to 17-08-2026").unwrap();
     assert_eq!(res_days_default.to_display(), "10 d");
 
-    // Chained conversion in days
     let res_days = abacus.eval("07-08-2026 to 17-08-2026 in days").unwrap();
     assert_eq!(res_days.to_display(), "10 d");
 
-    // Chained conversion in hours
     let res_hours = abacus.eval("07-08-2026 to 08-08-2026 in hours").unwrap();
     assert_eq!(res_hours.to_display(), "24 h");
 }

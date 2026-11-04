@@ -1,4 +1,4 @@
-//! Regression tests for the math/statistics audit findings.
+//! Accuracy and argument handling of the math, statistics and distribution functions.
 //!
 //! Reference values come from mpmath (40-digit precision) unless stated otherwise. Values
 //! are checked through `canonical` rather than the display string so they are independent
@@ -69,7 +69,7 @@ fn display(expr: &str) -> String {
     eval(expr).unwrap().to_display()
 }
 
-// ── Finding 1: erfinv/invnorm accuracy ──
+// erfinv/invnorm accuracy
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -91,7 +91,7 @@ fn z_based_intervals_use_the_exact_critical_value() {
     assert_rel("zmoe(1, 1)", 1.959_963_984_540_054, 1e-15);
 }
 
-// ── Findings 2 & 3: unambiguous TTest / ZTest / TInterval forms ──
+// Unambiguous TTest / ZTest / TInterval forms
 
 #[cfg(feature = "stats")]
 #[test]
@@ -153,7 +153,7 @@ fn trailing_fraction_is_data_not_confidence_level() {
     );
 }
 
-// ── Findings 4, 12: incomplete gamma/beta convergence and robust inverses ──
+// Incomplete gamma/beta convergence and robust inverses
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -187,7 +187,7 @@ fn student_t_cdf_is_accurate_for_large_df() {
     assert_rel("tcdf(2.5, -40)", 7.097_817_145_246_691e-5, 1e-13);
 }
 
-// ── Finding 5: erf / normcdf tails ──
+// erf / normcdf tails
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -210,7 +210,7 @@ fn two_sided_p_values_do_not_cancel_to_zero() {
     );
 }
 
-// ── Finding 6: affine temperatures in statistics ──
+// Affine temperatures in statistics
 
 #[cfg(all(feature = "units", feature = "stats"))]
 #[test]
@@ -265,7 +265,7 @@ fn sample_sizes_must_be_dimensionless_integers() {
     );
 }
 
-// ── Finding 7: unit-aware floored modulo ──
+// Unit-aware floored modulo
 
 #[cfg(feature = "units")]
 #[test]
@@ -278,7 +278,7 @@ fn modulo_uses_canonical_units_and_floored_sign() {
     assert_err("mod(5 m, 0)");
 }
 
-// ── Finding 8: predict argument order ──
+// predict argument order
 
 #[cfg(feature = "stats")]
 #[test]
@@ -288,7 +288,7 @@ fn prediction_argument_order_is_fixed_per_name() {
     assert_eq!(scalar("LinRegPredict(1, 2, 3, 2, 4, 6, 4)"), 8.0);
 }
 
-// ── Findings 9 & 10: discrete distributions in log space, no O(k) loops ──
+// Discrete distributions in log space, no O(k) loops
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -331,7 +331,7 @@ fn huge_cdf_arguments_return_quickly() {
     );
 }
 
-// ── Finding 11: lcm/gcd overflow and integer validation ──
+// lcm/gcd overflow and integer validation
 
 #[test]
 fn lcm_overflow_is_an_error_not_a_panic() {
@@ -341,7 +341,7 @@ fn lcm_overflow_is_an_error_not_a_panic() {
     assert_eq!(scalar("gcd(-12, 18)"), 6.0);
 }
 
-// ── Finding 13: irr ──
+// irr
 
 #[cfg(feature = "financial")]
 #[test]
@@ -356,7 +356,7 @@ fn irr_uses_relative_tolerance_and_reports_failure() {
     assert_err("irr(-100, -110)");
 }
 
-// ── Finding 14: 1-PropZInt is the TI-84 Wald interval ──
+// 1-PropZInt is the TI-84 Wald interval
 
 #[cfg(feature = "stats")]
 #[test]
@@ -366,7 +366,7 @@ fn one_prop_z_int_matches_ti84() {
     assert!((hi - 0.496_018_233_527_106_2).abs() < 1e-14, "hi = {hi}");
 }
 
-// ── Finding 15: degenerate standard errors ──
+// Degenerate standard errors
 
 #[test]
 fn degenerate_standard_errors_are_errors() {
@@ -377,7 +377,7 @@ fn degenerate_standard_errors_are_errors() {
     assert_err("ZTest(0, 1, 0, 10)");
 }
 
-// ── Finding 16: skewness / kurtosis definitions ──
+// Skewness / kurtosis definitions
 
 #[cfg(feature = "stats")]
 #[test]
@@ -388,7 +388,7 @@ fn skew_and_kurt_match_excel() {
     assert_err("kurt(2, 2, 2, 2)");
 }
 
-// ── Finding 17: F and χ² densities at zero ──
+// F and χ² densities at zero
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -401,7 +401,7 @@ fn densities_at_zero() {
     assert_eq!(scalar("chisqpdf(3, 0)"), 0.0);
 }
 
-// ── Finding 19: non-integer inputs and consistent limits ──
+// Non-integer inputs and consistent limits
 
 #[cfg(feature = "distributions")]
 #[test]
@@ -445,7 +445,7 @@ fn combinatorics_limits_are_consistent() {
     ));
 }
 
-// ── Finding 20: trig domains and exact values ──
+// Trig domains and exact values
 
 #[cfg(feature = "units")]
 #[test]
@@ -472,7 +472,7 @@ fn inverse_hyperbolics_are_plain_numbers() {
     assert_rel("asinh(1)", 0.881_373_587_019_543, 1e-15);
 }
 
-// ── Finding 21: regression consistency ──
+// Regression consistency
 
 #[cfg(feature = "stats")]
 #[test]
@@ -498,7 +498,7 @@ fn regression_reports_slope_standard_error() {
     assert!((hash_value(expr, "intercept_se") - s * 1.5f64.sqrt()).abs() < 1e-14);
 }
 
-// ── Finding 22: Chi2Test argument layout ──
+// Chi2Test argument layout
 
 #[cfg(feature = "stats")]
 #[test]
@@ -513,7 +513,7 @@ fn chi2_test_takes_observed_then_expected() {
     assert_err("Chi2Test(1 m, 2 m, 1 m, 2 m)");
 }
 
-// ── Nits ──
+// Miscellaneous
 
 #[cfg(feature = "stats")]
 #[test]

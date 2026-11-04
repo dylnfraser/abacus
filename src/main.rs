@@ -12,7 +12,7 @@ use std::process::ExitCode;
 
 use abacus::Abacus;
 
-/// Like `println!`, but exits quietly when stdout is closed (e.g. `abacus --demo | head`)
+/// Like `println!`, but exits quietly when stdout is closed (`abacus --demo | head`)
 /// instead of panicking on a broken pipe.
 macro_rules! out {
     ($($arg:tt)*) => {{

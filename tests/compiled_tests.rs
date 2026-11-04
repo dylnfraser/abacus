@@ -132,7 +132,7 @@ fn long_flat_expressions_do_not_deepen_the_tree() {
     assert_eq!(handle.join().unwrap(), Ok("50000".to_string()));
 }
 
-// ── Diagnostics ──
+// Diagnostics
 
 /// The error, the source text its span covers, and the note.
 fn diagnose(src: &str) -> (AbacusError, String, Option<String>) {
@@ -190,7 +190,7 @@ fn diagnostics_render_a_caret() {
         d.to_string(),
         "cannot perform operation on incompatible dimensions\n  5 m + 3 s\n      ^\n  note: m + s"
     );
-    // The plain error is unchanged.
+    // `eval` still returns the plain error.
     assert_eq!(
         Abacus::standard().eval("5 m + 3 s"),
         Err(AbacusError::IncompatibleDimensions)

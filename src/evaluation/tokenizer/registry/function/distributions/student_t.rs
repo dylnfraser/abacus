@@ -40,7 +40,7 @@ fn t_tail_large_df(df: f64, t: f64) -> f64 {
     0.5 * erfc(z / std::f64::consts::SQRT_2)
 }
 
-/// Lower-tail probability P(T ≤ -|t|) for Student's t, i.e. one tail.
+/// One tail of Student's t, P(T ≤ -|t|).
 fn t_tail(df: f64, t: f64) -> Option<f64> {
     if df > LARGE_DF {
         return Some(t_tail_large_df(df, t));

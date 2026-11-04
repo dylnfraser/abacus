@@ -1,10 +1,10 @@
-//! Minimal, dependency-free resolution of the system's local UTC offset.
+//! Resolves the system's local UTC offset without external dependencies.
 //!
 //! On Unix the zone is taken from the `TZ` environment variable (a zone name such as
 //! `America/New_York`, an absolute TZif path, or a POSIX rule string such as `EST5EDT,M3.2.0,M11.1.0`),
 //! falling back to `/etc/localtime`. The TZif file is parsed once per process (including its POSIX
 //! footer rule for instants beyond the last transition), so DST is honoured. When no zone information
-//! is available (e.g. on non-Unix targets) the local zone is UTC.
+//! is available (as on non-Unix targets) the local zone is UTC.
 
 use std::sync::OnceLock;
 
@@ -230,7 +230,7 @@ impl PosixTz {
         }
     }
 
-    /// Returns `(offset seconds east of UTC, abbreviation)` in effect at the UTC instant `t` (seconds).
+    /// The offset (seconds east of UTC) and abbreviation in effect at UTC instant `t`, in seconds.
     pub(crate) fn offset_at(&self, t: i64) -> (i32, &str) {
         let Some(dst) = &self.dst else {
             return (self.std_offset, &self.std_abbr);
@@ -401,7 +401,7 @@ fn system_zone() -> Option<&'static Zone> {
     ZONE.get_or_init(load_system_zone).as_ref()
 }
 
-/// Returns the local UTC offset (minutes east) and zone abbreviation in effect at a UTC instant (ms).
+/// The local UTC offset (minutes east) and zone abbreviation in effect at a UTC instant in ms.
 pub(crate) fn local_offset_at_utc_ms(utc_ms: i64) -> (i32, String) {
     match system_zone() {
         Some(zone) => {
@@ -412,7 +412,7 @@ pub(crate) fn local_offset_at_utc_ms(utc_ms: i64) -> (i32, String) {
     }
 }
 
-/// Returns only the local UTC offset in minutes at a UTC instant (ms).
+/// The local UTC offset in minutes at a UTC instant in ms.
 pub(crate) fn local_offset_minutes_at_utc_ms(utc_ms: i64) -> i32 {
     system_zone().map_or(0, |zone| zone.offset_at(utc_ms.div_euclid(1000)).0 / 60)
 }

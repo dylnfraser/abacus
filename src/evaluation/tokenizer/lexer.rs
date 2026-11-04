@@ -11,7 +11,7 @@ use crate::{
 
 const CONVERSION_KEYWORDS: [&str; 2] = ["as", "to"];
 
-/// Zero-allocation byte prefix matching for relative time keywords.
+/// Matches a relative time keyword at the start of `remaining`, without allocating.
 #[inline]
 fn match_rel_time_op(remaining: &str) -> Option<(&'static str, usize)> {
     let b = remaining.as_bytes();
@@ -73,7 +73,7 @@ fn starts_with_ci(s: &str, prefix: &str) -> bool {
     s.len() >= prefix.len() && s.as_bytes()[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
 }
 
-/// Returns true if `rest` does not continue an identifier (end of input or a non-word character).
+/// Whether `rest` doesn't continue an identifier (end of input or a non-word character).
 #[inline]
 fn at_word_boundary(rest: &str) -> bool {
     rest.chars()
@@ -125,7 +125,7 @@ fn match_percent_tag(remaining: &str) -> Option<(&'static str, usize)> {
         .map(|&tag| (tag, tag.len()))
 }
 
-/// Returns the leading identifier-like word of `s` (alphanumeric or `_`).
+/// The leading word of `s` (alphanumeric or `_`).
 #[inline]
 fn leading_word(s: &str) -> &str {
     let len = s
@@ -134,8 +134,8 @@ fn leading_word(s: &str) -> &str {
     &s[..len]
 }
 
-/// Detects a timezone offset literal such as `+02:00`, `-04:00` or `+05:30` at the start of `s`,
-/// scanning at most a few bytes. Returns the literal's byte length.
+/// The byte length of a timezone offset literal (`+05:30`) at the start of `s`. Scans at most a
+/// few bytes.
 #[inline]
 fn match_tz_offset_literal(s: &str) -> Option<usize> {
     let b = s.as_bytes();
@@ -148,8 +148,8 @@ fn match_tz_offset_literal(s: &str) -> Option<usize> {
         .take_while(|c| c.is_ascii_digit() || **c == b':')
         .count();
     let word = &s[..len];
-    // Must be a complete word (e.g. not the start of `+05:30abc` or `-1:30.5`).
-    // Accept `±HH:MM` or the compact `±HHMM` form.
+    // Accept `±HH:MM` or `±HHMM`, as a complete word (not the start of `+05:30abc` or
+    // `-1:30.5`).
     let compact = len == 5 && !word.contains(':');
     if !(word.contains(':') || compact)
         || s[len..].starts_with(|c: char| c.is_alphanumeric() || c == '.')
@@ -159,9 +159,9 @@ fn match_tz_offset_literal(s: &str) -> Option<usize> {
     crate::units::date::TimeZone::parse(word).ok().map(|_| len)
 }
 
-/// Decides whether a `%` (with `rest` being the text after it) is the modulo operator rather
-/// than the percent unit: it is modulo only when an operand follows (`10 % 3`, `10%(3)`) and
-/// the next word is not `of` (`50% of 200`). A signed operand counts only after a space
+/// Whether a `%` followed by `rest` is the modulo operator rather than the percent unit. It is
+/// modulo only when an operand follows (`10 % 3`, `10%(3)`) and the next word is not `of`
+/// (`50% of 200`). A signed operand counts only after a space
 /// (`5 % -3` is modulo; `10% - 3` and `10%-3` are a percentage minus 3).
 #[inline]
 pub(crate) fn percent_is_modulo(rest: &str) -> bool {
@@ -180,13 +180,11 @@ pub(crate) fn percent_is_modulo(rest: &str) -> bool {
     if starts_operand(after) {
         return true;
     }
-    // A signed operand after a space is a negative/positive divisor (`5 % -3`), whereas
-    // `10% - 3` and `10%-3` remain "percentage minus a number".
     rest.starts_with(char::is_whitespace)
         && after.strip_prefix(['-', '+']).is_some_and(starts_operand)
 }
 
-/// Returns true if `tok` ends an operand (so a following operator is infix/postfix).
+/// Whether `tok` ends an operand (so a following operator is infix/postfix).
 #[inline]
 fn is_operand_token(tok: Option<&Token<'_>>) -> bool {
     matches!(
@@ -209,7 +207,7 @@ fn is_operand_token(tok: Option<&Token<'_>>) -> bool {
 ///
 /// Capital `A` is the ampere and is only read as `1` before a number-scale word
 /// (`A million dollars`). Returns `None` when `sym` should be lexed as a regular unit
-/// (e.g. `3 a` = 3 ares, `10 V / A`).
+/// (`3 a` = 3 ares, `10 V / A`).
 fn resolve_indefinite_article<'a>(
     sym: &str,
     rest_after: &str,
@@ -243,7 +241,7 @@ fn resolve_indefinite_article<'a>(
     }
 }
 
-/// Returns true if `sym` is a standard mathematical constant name.
+/// Whether `sym` is a standard mathematical constant.
 #[inline]
 pub(crate) fn is_standard_constant(sym: &str) -> bool {
     crate::evaluation::tokenizer::registry::constants::is_standard_constant(sym)
@@ -371,7 +369,7 @@ fn could_start_multi_word_unit(s: &str) -> bool {
     matches!(b.get(word_len), Some(b' ' | b'$'))
 }
 
-/// Returns `true` if the digit run at the start of `s` may begin a date or time literal
+/// Whether the digit run at the start of `s` may begin a date or time literal
 /// (`07-08-2026`, `15:30`, `3pm`, `3 PM`, `16th May`, `16 May 2010`).
 fn is_numeric_date_candidate(s: &str) -> bool {
     let bytes = s.as_bytes();
@@ -724,7 +722,7 @@ impl<'a> Lexer<'a, '_> {
                 && name[0].eq_ignore_ascii_case(&(c as u8))
                 && rest.as_bytes()[..name.len()].eq_ignore_ascii_case(name)
             {
-                // Names ending in a symbol (e.g. "R$") may be glued to a number ("R$5").
+                // Names ending in a symbol ("R$") may be glued to a number ("R$5").
                 let needs_boundary = name[name.len() - 1].is_ascii_alphanumeric();
                 if (!needs_boundary || at_word_boundary(&rest[name.len()..]))
                     && self.unit_registry.contains(unit_name)
@@ -962,7 +960,7 @@ impl<'a> Lexer<'a, '_> {
                 | Token::Comma,
             )
             | None => followed_by_conversion_kw || has_no_target,
-            // After a unit/value (e.g. `5 in in`, `5 m in`), `in` is the conversion keyword; a
+            // After a unit or value (`5 in in`, `5 m in`), `in` is the conversion keyword; a
             // missing target is then reported instead of silently multiplying by inches.
             _ => false,
         }
