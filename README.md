@@ -560,7 +560,17 @@ error: cannot perform operation on incompatible dimensions
 1
 ```
 
-Variables assigned with `name = expr` persist across expressions. `abacus --demo` prints a tour of features; `--help` and `--version` are also available.
+Variables assigned with `name = expr` persist across expressions. Options configure the engine:
+
+```sh
+$ abacus --degrees --decimals 3 "sin 40"
+0.643
+$ abacus --notation eng --date-format iso "45000 m" "07-08-2026 + 1 day"
+45e3 m
+2026-08-08
+```
+
+`--degrees`/`--radians`/`--gradians`, `--decimals N`, `--sig-figs N`, `--notation standard|scientific|engineering`, `--timezone TZ`, `--date-format long|iso|us|eu`, `--strict`, `--no-implicit` and `--exact` (no cancellation snapping) are available. `abacus --demo` prints a tour of features; `--help` and `--version` are also available.
 
 ### REPL
 

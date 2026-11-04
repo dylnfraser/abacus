@@ -3,6 +3,7 @@
 //! ```text
 //! abacus "10 N * 5 m" "100 km/h in m/s"   # evaluate each argument
 //! echo "x = 5 m" | abacus                 # evaluate stdin line by line
+//! abacus --degrees --decimals 3 "sin 30"  # with options
 //! abacus --demo                           # feature tour
 //! ```
 
@@ -31,10 +32,87 @@ stdin; blank lines and lines starting with '#' are skipped. Variables
 assigned with `name = expr` persist across expressions.
 
 Options:
-  --demo         Print a tour of supported features
-  -h, --help     Print this help
-  -V, --version  Print version
-  --             Treat all following arguments as expressions";
+  --degrees, --radians, --gradians
+                         Angle unit for bare numbers in trig functions
+                         (default: radians)
+  --decimals N           Round results to N decimal places
+  --sig-figs N           Round results to N significant figures
+  --notation MODE        standard, scientific or engineering
+  --timezone TZ          Timezone for dates and times written without one
+                         (EST, UTC, +05:30, ...)
+  --date-format FORMAT   long (August 7, 2026), iso (2026-08-07),
+                         us (08-07-2026) or eu (07-08-2026); us also reads
+                         ambiguous NN-NN-YYYY input month-first
+  --strict               Reject adding a bare number to a quantity (5 m + 3)
+  --no-implicit          Require an explicit * (reject 2(3), 2 pi)
+  --exact                Report floating-point cancellation noise instead of
+                         rounding it to 0 (0.1 + 0.2 - 0.3)
+  --demo                 Print a tour of supported features
+  -h, --help             Print this help
+  -V, --version          Print version
+  --                     Treat all following arguments as expressions";
+
+/// Options that take a value (`--decimals 2` or `--decimals=2`).
+const VALUE_OPTIONS: &[&str] = &[
+    "--decimals",
+    "--sig-figs",
+    "--notation",
+    "--timezone",
+    "--date-format",
+];
+
+/// Applies option `name` with `value` to `calc`, or explains what was wrong with it.
+fn apply_option(calc: &mut Abacus, name: &str, value: &str) -> Result<(), String> {
+    use abacus::{DateFormat, Notation, TimeZone};
+    let count = || {
+        value
+            .parse::<usize>()
+            .map_err(|_| format!("{name} expects a whole number, got `{value}`"))
+    };
+    match name {
+        "--decimals" => {
+            calc.set_decimal_places(count()?);
+        }
+        "--sig-figs" => {
+            let n = count()?;
+            if n == 0 {
+                return Err("--sig-figs must be at least 1".to_string());
+            }
+            calc.set_significant_figures(n);
+        }
+        "--notation" => {
+            calc.set_notation(match value {
+                "standard" | "std" => Notation::Standard,
+                "scientific" | "sci" => Notation::Scientific,
+                "engineering" | "eng" => Notation::Engineering,
+                _ => {
+                    return Err(format!(
+                        "--notation expects standard, scientific or engineering, got `{value}`"
+                    ));
+                }
+            });
+        }
+        "--timezone" => {
+            let tz = TimeZone::parse(value).map_err(|e| format!("--timezone: {e}"))?;
+            calc.set_default_timezone(tz);
+        }
+        "--date-format" => {
+            calc.set_date_format(match value {
+                "long" => DateFormat::MonthDayYear,
+                "iso" => DateFormat::YYYYMMDD,
+                "us" => DateFormat::MMDDYYYY,
+                "eu" => DateFormat::DDMMYYYY,
+                _ => {
+                    return Err(format!(
+                        "--date-format expects long, iso, us or eu, got `{value}`"
+                    ));
+                }
+            });
+        }
+        _ => return Err(format!("unknown option `{name}`")),
+    }
+    Ok(())
+}
 
 const DEMO: &[(&str, &[&str])] = &[
     (
@@ -151,8 +229,14 @@ fn main() -> ExitCode {
     let mut calc = Abacus::standard();
     let mut exprs = Vec::new();
     let mut flags_done = false;
+    let mut demo = false;
+    let mut args = std::env::args().skip(1);
+    let usage_error = |message: String| {
+        eprintln!("error: {message}\n\n{USAGE}");
+        ExitCode::from(2)
+    };
 
-    for arg in std::env::args().skip(1) {
+    while let Some(arg) = args.next() {
         if flags_done {
             exprs.push(arg);
             continue;
@@ -167,19 +251,50 @@ fn main() -> ExitCode {
                 out!("abacus {}", env!("CARGO_PKG_VERSION"));
                 return ExitCode::SUCCESS;
             }
-            "--demo" => {
-                return if run_demo(&calc) {
-                    ExitCode::SUCCESS
-                } else {
-                    ExitCode::FAILURE
-                };
+            "--demo" => demo = true,
+            "--degrees" => {
+                calc.set_angle_mode(abacus::AngleMode::Degrees);
+            }
+            "--radians" => {
+                calc.set_angle_mode(abacus::AngleMode::Radians);
+            }
+            "--gradians" => {
+                calc.set_angle_mode(abacus::AngleMode::Gradians);
+            }
+            "--strict" => {
+                calc.set_strict_dimensions(true);
+            }
+            "--no-implicit" => {
+                calc.set_implicit_multiplication(false);
+            }
+            "--exact" => {
+                calc.set_snap_cancellation(false);
             }
             flag if flag.starts_with("--") => {
-                eprintln!("error: unknown option `{flag}`\n\n{USAGE}");
-                return ExitCode::from(2);
+                let (name, inline) = match flag.split_once('=') {
+                    Some((name, value)) => (name, Some(value.to_string())),
+                    None => (flag, None),
+                };
+                if !VALUE_OPTIONS.contains(&name) {
+                    return usage_error(format!("unknown option `{name}`"));
+                }
+                let Some(value) = inline.or_else(|| args.next()) else {
+                    return usage_error(format!("{name} needs a value"));
+                };
+                if let Err(message) = apply_option(&mut calc, name, &value) {
+                    return usage_error(message);
+                }
             }
             _ => exprs.push(arg),
         }
+    }
+
+    if demo {
+        return if run_demo(&calc) {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        };
     }
 
     let mut ok = true;

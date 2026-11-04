@@ -536,6 +536,34 @@ fn command_line_examples() {
         String::from_utf8_lossy(&out.stderr),
         "error: cannot perform operation on incompatible dimensions\n  1 m + 1 s\n      ^\n  note: m + s\n"
     );
+
+    let run = |args: &[&str]| {
+        let out = Command::new(bin).args(args).output().unwrap();
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+        )
+    };
+    assert_eq!(
+        run(&["--degrees", "--decimals", "3", "sin 40"]),
+        (Some(0), "0.643\n".into())
+    );
+    assert_eq!(
+        run(&[
+            "--notation",
+            "eng",
+            "--date-format=iso",
+            "45000 m",
+            "07-08-2026 + 1 day"
+        ]),
+        (Some(0), "45e3 m\n2026-08-08\n".into())
+    );
+    assert_eq!(
+        run(&["--exact", "0.1 + 0.2 - 0.3"]).1,
+        "5.551115123125783e-17\n"
+    );
+    assert_eq!(run(&["--decimals", "x", "1"]).0, Some(2));
+    assert_eq!(run(&["--nope"]).0, Some(2));
 }
 
 #[cfg(feature = "units")]
