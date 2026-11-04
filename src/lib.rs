@@ -10,7 +10,7 @@ pub mod units;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub use error::AbacusError;
+pub use error::{AbacusError, Diagnostic};
 pub use registry::unit_registry::UnitRegistry;
 pub use units::{
     date::{Date, DateFormat, DayOfWeek, Time, TimeZone, WeekendDays},
@@ -31,7 +31,7 @@ pub use evaluation::tokenizer::registry::{
 pub use evaluation::tokenizer::sig_figs::{
     count_significant_figures, min_significant_figures_in_expr,
 };
-pub use evaluation::tokenizer::tokens::Token;
+pub use evaluation::tokenizer::tokens::{Span, Token};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

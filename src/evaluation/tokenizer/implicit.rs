@@ -1,6 +1,10 @@
 use crate::{
     AbacusError, UnitRegistry, Value,
-    evaluation::tokenizer::{registry::token_registry::TokenRegistry, tokens::Token},
+    evaluation::tokenizer::{
+        lexer::Lexed,
+        registry::token_registry::TokenRegistry,
+        tokens::{Span, Token},
+    },
 };
 
 /// Returns scale multiplier for natural number words (e.g. "million" -> 1e6).
@@ -63,24 +67,31 @@ fn fold_compound_measurement(lhs: &Value, rhs: &Value) -> Option<Value> {
 /// Two bare numbers next to each other (`1 000`, `2 3`, `5 m 3`) are rejected rather than
 /// silently multiplied, since they almost always indicate a typo or a thousands separator.
 pub(crate) fn resolve_tokens<'a>(
-    mut tokens: Vec<Token<'a>>,
+    lexed: Lexed<'a>,
     unit_registry: &UnitRegistry,
     token_registry: &TokenRegistry,
     implicit_multiplication: bool,
     number_scales: bool,
-) -> Result<Vec<Token<'a>>, AbacusError> {
+) -> Result<Lexed<'a>, (AbacusError, Span)> {
+    let Lexed {
+        mut tokens,
+        mut spans,
+    } = lexed;
     // 1. Combine adjacent Float + Unit into Val if separated by space (e.g. `5.0` + `km`),
     // fold prefix currency units (e.g. `$50`, `€ 100`, `$ 3 million`),
     // and scale numbers with scale words (e.g. `3 million`, `3 million km`) if enabled.
     //
     // Done in place: `tokens[..w]` is the resolved output and `tokens[r..]` the unread input.
     // Each step reads at least one token and writes at most one, so `w < r` whenever a token is
-    // written and unread input is never overwritten.
+    // written and unread input is never overwritten. `spans` is kept in step with `tokens`.
     let len = tokens.len();
     let (mut r, mut w) = (0, 0);
     while r < len {
+        let first = r;
         let tok = std::mem::replace(&mut tokens[r], Token::Comma);
         r += 1;
+        // Span of the input tokens consumed so far by this step.
+        let consumed = |r: usize, spans: &[Span]| spans[first].to(spans[r - 1]);
         // Prefix currency: e.g. `$ 50`, `€100`, `$ 3 million`
         if let Token::Unit(unit_sym) = tok
             && let Ok(unit) = unit_registry.unit(unit_sym)
@@ -98,10 +109,18 @@ pub(crate) fn resolve_tokens<'a>(
                         break;
                     }
                 }
-                emit(&mut tokens, &mut w, Token::Val(Value::new(num, unit)));
+                let span = consumed(r, &spans);
+                emit(
+                    &mut tokens,
+                    &mut spans,
+                    &mut w,
+                    Token::Val(Value::new(num, unit)),
+                    span,
+                );
                 continue;
             }
-            emit(&mut tokens, &mut w, Token::Unit(unit_sym));
+            let span = consumed(r, &spans);
+            emit(&mut tokens, &mut spans, &mut w, Token::Unit(unit_sym), span);
             continue;
         }
 
@@ -124,46 +143,61 @@ pub(crate) fn resolve_tokens<'a>(
                 && (!number_scales || number_scale_factor(unit_sym).is_none())
             {
                 r += 1;
-                push_value(&mut tokens, &mut w, Value::new(num, unit));
+                let span = consumed(r, &spans);
+                push_value(&mut tokens, &mut spans, &mut w, Value::new(num, unit), span);
                 continue;
             }
-            emit(&mut tokens, &mut w, Token::Float(num));
+            let span = consumed(r, &spans);
+            emit(&mut tokens, &mut spans, &mut w, Token::Float(num), span);
         } else if let Token::Val(v) = tok {
-            push_value(&mut tokens, &mut w, v);
+            let span = consumed(r, &spans);
+            push_value(&mut tokens, &mut spans, &mut w, v, span);
         } else {
-            emit(&mut tokens, &mut w, tok);
+            let span = consumed(r, &spans);
+            emit(&mut tokens, &mut spans, &mut w, tok, span);
         }
     }
     tokens.truncate(w);
+    spans.truncate(w);
     let mut resolved = tokens;
 
     // Reject juxtaposed bare numbers (`1 000`, `1.2.3`, `2 3`, `5 m 3`) and stray trailing
     // currency symbols (`$5 $`), which would otherwise be silently multiplied.
-    for pair in resolved.windows(2) {
+    for (i, pair) in resolved.windows(2).enumerate() {
+        let at = spans[i + 1];
         match (&pair[0], &pair[1]) {
             (Token::Float(_) | Token::Val(_), Token::Float(n)) => {
-                return Err(AbacusError::UnexpectedToken(format!(
-                    "adjacent numbers without an operator near '{n}'"
-                )));
+                return Err((
+                    AbacusError::UnexpectedToken(format!(
+                        "adjacent numbers without an operator near '{n}'"
+                    )),
+                    at,
+                ));
             }
             (Token::Float(_), Token::Val(v)) => {
-                return Err(AbacusError::UnexpectedToken(format!(
-                    "adjacent numbers without an operator near '{v}'"
-                )));
+                return Err((
+                    AbacusError::UnexpectedToken(format!(
+                        "adjacent numbers without an operator near '{v}'"
+                    )),
+                    at,
+                ));
             }
             (Token::Val(v), Token::Unit(sym))
                 if v.unit.dimensions == crate::units::dimensions::Dimensions::CURRENCY
                     && sym.chars().count() == 1
                     && sym.chars().all(is_currency_symbol) =>
             {
-                return Err(AbacusError::UnexpectedToken((*sym).to_string()));
+                return Err((AbacusError::UnexpectedToken((*sym).to_string()), at));
             }
             _ => {}
         }
     }
 
     if !implicit_multiplication {
-        return Ok(resolved);
+        return Ok(Lexed {
+            tokens: resolved,
+            spans,
+        });
     }
 
     // 2. Insert implicit multiplication `BinaryOp("*")` between adjacent terms (e.g. `5(2+3)`, `2 sqrt(9)`, `2 pi`, `2x`)
@@ -196,13 +230,15 @@ pub(crate) fn resolve_tokens<'a>(
 
     // Also in place: count the insertions, grow the buffer once, then move tokens to their final
     // positions from the back. While handling token `i`, slots in `i + 1..dst` hold placeholders
-    // and token `i + 1` already sits at `next_dst`.
+    // and token `i + 1` already sits at `next_dst`. An inserted `*` gets an empty span at the
+    // start of the token it precedes.
     let len = resolved.len();
     let insertions = (1..len)
         .filter(|&i| is_left(&resolved[i - 1]) && is_right(&resolved[i]))
         .count();
     if insertions > 0 {
         resolved.resize_with(len + insertions, || Token::Comma);
+        spans.resize(len + insertions, Span::default());
         let mut dst = len + insertions;
         let mut next_dst: Option<usize> = None;
         for i in (0..len).rev() {
@@ -212,34 +248,54 @@ pub(crate) fn resolve_tokens<'a>(
             {
                 dst -= 1;
                 resolved[dst] = Token::BinaryOp("*");
+                let at = spans[nd].start;
+                spans[dst] = Span::new(at, at);
             }
             dst -= 1;
             resolved.swap(i, dst);
+            spans.swap(i, dst);
             next_dst = Some(dst);
         }
     }
 
-    Ok(resolved)
+    Ok(Lexed {
+        tokens: resolved,
+        spans,
+    })
 }
 
 /// Writes `tok` at the in-place output cursor `w` (see [`resolve_tokens`]).
 #[inline]
-fn emit<'a>(tokens: &mut [Token<'a>], w: &mut usize, tok: Token<'a>) {
+fn emit<'a>(
+    tokens: &mut [Token<'a>],
+    spans: &mut [Span],
+    w: &mut usize,
+    tok: Token<'a>,
+    span: Span,
+) {
     tokens[*w] = tok;
+    spans[*w] = span;
     *w += 1;
 }
 
 /// Emits a value token, merging it into the preceding output value when the pair forms a
 /// compound measurement (`5 ft 3 in` -> `5.25 ft`).
-fn push_value<'a>(tokens: &mut [Token<'a>], w: &mut usize, v: Value) {
+fn push_value<'a>(
+    tokens: &mut [Token<'a>],
+    spans: &mut [Span],
+    w: &mut usize,
+    v: Value,
+    span: Span,
+) {
     if *w > 0
         && let Token::Val(prev) = &mut tokens[*w - 1]
         && let Some(sum) = fold_compound_measurement(prev, &v)
     {
         *prev = sum;
+        spans[*w - 1] = spans[*w - 1].to(span);
         return;
     }
-    emit(tokens, w, Token::Val(v));
+    emit(tokens, spans, w, Token::Val(v), span);
 }
 
 #[cfg(all(test, feature = "units", feature = "currencies"))]
@@ -457,7 +513,18 @@ mod reference_tests {
             for (implicit, scales) in [(true, true), (true, false), (false, true)] {
                 let expected =
                     resolve_tokens_reference(toks.clone(), &units, &ops, implicit, scales);
-                let actual = resolve_tokens(toks.clone(), &units, &ops, implicit, scales);
+                let lexed = Lexed {
+                    tokens: toks.clone(),
+                    spans: (0..toks.len()).map(|i| Span::new(i, i + 1)).collect(),
+                };
+                let actual = resolve_tokens(lexed, &units, &ops, implicit, scales)
+                    .map(|out| {
+                        // Spans stay aligned with tokens and in source order.
+                        assert_eq!(out.spans.len(), out.tokens.len());
+                        assert!(out.spans.windows(2).all(|p| p[0].start <= p[1].start));
+                        out.tokens
+                    })
+                    .map_err(|(error, _)| error);
                 assert_eq!(
                     actual, expected,
                     "tokens {toks:?} implicit={implicit} scales={scales}"
