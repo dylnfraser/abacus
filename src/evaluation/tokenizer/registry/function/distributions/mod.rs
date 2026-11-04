@@ -1,17 +1,30 @@
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod binomial;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod chi_square;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod exponential;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod f_dist;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod geometric;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod hypergeometric;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod normal;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod poisson;
 pub mod special;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod student_t;
+#[cfg(any(feature = "distributions", feature = "stats"))]
 pub mod uniform;
 
+#[cfg(any(feature = "distributions", feature = "stats"))]
 use crate::evaluation::tokenizer::registry::function::operators::FunctionOp;
 
+// Statistics uses the distributions for p-values and critical values.
+#[cfg(any(feature = "distributions", feature = "stats"))]
 #[must_use]
 pub fn register_distributions() -> Vec<FunctionOp> {
     let mut functions = Vec::new();

@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    gen_prefixes,
     registry::{
-        helpers::scalar_prefixes::ScalarPrefix,
+        helpers::scalar_prefixes::{ScalarPrefix, gen_prefixes},
         units::{
             angle_units::register_angle_units, astronomical_units::register_astronomical_units,
             cgs_physics_units::register_cgs_physics_units,

@@ -8,7 +8,6 @@ pub struct ScalarPrefix {
 }
 
 // Generates a static array of ScalarPrefix structs from a macro invocation
-#[macro_export]
 macro_rules! gen_prefixes {
     ( $( $name:expr, $alias:expr, $scalar:expr );* $(;)? ) => {
         &[
@@ -22,3 +21,5 @@ macro_rules! gen_prefixes {
         ]
     };
 }
+
+pub(crate) use gen_prefixes;

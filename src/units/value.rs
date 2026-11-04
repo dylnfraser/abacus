@@ -47,10 +47,6 @@ impl PartialEq for Value {
     }
 }
 
-/// Shared dimensionless unit; equivalent to [`Unit::dimensionless_arc`].
-pub static DIMENSIONLESS_UNIT: std::sync::LazyLock<Arc<Unit>> =
-    std::sync::LazyLock::new(Unit::dimensionless_arc);
-
 /// Results of addition/subtraction smaller than this (relative to the operands) are
 /// floating-point cancellation noise and are snapped to zero (`0.1 + 0.2 - 0.3` → `0`).
 const CANCELLATION_EPSILON: f64 = 4.0 * f64::EPSILON;
@@ -387,34 +383,6 @@ fn write_with_unit<W: fmt::Write>(out: &mut W, amount: &str, unit: &str) -> fmt:
     } else {
         write!(out, "{amount} {unit}")
     }
-}
-
-/// Formats a number for display.
-///
-/// Values within a few ulps of an integer print as that integer; magnitudes below
-/// `1e-6` or at/above `1e21` use scientific notation (`1.6e-19`, `1e300`); everything else
-/// uses the shortest round-trip decimal representation, except that float noise in the last
-/// bits is hidden: when the shortest representation needs 16+ significant digits and a
-/// rendering of at most 12 significant digits is within 2 ulps of the value, the shorter one is
-/// printed (`2.2679618500000003` → `2.26796185`, `0.1 + 0.2` → `0.3`). Genuine 16–17 digit
-/// values such as `27.77777777777778` or `78.53981633974483` are unaffected.
-#[must_use]
-pub fn format_number(v: f64) -> String {
-    format_number_with(v, true)
-}
-
-/// Like [`format_number`], but always prints the exact shortest round-trip representation
-/// (no float-noise suppression). Used for interval bounds, where outward rounding by one ulp
-/// is meaningful and must stay visible.
-#[must_use]
-pub fn format_number_exact(v: f64) -> String {
-    format_number_with(v, false)
-}
-
-fn format_number_with(v: f64, denoise: bool) -> String {
-    let mut s = String::new();
-    let _ = write_number(&mut s, v, denoise);
-    s
 }
 
 /// Whether `v` is an integer up to float noise (a few ulps). A fixed relative tolerance such

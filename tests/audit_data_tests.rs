@@ -206,7 +206,7 @@ fn brazilian_real_symbol() {
 #[cfg(all(feature = "units", feature = "currencies"))]
 mod currency {
     use super::*;
-    use abacus::registry::units::currency_units::{
+    use abacus::currency::{
         FALLBACK_RATES_DATE, FIXED_EXCHANGE_RATES, is_using_fallback_rates, load_rates_from_cache,
         parse_frankfurter_json, save_rates_to_cache,
     };

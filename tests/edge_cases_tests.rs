@@ -401,7 +401,7 @@ fn test_code_review_findings_cr_007_through_cr_009() {
     let abacus = Abacus::standard();
 
     // CR-007: round_to_decimals with decimals >= 308 does not produce NaN
-    let val = abacus::units::value::Value::dimensionless(123.456);
+    let val = abacus::Value::dimensionless(123.456);
     let rounded = val.round_to_decimals(400);
     assert_eq!(rounded.canonical, 123.456);
     assert!(!rounded.canonical.is_nan());
@@ -427,7 +427,7 @@ fn test_code_review_findings_cr_007_through_cr_009() {
     ));
 
     // CR-009: Date arithmetic does not overflow or panic on extreme bounds
-    let d = abacus::units::date::Date::new(2025, 1, 1);
+    let d = abacus::Date::new(2025, 1, 1);
     let _ = d.add_days(i64::MAX);
     let _ = d.add_days(i64::MIN);
     let _ = d.add_seconds(i64::MAX);

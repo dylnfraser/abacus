@@ -72,8 +72,8 @@ fn registry_key_overrides_operator_alias() {
             right_associative: false,
         },
     );
-    let units = UnitRegistry::standard();
-    let res = abacus::evaluation::parser::evaluate(&tokens, &units, "2 plus 3").unwrap();
+    let calc = Abacus::from_registry(UnitRegistry::standard(), tokens);
+    let res = calc.eval("2 plus 3").unwrap();
     assert_eq!(res.to_display(), "15");
 }
 
@@ -165,10 +165,7 @@ fn only_unitless_expressions_take_on_a_conversion_unit() {
 #[test]
 fn recursion_depth_setter_is_clamped() {
     let calc = Abacus::standard().with_max_recursion_depth(usize::MAX);
-    assert_eq!(
-        calc.max_recursion_depth(),
-        abacus::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP
-    );
+    assert_eq!(calc.max_recursion_depth(), abacus::MAX_RECURSION_DEPTH_CAP);
 }
 
 fn nested_inputs(n: usize) -> [String; 6] {

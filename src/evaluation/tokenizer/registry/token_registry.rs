@@ -38,7 +38,6 @@ pub struct TokenRegistry {
 /// Operator patterns grouped by first character, longest pattern first.
 #[derive(Debug)]
 pub struct OperatorIndex {
-    by_first_char: HashMap<char, Vec<(Box<str>, MatchedOpKind)>>,
     /// Patterns that are not plain words (contain a symbol or `-`), by first character,
     /// longest first. Plain-word patterns live in `words` instead.
     symbolic_by_first_char: FxHashMap<char, Vec<(Box<str>, MatchedOpKind)>>,
@@ -65,12 +64,6 @@ pub(crate) fn is_word_pattern(pattern: &str) -> bool {
 }
 
 impl OperatorIndex {
-    /// Candidate patterns starting with `c`, sorted by descending length.
-    #[must_use]
-    pub fn candidates(&self, c: char) -> Option<&[(Box<str>, MatchedOpKind)]> {
-        self.by_first_char.get(&c).map(Vec::as_slice)
-    }
-
     /// Non-word candidate patterns starting with `c`, sorted by descending length.
     #[must_use]
     pub(crate) fn symbolic_candidates(&self, c: char) -> &[(Box<str>, MatchedOpKind)] {
@@ -276,7 +269,6 @@ impl TokenRegistry {
             }
         }
         OperatorIndex {
-            by_first_char: map,
             symbolic_by_first_char,
             words,
         }

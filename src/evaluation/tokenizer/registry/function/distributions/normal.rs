@@ -8,12 +8,6 @@ use crate::{
 };
 use std::sync::Arc;
 
-/// Standard normal CDF Φ(z).
-#[must_use]
-pub fn std_normal_cdf(z: f64) -> f64 {
-    norm_cdf(z)
-}
-
 /// Two-sided p-value `2·(1 − Φ(|z|))`, computed from the survival function so that very
 /// small p-values keep their relative precision.
 #[must_use]

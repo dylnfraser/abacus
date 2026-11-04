@@ -179,10 +179,7 @@ fn builders_setters_and_getters_agree() {
         assert_eq!(calc.decimal_places(), Some(2));
         assert_eq!(calc.interval_style(), Some(IntervalStyle::Range));
         assert_eq!(calc.notation(), Notation::Scientific);
-        assert_eq!(
-            calc.max_recursion_depth(),
-            abacus::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP
-        );
+        assert_eq!(calc.max_recursion_depth(), abacus::MAX_RECURSION_DEPTH_CAP);
         // One source of truth for the exponent limit: `^` and unit symbols agree.
         assert_eq!(calc.max_exponent(), calc.units().max_exponent());
         assert!(calc.eval("2^6").is_err());

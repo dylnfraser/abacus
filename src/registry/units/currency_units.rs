@@ -24,6 +24,7 @@ pub struct CurrencyDefinition {
 pub const FALLBACK_RATES_DATE: &str = "2026-10-20";
 
 /// Endpoint used for live exchange rates.
+#[cfg(feature = "live-rates")]
 pub const FRANKFURTER_URL: &str = "https://api.frankfurter.dev/v1/latest?base=USD";
 
 /// A cache file is considered fresh if it was written less than this many seconds ago...
@@ -641,24 +642,6 @@ fn curl_fetch_body() -> Result<String, AbacusError> {
     String::from_utf8(output.stdout).map_err(|e| {
         AbacusError::EvaluationError(format!("invalid UTF-8 response from frankfurter: {e}"))
     })
-}
-
-/// Fetches live exchange rates from <https://api.frankfurter.dev/v1/latest?base=USD> via `curl`.
-///
-/// # Errors
-/// Returns an error if curl is unavailable, the request fails, or the response is invalid.
-#[cfg(feature = "live-rates")]
-pub fn fetch_frankfurter_rates() -> Result<HashMap<String, f64>, AbacusError> {
-    parse_frankfurter_json(&curl_fetch_body()?)
-}
-
-/// # Errors
-/// Always returns an error because the `live-rates` feature is disabled.
-#[cfg(not(feature = "live-rates"))]
-pub fn fetch_frankfurter_rates() -> Result<HashMap<String, f64>, AbacusError> {
-    Err(AbacusError::EvaluationError(
-        "live-rates feature is not enabled".to_string(),
-    ))
 }
 
 /// Fetches live exchange rates and writes the validated response to the cache file.

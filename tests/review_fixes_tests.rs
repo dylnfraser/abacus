@@ -59,7 +59,7 @@ fn temperature_divided_by_zero_is_an_error() {
 #[test]
 #[cfg(feature = "date")]
 fn distinct_floating_dates_never_compare_equal() {
-    use abacus::units::date::Date;
+    use abacus::Date;
     use std::collections::HashSet;
     // 02:30 doesn't exist on 2026-03-08 in US zones (DST gap); it must still differ from 03:30.
     let gap: Date = "2026-03-08 02:30".parse().unwrap();

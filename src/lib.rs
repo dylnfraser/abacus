@@ -1,11 +1,45 @@
 #![warn(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
+// Feature-gated code shares helpers and unit tables, some of which go unused in reduced
+// feature sets; only the default build is held to the dead-code lint.
+#![cfg_attr(
+    not(all(
+        feature = "units",
+        feature = "stats",
+        feature = "distributions",
+        feature = "date",
+        feature = "financial",
+        feature = "number-scales",
+        feature = "currencies"
+    )),
+    allow(dead_code, unused_imports)
+)]
 
-pub mod evaluation;
+// Implementation modules are private; everything public is re-exported below.
+mod error;
+mod evaluation;
+mod registry;
+mod units;
 
-pub mod error;
-pub mod registry;
-pub mod units;
+/// Exchange-rate data for the `currencies` feature.
+#[cfg(feature = "currencies")]
+pub mod currency {
+    pub use crate::registry::units::currency_units::{
+        CurrencyDefinition, FALLBACK_RATES_DATE, FIXED_EXCHANGE_RATES, is_cache_fresh,
+        is_using_fallback_rates, load_rates_from_cache, parse_frankfurter_json,
+        save_rates_to_cache,
+    };
+}
+
+/// Proleptic Gregorian calendar arithmetic used by [`Date`].
+pub mod calendar {
+    pub use crate::units::date::{
+        date_to_epoch_days, days_in_month, epoch_days_to_date, is_leap_year, is_valid_date,
+    };
+}
+
+pub use evaluation::parser::pratt::{MAX_RECURSION_DEPTH, MAX_RECURSION_DEPTH_CAP};
+pub use units::value::format_human_duration;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,7 +52,7 @@ pub use units::{
     eval_result::EvalResult,
     hash::Hash,
     interval::{Interval, IntervalStyle},
-    unit::Unit,
+    unit::{Sym, SymList, Unit, UnitExpr},
     value::Value,
 };
 
@@ -589,15 +623,22 @@ pub fn default_currency_cache_path() -> std::path::PathBuf {
 impl Abacus {
     // Tokenize an expression into a vector of `Token`s
     pub fn tokenize<'a>(&self, expr: &'a str) -> Result<Vec<Token<'a>>, AbacusError> {
-        crate::evaluation::tokenizer::lexer::tokenize_string_with_anchor(
+        let lazy_now = std::cell::OnceCell::new();
+        crate::evaluation::tokenizer::lexer::lex(
             &self.tokens,
             &self.units,
             Some(&self.variables),
             expr,
-            self.implicit_multiplication,
-            self.number_scales,
-            self.anchor_date.as_ref(),
+            crate::evaluation::tokenizer::lexer::LexOptions {
+                implicit_multiplication: self.implicit_multiplication,
+                number_scales: self.number_scales,
+                anchor_date: self.anchor_date.as_ref(),
+                lazy_now: Some((&lazy_now, self.default_timezone.as_ref())),
+                date_month_first: self.date_format == DateFormat::MMDDYYYY,
+            },
         )
+        .map(|lexed| lexed.tokens)
+        .map_err(|(error, _)| error)
     }
 
     /// Define a variable on this `Abacus` instance (builder pattern).

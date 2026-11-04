@@ -12,7 +12,7 @@ pub const SCALE: i32 = 27_720;
 /// Largest exponent magnitude representable in a single dimension slot (≈ 77 471).
 pub const MAX_REPRESENTABLE_EXPONENT: f64 = (i32::MAX / SCALE) as f64;
 
-/// Dimensions represented as fixed-point integers (scaled by [`SCALE`]) across 9 base dimensions:
+/// Dimensions represented as fixed-point integers (scaled by [`Dimensions::SCALE`]) across 9 base dimensions:
 /// [length, mass, time, current, temperature, amount, luminous intensity, information, currency].
 ///
 /// The representation is `[i32; 9]` (36 bytes). The `+`, `-` and `* f64` operators saturate
@@ -33,6 +33,13 @@ const fn round_to_fixed(x: f64) -> i32 {
 }
 
 impl Dimensions {
+    /// Fixed-point scale of the exponents: an exponent `e` is stored as `e * SCALE`, so any
+    /// fraction with denominator up to 12 is exact.
+    pub const SCALE: i32 = SCALE;
+
+    /// Largest exponent magnitude the fixed-point representation can hold.
+    pub const MAX_EXPONENT: f64 = MAX_REPRESENTABLE_EXPONENT;
+
     /// Create a `Dimensions` instance from the 8 physical base dimensions (length, mass, time,
     /// current, temperature, amount, luminous intensity, information). Currency is set to 0.
     #[must_use]

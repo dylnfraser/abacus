@@ -6,12 +6,11 @@ pub mod range;
 
 pub use config::EvalConfig;
 pub use pratt::MAX_RECURSION_DEPTH;
-pub use range::RangeSeq;
 
 use std::collections::HashMap;
 
 use crate::{
-    AbacusError, TokenRegistry, UnitRegistry,
+    TokenRegistry, UnitRegistry,
     evaluation::{
         parser::{ast::Located, eval::Evaluator, pratt::Parser},
         tokenizer::lexer::{LexOptions, lex},
@@ -125,50 +124,4 @@ pub(crate) fn evaluate_located(
     let result = run(&compiled, unit_registry, variables, &config);
     compiled.ast.recycle();
     result
-}
-
-/// Convenience function: tokenize and evaluate an expression string.
-pub fn evaluate(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    input: &str,
-) -> Result<EvalResult, AbacusError> {
-    evaluate_with_config(token_registry, unit_registry, input, EvalConfig::default())
-}
-
-/// Tokenize and evaluate an expression string with explicit auto_derived setting.
-pub fn evaluate_with_options(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    input: &str,
-    auto_derived: bool,
-) -> Result<EvalResult, AbacusError> {
-    let config = EvalConfig {
-        auto_derived,
-        ..Default::default()
-    };
-    evaluate_with_config(token_registry, unit_registry, input, config)
-}
-
-/// Tokenize and evaluate an expression string with full evaluation configuration.
-pub fn evaluate_with_config(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    input: &str,
-    config: EvalConfig,
-) -> Result<EvalResult, AbacusError> {
-    evaluate_with_variables(token_registry, unit_registry, None, input, config)
-}
-
-/// Tokenize and evaluate an expression string with variable definitions and full evaluation
-/// configuration.
-pub fn evaluate_with_variables(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    variables: Option<&HashMap<String, EvalResult>>,
-    input: &str,
-    config: EvalConfig,
-) -> Result<EvalResult, AbacusError> {
-    evaluate_located(token_registry, unit_registry, variables, input, config)
-        .map_err(|located| located.into_inner().error)
 }

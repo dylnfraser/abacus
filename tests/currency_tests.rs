@@ -13,7 +13,7 @@
     allow(unused)
 )]
 
-use abacus::registry::units::currency_units::FIXED_EXCHANGE_RATES;
+use abacus::currency::FIXED_EXCHANGE_RATES;
 use abacus::{Abacus, AbacusError, eval};
 
 /// Bundled fallback `rate_per_usd` for `code`, so assertions don't hardcode a rate snapshot.
@@ -323,13 +323,13 @@ fn test_update_rates_from_json_and_daily_caching() {
     //    writes to the user's real cache.
     let mut calc = Abacus::standard();
     assert!(calc.currency_cache_path().is_none());
-    assert!(abacus::registry::units::currency_units::is_using_fallback_rates(calc.units()));
+    assert!(abacus::currency::is_using_fallback_rates(calc.units()));
     assert_eq!(
         calc.eval("100 USD in EUR").unwrap().to_display(),
         format!("{} EUR", money(100.0 * rate("EUR"), 2))
     );
     calc.update_rates_from_json(&sample_json).unwrap();
-    assert!(!abacus::registry::units::currency_units::is_using_fallback_rates(calc.units()));
+    assert!(!abacus::currency::is_using_fallback_rates(calc.units()));
     assert_eq!(calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
 
     // 2. Write to an explicit cache file and verify it is fresh

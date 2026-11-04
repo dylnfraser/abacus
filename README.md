@@ -528,7 +528,7 @@ irr(-100, 60, 60)                  -> 0.13066238629180754
 
 ## Exchange Rates
 
-With the `currencies` feature, conversions use bundled fallback rates (dated `currency_units::FALLBACK_RATES_DATE`); `currency_units::is_using_fallback_rates(calc.units())` reports whether they are still in use. Nothing touches the network or disk unless you opt in:
+With the `currencies` feature, conversions use bundled fallback rates (dated `currency::FALLBACK_RATES_DATE`); `currency::is_using_fallback_rates(calc.units())` reports whether they are still in use. Nothing touches the network or disk unless you opt in:
 
 - `with_live_rates(true)` / `update_daily_rates()` fetch rates (with the non-default `live-rates` feature; without it they only load a fresh cache file) from the Frankfurter API (`https://api.frankfurter.dev/v1/latest?base=USD`) by running the system `curl` over HTTPS (`--fail --proto =https --tlsv1.2`, 4 s connect timeout, 8 s total). Responses are validated (USD base, finite positive rates). The fetch blocks; `try_set_live_rates` returns errors instead of ignoring them.
 - Fetched rates are cached on disk and reused while the file is under 24 hours old **and** its ECB reference date is recent. Writes are atomic (temp file + rename). The cache path is the one passed to `with_currency_cache`, else `ABACUS_CURRENCY_CACHE`, `$ABACUS_CACHE_DIR/currency_rates.json`, `$XDG_CACHE_HOME/abacus/currency_rates.json`, `~/.cache/abacus/currency_rates.json` (`%LOCALAPPDATA%\abacus\…` on Windows), and finally a private (`0700`) per-user directory under the system temp dir.

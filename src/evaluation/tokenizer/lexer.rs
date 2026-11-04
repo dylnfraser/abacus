@@ -249,81 +249,6 @@ pub(crate) fn is_standard_constant(sym: &str) -> bool {
     crate::evaluation::tokenizer::registry::constants::is_standard_constant(sym)
 }
 
-/// Tokenize an expression string using default settings (implicit multiplication enabled).
-pub fn tokenize_string<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    input_text: &'a str,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    tokenize_string_full(
-        token_registry,
-        unit_registry,
-        None,
-        input_text,
-        true,
-        cfg!(feature = "number-scales"),
-    )
-}
-
-/// Tokenize an expression string with configurable options.
-pub fn tokenize_string_with_options<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    input_text: &'a str,
-    implicit_multiplication: bool,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    tokenize_string_full(
-        token_registry,
-        unit_registry,
-        None,
-        input_text,
-        implicit_multiplication,
-        cfg!(feature = "number-scales"),
-    )
-}
-
-/// Tokenize an expression string with variable definitions and configurable options.
-pub fn tokenize_string_full<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
-    input_text: &'a str,
-    implicit_multiplication: bool,
-    number_scales: bool,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    tokenize_string_with_anchor(
-        token_registry,
-        unit_registry,
-        variables,
-        input_text,
-        implicit_multiplication,
-        number_scales,
-        None,
-    )
-}
-
-/// Tokenize an expression string with variable definitions, evaluation options, and an optional anchor date.
-pub fn tokenize_string_with_anchor<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
-    input_text: &'a str,
-    implicit_multiplication: bool,
-    number_scales: bool,
-    anchor_date: Option<&crate::Date>,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    tokenize_string_with_date_options(
-        token_registry,
-        unit_registry,
-        variables,
-        input_text,
-        implicit_multiplication,
-        number_scales,
-        anchor_date,
-        false,
-    )
-}
-
 /// `str::strip_prefix` for the short operator patterns: compares bytes inline and stops at the
 /// first mismatch (usually the second byte), avoiding an out-of-line `memcmp` per candidate.
 #[inline]
@@ -469,66 +394,6 @@ fn is_numeric_date_candidate(s: &str) -> bool {
         }
     }
     false
-}
-
-/// Tokenize an expression string with an optional anchor date, reading ambiguous `NN-NN-YYYY`
-/// dates month-first when `date_month_first` is set (day-first otherwise).
-#[allow(clippy::too_many_arguments)]
-pub fn tokenize_string_with_date_options<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
-    input_text: &'a str,
-    implicit_multiplication: bool,
-    number_scales: bool,
-    anchor_date: Option<&crate::Date>,
-    date_month_first: bool,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    tokenize_with_lazy_now(
-        token_registry,
-        unit_registry,
-        variables,
-        input_text,
-        implicit_multiplication,
-        number_scales,
-        anchor_date,
-        None,
-        date_month_first,
-    )
-}
-
-/// [`tokenize_string_with_date_options`], with an optional lazily resolved "now" used when no
-/// anchor is given (see [`DateLexOptions::lazy_now`]).
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn tokenize_with_lazy_now<'a>(
-    token_registry: &TokenRegistry,
-    unit_registry: &UnitRegistry,
-    variables: Option<&std::collections::HashMap<String, crate::units::eval_result::EvalResult>>,
-    input_text: &'a str,
-    implicit_multiplication: bool,
-    number_scales: bool,
-    anchor_date: Option<&crate::Date>,
-    lazy_now: Option<(
-        &std::cell::OnceCell<crate::Date>,
-        Option<&crate::units::date::TimeZone>,
-    )>,
-    date_month_first: bool,
-) -> Result<Vec<Token<'a>>, AbacusError> {
-    lex(
-        token_registry,
-        unit_registry,
-        variables,
-        input_text,
-        LexOptions {
-            implicit_multiplication,
-            number_scales,
-            anchor_date,
-            lazy_now,
-            date_month_first,
-        },
-    )
-    .map(|lexed| lexed.tokens)
-    .map_err(|(error, _)| error)
 }
 
 /// Lexer settings (see [`lex`]).
@@ -1128,6 +993,24 @@ mod tests {
     use crate::evaluation::tokenizer::sig_figs::{
         count_significant_figures, min_significant_figures_in_expr,
     };
+
+    /// Tokenizes with default settings.
+    fn tokenize_string<'a>(
+        token_registry: &TokenRegistry,
+        unit_registry: &UnitRegistry,
+        input: &'a str,
+    ) -> Result<Vec<Token<'a>>, AbacusError> {
+        let options = LexOptions {
+            implicit_multiplication: true,
+            number_scales: cfg!(feature = "number-scales"),
+            anchor_date: None,
+            lazy_now: None,
+            date_month_first: false,
+        };
+        lex(token_registry, unit_registry, None, input, options)
+            .map(|lexed| lexed.tokens)
+            .map_err(|(error, _)| error)
+    }
 
     #[cfg(feature = "units")]
     #[test]

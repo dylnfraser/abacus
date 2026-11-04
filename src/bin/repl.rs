@@ -304,11 +304,11 @@ fn main() {
     }
 }
 
-fn format_repl_result(result: &abacus::units::eval_result::EvalResult) -> String {
+fn format_repl_result(result: &abacus::EvalResult) -> String {
     match result {
-        abacus::units::eval_result::EvalResult::Scalar(v) => {
+        abacus::EvalResult::Scalar(v) => {
             if v.unit.is_standard_duration_unit() {
-                abacus::units::value::format_human_duration(v.canonical)
+                abacus::format_human_duration(v.canonical)
             } else {
                 v.to_display()
             }

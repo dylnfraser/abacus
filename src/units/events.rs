@@ -80,12 +80,6 @@ pub fn end_of_quarter(ref_date: &Date) -> Date {
     quarter_end_date(quarter_of(ref_date), ref_date.year)
 }
 
-/// Returns the start date of the current quarter relative to `ref_date`.
-#[must_use]
-pub fn start_of_quarter(ref_date: &Date) -> Date {
-    quarter_start_date(quarter_of(ref_date), ref_date.year)
-}
-
 /// Returns the end date of the next quarter relative to `ref_date`.
 #[must_use]
 pub fn end_of_next_quarter(ref_date: &Date) -> Date {

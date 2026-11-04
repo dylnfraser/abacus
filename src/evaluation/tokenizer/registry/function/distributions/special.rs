@@ -186,18 +186,6 @@ pub fn norm_ppf(p: f64) -> f64 {
     }
 }
 
-/// Inverse error function, derived from the normal quantile.
-#[must_use]
-pub fn erfinv(x: f64) -> f64 {
-    if x <= -1.0 {
-        return f64::NEG_INFINITY;
-    }
-    if x >= 1.0 {
-        return f64::INFINITY;
-    }
-    norm_ppf(0.5 * (x + 1.0)) / SQRT_2
-}
-
 // ── Gamma function family ──
 
 /// Stirling-series correction `ln Γ(x) - [(x - ½) ln x - x + ½ ln 2π]`, for x ≥ 10
@@ -471,17 +459,6 @@ fn beta_cf(a: f64, b: f64, x: f64) -> Option<f64> {
     None
 }
 
-/// Regularized incomplete beta function `I_x(a, b)`. `None` if it fails to converge.
-///
-/// Accuracy: ~1e-13 relative or better while `a` and `b` are below ~1e6. The continued
-/// fraction accumulates rounding error for larger parameters (~1e-12–1e-10 around 1e8–1e12,
-/// ~1e-8 at 1e15). A port of TOMS 708 (DiDonato & Morris, as used by R's `pbeta`) would fix
-/// this regime; it was judged not worth the risk for parameters this extreme.
-#[must_use]
-pub fn beta_inc(a: f64, b: f64, x: f64) -> Option<f64> {
-    beta_inc_xy(a, b, x, 1.0 - x)
-}
-
 /// `I_x(a, b)` given both `x` and `y = 1 - x`. Supplying an exactly computed `y` (e.g.
 /// `t²/(ν + t²)` for Student's t, or `p` for the binomial) avoids the rounding of `1 - x`,
 /// which matters when a or b is large.
@@ -592,38 +569,6 @@ pub fn poisson_pmf_raw(x: f64, lambda: f64) -> f64 {
         return 0.0;
     }
     (-stirlerr(x) - bd0(x, lambda)).exp() / (2.0 * PI * x).sqrt()
-}
-
-/// ln C(n, k) via `lgamma`.
-#[must_use]
-pub fn ln_choose(n: f64, k: f64) -> f64 {
-    lgamma(n + 1.0) - lgamma(k + 1.0) - lgamma(n - k + 1.0)
-}
-
-/// Binomial coefficient C(n, k) as f64; `inf` if it overflows.
-#[must_use]
-pub fn n_cr(n: u64, k: u64) -> f64 {
-    if k > n {
-        return 0.0;
-    }
-    let k = k.min(n - k);
-    if k == 0 {
-        return 1.0;
-    }
-    if k <= 60 {
-        // Exact-as-possible multiplicative form for small k.
-        let mut c = 1.0;
-        for i in 0..k {
-            c = c * (n - i) as f64 / (i + 1) as f64;
-        }
-        return c;
-    }
-    let ln_c = ln_choose(n as f64, k as f64);
-    if ln_c > f64::MAX.ln() {
-        f64::INFINITY
-    } else {
-        ln_c.exp().round()
-    }
 }
 
 // ── Root finding ──

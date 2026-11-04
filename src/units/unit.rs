@@ -361,13 +361,6 @@ pub fn parse_exponent(s: &str) -> Option<f64> {
     value.is_finite().then_some(value)
 }
 
-/// Formats an exponent for display: integers plainly, short decimals as-is (`0.5`, `1.25`),
-/// and other small-denominator rationals as `(p/q)` (e.g. `(1/3)`).
-#[must_use]
-pub fn format_exponent(e: f64) -> String {
-    ExponentDisplay(e).to_string()
-}
-
 /// Displays an exponent exactly as [`format_exponent`] formats it, without allocating.
 pub(crate) struct ExponentDisplay(pub f64);
 

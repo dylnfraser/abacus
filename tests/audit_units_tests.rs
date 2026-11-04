@@ -297,10 +297,7 @@ fn notation_applies_to_intervals_and_hashes() {
 
 #[test]
 fn human_duration_handles_non_finite() {
-    assert_eq!(
-        abacus::units::value::format_human_duration(f64::NAN),
-        "NaN seconds"
-    );
+    assert_eq!(abacus::format_human_duration(f64::NAN), "NaN seconds");
 }
 
 #[cfg(feature = "units")]
