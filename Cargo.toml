@@ -43,7 +43,7 @@ rustyline = { version = "15.0", optional = true, default-features = false, featu
 serde = { version = "1.0", default-features = false, features = ["derive", "std", "rc"], optional = true }
 
 [features]
-default = ["units", "stats", "distributions", "date", "financial", "number-scales", "currencies", "live-rates"]
+default = ["units", "stats", "distributions", "date", "financial", "number-scales", "currencies"]
 units = []
 stats = []
 distributions = []
@@ -51,9 +51,10 @@ date = []
 financial = []
 number-scales = []
 currencies = []
-# Enables `Abacus::with_live_rates`/`update_daily_rates`/`fetch_live_rates`, which run the
-# system `curl` binary against api.frankfurter.dev. Nothing touches the network unless one of
-# those methods is called explicitly.
+# Lets `Abacus::with_live_rates`/`update_daily_rates`/`fetch_live_rates` download rates by
+# running the system `curl` binary against api.frankfurter.dev. Off by default: without it
+# those methods only read a cached rates file, and a library never spawns processes unasked.
+# Even with it, nothing touches the network unless one of those methods is called.
 live-rates = ["currencies"]
 serde = ["dep:serde"]
 repl = ["dep:rustyline"]

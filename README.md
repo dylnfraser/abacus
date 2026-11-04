@@ -174,7 +174,7 @@ let calc_curr = Abacus::standard()
     .with_currency_rate("EUR", 0.50);
 println!("{}", calc_curr.eval("$100 in EUR").unwrap()); // 50 EUR
 
-// 13. Live exchange rates (opt-in; see "Exchange Rates" below)
+// 13. Live exchange rates (needs the `live-rates` feature; see "Exchange Rates" below)
 let calc_live = Abacus::standard()
     .with_currency_cache("/path/to/currency_rates.json")
     .with_live_rates(true);
@@ -530,7 +530,7 @@ irr(-100, 60, 60)                  -> 0.13066238629180754
 
 With the `currencies` feature, conversions use bundled fallback rates (dated `currency_units::FALLBACK_RATES_DATE`); `currency_units::is_using_fallback_rates(calc.units())` reports whether they are still in use. Nothing touches the network or disk unless you opt in:
 
-- `with_live_rates(true)` / `update_daily_rates()` (feature `live-rates`) fetch rates from the Frankfurter API (`https://api.frankfurter.dev/v1/latest?base=USD`) by running the system `curl` over HTTPS (`--fail --proto =https --tlsv1.2`, 4 s connect timeout, 8 s total). Responses are validated (USD base, finite positive rates). The fetch blocks; `try_set_live_rates` returns errors instead of ignoring them.
+- `with_live_rates(true)` / `update_daily_rates()` fetch rates (with the non-default `live-rates` feature; without it they only load a fresh cache file) from the Frankfurter API (`https://api.frankfurter.dev/v1/latest?base=USD`) by running the system `curl` over HTTPS (`--fail --proto =https --tlsv1.2`, 4 s connect timeout, 8 s total). Responses are validated (USD base, finite positive rates). The fetch blocks; `try_set_live_rates` returns errors instead of ignoring them.
 - Fetched rates are cached on disk and reused while the file is under 24 hours old **and** its ECB reference date is recent. Writes are atomic (temp file + rename). The cache path is the one passed to `with_currency_cache`, else `ABACUS_CURRENCY_CACHE`, `$ABACUS_CACHE_DIR/currency_rates.json`, `$XDG_CACHE_HOME/abacus/currency_rates.json`, `~/.cache/abacus/currency_rates.json` (`%LOCALAPPDATA%\abacus\…` on Windows), and finally a private (`0700`) per-user directory under the system temp dir.
 - `update_rates_from_json(json)` loads rates you fetched yourself; it only writes to disk when a cache path was configured with `with_currency_cache`.
 
@@ -593,7 +593,7 @@ abacus = { git = "https://github.com/dylnfraser/abacus", default-features = fals
 | :-------------: | :---------------------------------------------------------------------------------- | :------ |
 |     `units`     | Physical unit registry and conversions (needed for currency and scale-word units)   | **Yes** |
 |  `currencies`   | 30 world currencies, prefix formatting, bundled fallback rates, and conversions     | **Yes** |
-|  `live-rates`   | Opt-in live exchange rates via the system `curl`, with daily disk caching           | **Yes** |
+|  `live-rates`   | Live exchange rates downloaded via the system `curl`, with daily disk caching       | No      |
 | `number-scales` | Scale words (`million`, `billion`) and indefinite-article evaluation                | **Yes** |
 |     `stats`     | Descriptive statistics, hypothesis tests, confidence intervals, linear regression   | **Yes** |
 | `distributions` | Continuous & discrete probability distributions                                     | **Yes** |
