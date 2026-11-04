@@ -87,6 +87,7 @@ pub struct Abacus {
     max_recursion_depth: usize,
     implicit_multiplication: bool,
     number_scales: bool,
+    snap_cancellation: bool,
     live_rates: bool,
     currency_cache_path: Option<std::path::PathBuf>,
     unit_display_overrides: HashMap<String, String>,
@@ -198,6 +199,7 @@ impl Abacus {
             max_recursion_depth: crate::evaluation::parser::MAX_RECURSION_DEPTH,
             implicit_multiplication: true,
             number_scales: cfg!(feature = "number-scales"),
+            snap_cancellation: true,
             live_rates: false,
             // No implicit disk writes: `update_rates_from_json` only persists when a cache path
             // is configured. Live-rate methods fall back to `default_currency_cache_path()`.
@@ -290,6 +292,10 @@ impl Abacus {
         implicit_multiplication: bool => with_implicit_multiplication, set_implicit_multiplication;
         /// Recognise scale words (`million`, `dozen`, ...) as multipliers.
         number_scales: bool => with_number_scales, set_number_scales;
+        /// Report `+`/`-` results that are pure floating-point cancellation noise as 0
+        /// (`0.1 + 0.2 - 0.3` = 0, on by default). Turn off for exact IEEE results
+        /// (`1.0000000000000002 - 1` = 2.220446049250313e-16). `Value`'s own `+`/`-` never snap.
+        snap_cancellation: bool => with_snap_cancellation, set_snap_cancellation;
     }
 
     optional_settings! {

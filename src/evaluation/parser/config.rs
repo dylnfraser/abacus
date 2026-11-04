@@ -16,6 +16,9 @@ pub struct EvalConfig {
     pub anchor_date: Option<crate::Date>,
     /// Display format for dates; `MMDDYYYY` also makes ambiguous `NN-NN-YYYY` input month-first.
     pub date_format: crate::DateFormat,
+    /// Snap `+`/`-` results that are pure floating-point cancellation noise to 0
+    /// (`0.1 + 0.2 - 0.3` = 0).
+    pub snap_cancellation: bool,
 }
 
 impl Default for EvalConfig {
@@ -33,6 +36,7 @@ impl Default for EvalConfig {
             number_scales: cfg!(feature = "number-scales"),
             anchor_date: None,
             date_format: crate::DateFormat::default(),
+            snap_cancellation: true,
         }
     }
 }
@@ -52,6 +56,7 @@ impl From<&crate::Abacus> for EvalConfig {
             number_scales: abacus.number_scales(),
             anchor_date: abacus.anchor_date().cloned(),
             date_format: abacus.date_format(),
+            snap_cancellation: abacus.snap_cancellation(),
         }
     }
 }

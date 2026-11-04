@@ -330,9 +330,10 @@ impl<'a> Evaluator<'a> {
             && let (EvalResult::Scalar(l), EvalResult::Scalar(r)) = (&lhs, &rhs)
         {
             let (x, y) = (l.canonical, r.canonical);
+            let snap = self.config.snap_cancellation;
             let result = match kind {
-                OpKind::Add => l + r,
-                OpKind::Sub => l - r,
+                OpKind::Add => l.add_with(r, snap),
+                OpKind::Sub => l.sub_with(r, snap),
                 OpKind::Mul => l * r,
                 _ => l / r,
             }

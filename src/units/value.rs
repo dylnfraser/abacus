@@ -38,13 +38,12 @@ pub struct Value {
     pub unit: Arc<Unit>,
 }
 
-/// Values are equal when their dimensions match and their canonical magnitudes agree to a
-/// symmetric relative tolerance of `1e-12` (equal infinities compare equal; NaN never does).
+/// Values are equal when they are the same quantity: equal dimensions and exactly equal
+/// canonical (SI) magnitudes, whatever unit they are shown in (`5 km == 5000 m`). NaN is never
+/// equal. Use [`Value::approx_eq`] to allow for rounding.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        let (a, b) = (self.canonical, other.canonical);
-        self.unit.dimensions == other.unit.dimensions
-            && (a == b || (a - b).abs() <= 1e-12 * a.abs().max(b.abs()))
+        self.unit.dimensions == other.unit.dimensions && self.canonical == other.canonical
     }
 }
 
@@ -59,8 +58,9 @@ const CANCELLATION_EPSILON: f64 = 4.0 * f64::EPSILON;
 /// Snaps a tiny `a ± b` result to zero when it is cancellation noise. Whole-number operands
 /// are exempt: their sum/difference is computed exactly, so a small result is real
 /// (`9007199254740992 - 9007199254740991` = 1).
-fn snap_cancellation(result: f64, a: f64, b: f64) -> f64 {
-    if result != 0.0
+fn snap_cancellation_if(snap: bool, result: f64, a: f64, b: f64) -> f64 {
+    if snap
+        && result != 0.0
         && result.is_finite()
         && !(a.fract() == 0.0 && b.fract() == 0.0)
         && result.abs() <= CANCELLATION_EPSILON * a.abs().max(b.abs())
@@ -72,6 +72,27 @@ fn snap_cancellation(result: f64, a: f64, b: f64) -> f64 {
 }
 
 impl Value {
+    /// Whether `self` and `other` are the same quantity to within a relative tolerance:
+    /// equal dimensions and `|a - b| <= rel_tol * max(|a|, |b|)` on the canonical magnitudes
+    /// (equal infinities match; NaN never does).
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "units")] {
+    /// use abacus::Abacus;
+    ///
+    /// let calc = Abacus::standard();
+    /// let a = calc.eval_scalar("0.1 m + 0.2 m").unwrap();
+    /// let b = calc.eval_scalar("30 cm").unwrap();
+    /// assert!(a.approx_eq(&b, 1e-12));
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn approx_eq(&self, other: &Value, rel_tol: f64) -> bool {
+        let (a, b) = (self.canonical, other.canonical);
+        self.unit.dimensions == other.unit.dimensions
+            && (a == b || (a - b).abs() <= rel_tol * a.abs().max(b.abs()))
+    }
+
     #[must_use]
     pub fn new(value: f64, unit: Arc<Unit>) -> Self {
         Self {
@@ -764,11 +785,11 @@ impl Value {
     }
 }
 
-// Add implementations
-impl Add<&Value> for &Value {
-    type Output = Result<Value, AbacusError>;
-
-    fn add(self, rhs: &Value) -> Self::Output {
+impl Value {
+    /// `self + rhs`. With `snap`, a result that is pure cancellation noise relative to the
+    /// operands is returned as 0 (`0.1 + 0.2 - 0.3`; see [`snap_cancellation_if`]); the engine
+    /// does this for scalar arithmetic unless `Abacus::with_snap_cancellation_if(snap, false)`.
+    pub(crate) fn add_with(&self, rhs: &Value, snap: bool) -> Result<Value, AbacusError> {
         match (self.unit.is_affine(), rhs.unit.is_affine()) {
             (true, true) => return Err(AbacusError::AffineUnitOperation("add")),
             (true, false) => return Value::shift_affine(self, rhs, 1.0),
@@ -791,17 +812,13 @@ impl Add<&Value> for &Value {
 
         let (lhs_can, rhs_can, unit) = self.resolve_additive_operands(rhs)?;
         Ok(Value {
-            canonical: snap_cancellation(lhs_can + rhs_can, lhs_can, rhs_can),
+            canonical: snap_cancellation_if(snap, lhs_can + rhs_can, lhs_can, rhs_can),
             unit,
         })
     }
-}
 
-// Sub implementations
-impl Sub<&Value> for &Value {
-    type Output = Result<Value, AbacusError>;
-
-    fn sub(self, rhs: &Value) -> Self::Output {
+    /// `self - rhs`, optionally snapping cancellation noise to 0 (see [`Value::add_with`]).
+    pub(crate) fn sub_with(&self, rhs: &Value, snap: bool) -> Result<Value, AbacusError> {
         match (self.unit.is_affine(), rhs.unit.is_affine()) {
             (true, true) => {
                 if !self.unit.is_compatible_with(&rhs.unit) {
@@ -818,7 +835,8 @@ impl Sub<&Value> for &Value {
                     });
                 }
                 return Ok(Value {
-                    canonical: snap_cancellation(
+                    canonical: snap_cancellation_if(
+                        snap,
                         self.canonical - rhs.canonical,
                         self.canonical,
                         rhs.canonical,
@@ -843,7 +861,8 @@ impl Sub<&Value> for &Value {
                 return Err(AbacusError::IncompatibleDimensions);
             }
             return Ok(Value {
-                canonical: snap_cancellation(
+                canonical: snap_cancellation_if(
+                    snap,
                     self.canonical - rhs.canonical,
                     self.canonical,
                     rhs.canonical,
@@ -854,9 +873,27 @@ impl Sub<&Value> for &Value {
 
         let (lhs_can, rhs_can, unit) = self.resolve_additive_operands(rhs)?;
         Ok(Value {
-            canonical: snap_cancellation(lhs_can - rhs_can, lhs_can, rhs_can),
+            canonical: snap_cancellation_if(snap, lhs_can - rhs_can, lhs_can, rhs_can),
             unit,
         })
+    }
+}
+
+/// Exact IEEE addition (the engine's evaluator additionally snaps cancellation noise).
+impl Add<&Value> for &Value {
+    type Output = Result<Value, AbacusError>;
+
+    fn add(self, rhs: &Value) -> Self::Output {
+        self.add_with(rhs, false)
+    }
+}
+
+/// Exact IEEE subtraction (the engine's evaluator additionally snaps cancellation noise).
+impl Sub<&Value> for &Value {
+    type Output = Result<Value, AbacusError>;
+
+    fn sub(self, rhs: &Value) -> Self::Output {
+        self.sub_with(rhs, false)
     }
 }
 

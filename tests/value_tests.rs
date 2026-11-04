@@ -85,3 +85,50 @@ fn test_value_unit_conversion() {
     assert_eq!(converted.to_display(), "3500 m");
     assert_eq!(converted.canonical, 3500.0);
 }
+
+// ── Exact arithmetic and equality ──
+
+#[cfg(feature = "units")]
+#[test]
+fn value_arithmetic_is_exact_and_the_engine_snaps_by_default() {
+    use abacus::Abacus;
+    let calc = Abacus::standard();
+    let a = calc.eval_scalar("1.0000000000000002").unwrap();
+    let b = calc.eval_scalar("1").unwrap();
+    // `Value` subtraction is plain IEEE arithmetic ...
+    assert_eq!((&a - &b).unwrap().canonical, f64::EPSILON);
+    // ... while the engine reports cancellation noise as 0 unless asked not to.
+    assert_eq!(
+        calc.eval("1.0000000000000002 - 1").unwrap().to_display(),
+        "0"
+    );
+    assert_eq!(calc.eval("0.1 + 0.2 - 0.3").unwrap().to_display(), "0");
+    let exact = Abacus::standard().with_snap_cancellation(false);
+    assert_eq!(
+        exact
+            .eval_scalar("1.0000000000000002 - 1")
+            .unwrap()
+            .canonical,
+        f64::EPSILON
+    );
+    assert_eq!(
+        exact.eval_scalar("0.1 + 0.2 - 0.3").unwrap().canonical,
+        0.1 + 0.2 - 0.3
+    );
+}
+
+#[cfg(feature = "units")]
+#[test]
+fn value_equality_is_exact_and_transitive() {
+    use abacus::Abacus;
+    let calc = Abacus::standard();
+    let v = |s: &str| calc.eval_scalar(s).unwrap();
+    // Same quantity in different units.
+    assert_eq!(v("5 km"), v("5000 m"));
+    // No tolerance: these differ in the last bit.
+    let x = v("0.30000000000000004 m");
+    let y = v("0.3 m");
+    assert_ne!(x, y);
+    assert!(x.approx_eq(&y, 1e-12));
+    assert!(!x.approx_eq(&v("0.3 s"), 1e-12));
+}
