@@ -27,9 +27,10 @@ use crate::evaluation::tokenizer::registry::function::{
 /// methods, which keep the lexer's operator index up to date.
 #[derive(Debug, Default)]
 pub struct TokenRegistry {
-    pub(crate) binary_operators: HashMap<String, Arc<BinaryOp>>,
-    pub(crate) unary_operators: HashMap<String, Arc<UnaryOp>>,
-    pub(crate) function_operators: HashMap<String, Arc<FunctionOp>>,
+    // Looked up for every operator token, so these use the fast Fx hasher.
+    pub(crate) binary_operators: FxHashMap<String, Arc<BinaryOp>>,
+    pub(crate) unary_operators: FxHashMap<String, Arc<UnaryOp>>,
+    pub(crate) function_operators: FxHashMap<String, Arc<FunctionOp>>,
     /// Lexer index over all patterns, built on first use and reset by the `register_*` methods.
     index: std::sync::OnceLock<OperatorIndex>,
 }
