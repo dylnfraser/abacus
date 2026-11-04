@@ -105,7 +105,9 @@ impl Value {
 
     pub fn convert_to(&self, unit: Arc<Unit>) -> Result<Self, AbacusError> {
         if !self.unit.is_compatible_with(&unit) {
-            if self.unit.is_dimensionless() {
+            // A bare number takes on the target unit (`15 to kg`). Dimensionless quantities that
+            // carry a unit (`3 %`, `2 rad`) have a meaning of their own and do not.
+            if self.unit.is_plain_number() {
                 let amount = self.amount();
                 return Ok(Self::new(amount, unit));
             }
@@ -1248,5 +1250,11 @@ mod tests {
         let dimless = Value::new(10.0, Arc::new(Unit::dimensionless()));
         let converted = dimless.to(&registry, "m").unwrap();
         assert_eq!(converted.to_display(), "10 m");
+
+        let percent = registry.value(3.0, "%").unwrap();
+        assert_eq!(
+            percent.to(&registry, "m"),
+            Err(AbacusError::IncompatibleDimensions)
+        );
     }
 }

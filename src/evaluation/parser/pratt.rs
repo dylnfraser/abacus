@@ -192,6 +192,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr_inner(&mut self, min_bp: u8) -> Result<EvalResult, AbacusError> {
+        // Start of the left operand's tokens, so a conversion can inspect what was written.
+        let lhs_start = self.pos;
         // ── NUD (prefix / atom) ──
         let mut lhs = self.parse_prefix()?;
 
@@ -288,7 +290,7 @@ impl<'a> Parser<'a> {
                 if l_bp < min_bp {
                     break;
                 }
-                lhs = self.parse_conversion(lhs)?;
+                lhs = self.parse_conversion(lhs, lhs_start)?;
                 continue;
             }
 

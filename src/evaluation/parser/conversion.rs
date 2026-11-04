@@ -24,7 +24,12 @@ fn time_span(start: &crate::Date, mut end: crate::Date) -> Value {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn parse_conversion(&mut self, lhs: EvalResult) -> Result<EvalResult, AbacusError> {
+    pub(crate) fn parse_conversion(
+        &mut self,
+        lhs: EvalResult,
+        lhs_start: usize,
+    ) -> Result<EvalResult, AbacusError> {
+        let lhs_has_unit = self.tokens_contain_unit(lhs_start, self.pos);
         self.advance();
         self.has_explicit_conversion = true;
 
@@ -124,7 +129,28 @@ impl<'a> Parser<'a> {
         }
 
         let target_unit = target_result.unit().clone();
+        // Only a unitless expression may take on the target unit (`15 to kg`, `x in h`). When
+        // the units were written and cancelled (`10 m / 5 m in kg`, `sin(30 deg) to m`), the
+        // conversion makes no dimensional sense.
+        if lhs_has_unit
+            && matches!(lhs, EvalResult::Scalar(_) | EvalResult::Interval(_))
+            && !lhs.unit().is_compatible_with(&target_unit)
+            && lhs.unit().is_dimensionless()
+        {
+            return Err(AbacusError::IncompatibleDimensions);
+        }
         lhs.convert_to(target_unit)
+    }
+
+    /// Returns true if `tokens[start..end]` contains a written unit (`m`, `%`, `5 kg`, `$3`).
+    fn tokens_contain_unit(&self, start: usize, end: usize) -> bool {
+        self.tokens[start..end.min(self.tokens.len())]
+            .iter()
+            .any(|tok| match tok {
+                Token::Unit(_) => true,
+                Token::Val(v) => !v.unit.is_plain_number(),
+                _ => false,
+            })
     }
 
     /// Returns true if the conversion target parsed from `start` contains an explicit number

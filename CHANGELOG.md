@@ -20,7 +20,7 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 - `3--2` = 5 and `2++3` = 5. `++`/`--` only increment/decrement before an operand or at the end of an expression.
 - `%` is modulo exactly when an operand follows, regardless of spacing (`10%(3)` = 1). Modulo is **floored**: `-7 % 3` = 2.
 - Variables shadow units consistently, with or without a space (`2h`). Conversion targets always refer to units.
-- Conversions that don't make dimensional sense are errors (`5 m/s in s`, `1 kHz in ms`).
+- Conversions that don't make dimensional sense are errors (`5 m/s in s`, `1 kHz in ms`). Only a unitless expression takes on the target unit (`15 to kg`, `x in h`). Values whose written units cancelled (`10 m / 5 m in kg`), percentages (`3 % to m`) and angles (`2 rad to m`) are errors.
 - `1e999` and `4e` are `InvalidNumber` errors; use `4 e` for 4·e.
 - Compound range endpoints inside function calls must be parenthesised (`max(1..(2*3))`).
 - `with_max_recursion_depth` is clamped to 256.

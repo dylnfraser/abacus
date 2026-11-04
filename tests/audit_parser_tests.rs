@@ -142,6 +142,32 @@ fn rate_accumulation_over_explicit_duration() {
     assert!((res.canonical - 2000.0).abs() < 1e-9);
 }
 
+#[cfg(feature = "units")]
+#[test]
+fn only_unitless_expressions_take_on_a_conversion_unit() {
+    // A bare number, plain variable or unitless result may be given a unit.
+    assert_eq!(display("15 to kg"), "15 kg");
+    assert_eq!(display("1 as inches"), "1 in");
+    assert_eq!(display("[1, 2] to m"), "[1 m, 2 m]");
+    assert_eq!(display("0.5 to %"), "50%");
+    // Written units that cancelled, percentages and angles are not bare numbers.
+    for expr in [
+        "10 m / 5 m in kg",
+        "[1 m, 2 m] / 1 m to s",
+        "sin(30 deg) to m",
+        "3 % to m",
+        "2 rad to m",
+    ] {
+        assert_eq!(
+            eval(expr),
+            Err(AbacusError::IncompatibleDimensions),
+            "{expr}"
+        );
+    }
+    // Compatible conversions of such values still work.
+    assert_eq!(display("10 m / 5 m in %"), "200%");
+}
+
 // ── Recursion limits and stack safety ──
 
 #[test]
