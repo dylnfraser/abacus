@@ -55,8 +55,8 @@ fn operator_index_is_invalidated_on_registration() {
     assert_eq!(calc.eval("1 @@ 2").unwrap().to_display(), "13");
 
     // Removing it updates the lexer index too.
-    assert!(calc.tokens.remove_binary_operator("@@").is_some());
-    assert!(calc.tokens.binary_operator("@@").is_none());
+    assert!(calc.tokens_mut().remove_binary_operator("@@").is_some());
+    assert!(calc.tokens().binary_operator("@@").is_none());
     assert!(calc.eval("1 @@ 2").is_err());
 }
 
@@ -166,7 +166,7 @@ fn only_unitless_expressions_take_on_a_conversion_unit() {
 fn recursion_depth_setter_is_clamped() {
     let calc = Abacus::standard().with_max_recursion_depth(usize::MAX);
     assert_eq!(
-        calc.max_recursion_depth,
+        calc.max_recursion_depth(),
         abacus::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP
     );
 }

@@ -6,6 +6,17 @@ Results of a full correctness, performance and robustness audit. Every fix has a
 
 ### Breaking / behaviour changes
 
+**API**
+- Each `Abacus` setting has exactly three methods: a builder `with_x(self, …) -> Self`, an in-place `set_x(&mut self, …) -> &mut Self`, and a getter `x(&self)`. Optional settings take `impl Into<Option<T>>` (`with_decimal_places(2)`, `set_decimal_places(None)`).
+  - Removed the builder-style `set_*` methods (`set_date_format(self)`, `set_angle_mode(self)`, …). The `set_*` names are now in-place setters, so old builder chains fail to compile instead of changing meaning.
+  - Removed the abbreviated setters: `set_wknd`, `set_def_tz`, `set_note_mode`, `set_int_style`, `set_dec_places`, `set_sig_figs`, `set_follow_sig_figs`, `set_strict_dims`, `set_max_depth`, `set_max_exp`, `set_implicit_mul`, `set_scales`, `set_auto_derive`, `set_angle`, `set_date_fmt`, and the deprecated `set_live_rates` (use `try_set_live_rates`).
+- `Abacus` fields are private. Use the getters, `units()`/`units_mut()`, `tokens()`/`tokens_mut()`, `variables()` and `unit_display_overrides()`. `default_interval_style` is now `interval_style()`.
+- `max_exponent` and the currency toggle live only in the unit registry, so they can no longer disagree. `max_exponent` is clamped to the representable range (≈ 77 471) for `^` as well as unit symbols. `UnitRegistry::max_exponent` is a method.
+- `Abacus::new()` and `Abacus::default()` return the standard engine. `Abacus::empty()` gives bare registries.
+- `TokenRegistry` operator maps are private. Look entries up with `binary_operator`, `unary_operator` and `function`; remove them with `remove_binary_operator`, `remove_unary_operator` and `remove_function`. `operators_by_first_char` was removed.
+- New `Abacus::eval_to_string`, which renders with every output setting, including `Notation` (as `format_result` does). The `abacus` CLI renders through `format_result`.
+- Removed `EvalConfig::currencies` and `EvalConfig::live_rates`, which had no effect. Also removed the `STANDARD` / `STANDARD_CALC` aliases (use `STANDARD_ABACUS` or `Abacus::shared()`) and `Value::as_unit` (use `Value::to`).
+
 **Units**
 - `pound`/`pounds`/`lbs` now mean mass (lb). Use `GBP`, `£`, `quid` or `pound sterling` for the currency.
 - `gal`, `gallon`, `qt`, `pt`, `gi`, `fl oz`/`floz` are now **US customary**. Imperial measures are `imp_gal`, `imp_qt`, `imp_pt`, `imp_gi`, `imp_fl_oz` (or `imperial gallon`, …).

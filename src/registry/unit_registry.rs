@@ -47,7 +47,7 @@ pub struct UnitRegistry {
     units: Arc<UnitMap>,
     cache: RwLock<FxHashMap<String, Arc<Unit>>>,
     priority_derived_units: Vec<(Dimensions, Arc<Unit>)>,
-    pub max_exponent: f64,
+    max_exponent: f64,
 }
 
 impl Default for UnitRegistry {
@@ -94,6 +94,12 @@ impl UnitRegistry {
     pub fn set_max_exponent(&mut self, max: f64) {
         self.max_exponent = max.min(MAX_REPRESENTABLE_EXPONENT);
         self.clear_cache();
+    }
+
+    /// Largest exponent magnitude accepted in `base^exp` unit symbols.
+    #[must_use]
+    pub fn max_exponent(&self) -> f64 {
+        self.max_exponent
     }
 
     #[must_use]
@@ -221,6 +227,13 @@ impl UnitRegistry {
         let mut map = HashMap::new();
         map.insert(code.to_string(), rate_per_usd);
         self.update_currency_rates(&map);
+    }
+
+    /// Whether currency units are registered.
+    #[cfg(feature = "currencies")]
+    #[must_use]
+    pub fn currencies_enabled(&self) -> bool {
+        self.units.contains_key("USD")
     }
 
     #[cfg(feature = "currencies")]

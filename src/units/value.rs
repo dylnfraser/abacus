@@ -26,7 +26,7 @@ use std::{
 /// use abacus::Abacus;
 ///
 /// let abacus = Abacus::standard();
-/// let length = abacus.units.value(5.0, "km").unwrap();
+/// let length = abacus.units().value(5.0, "km").unwrap();
 /// assert_eq!(length.to_display(), "5 km");
 /// assert_eq!(length.canonical, 5000.0);
 /// # }
@@ -122,11 +122,6 @@ impl Value {
 
     pub fn to(&self, registry: &UnitRegistry, symbol: &str) -> Result<Self, AbacusError> {
         self.convert_to(registry.unit(symbol)?)
-    }
-
-    #[deprecated(since = "0.1.0", note = "use `Value::to`")]
-    pub fn as_unit(&self, registry: &UnitRegistry, symbol: &str) -> Result<Self, AbacusError> {
-        self.to(registry, symbol)
     }
 
     /// Reduces a composite unit to a matching derived SI unit (`kg*m/s^2` → `N`).

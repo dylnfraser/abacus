@@ -120,7 +120,7 @@ fn run_demo(calc: &Abacus) -> bool {
         out!("{}. {title}", i + 1);
         for expr in *exprs {
             match calc.eval(expr) {
-                Ok(res) => out!("  {expr} = {}", res.to_display()),
+                Ok(res) => out!("  {expr} = {}", calc.format_result(&res)),
                 Err(err) => {
                     ok = false;
                     out!("  {expr} => error: {err}");
@@ -136,7 +136,7 @@ fn run_demo(calc: &Abacus) -> bool {
 fn eval_one(calc: &mut Abacus, expr: &str) -> bool {
     match calc.eval_mut(expr) {
         Ok(res) => {
-            out!("{}", res.to_display());
+            out!("{}", calc.format_result(&res));
             true
         }
         Err(err) => {

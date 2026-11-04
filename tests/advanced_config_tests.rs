@@ -63,7 +63,7 @@ fn test_angle_mode_gradians() {
 #[test]
 fn test_angle_mode_radians_default() {
     let calc = Abacus::standard();
-    assert_eq!(calc.angle_mode, AngleMode::Radians);
+    assert_eq!(calc.angle_mode(), AngleMode::Radians);
 
     let asin_1 = calc.eval("asin(1)").unwrap();
     assert!(asin_1.to_display().contains("rad"));
@@ -73,7 +73,7 @@ fn test_angle_mode_radians_default() {
 #[test]
 fn test_strict_dimension_checking() {
     let loose = Abacus::standard();
-    assert!(!loose.strict_dimensions);
+    assert!(!loose.strict_dimensions());
 
     // In loose mode, dimensionless promotion succeeds
     let promoted = loose.eval("5 m + 5").unwrap();
@@ -84,7 +84,7 @@ fn test_strict_dimension_checking() {
 
     // In strict mode, mixing dimensions fails with IncompatibleDimensions
     let strict = Abacus::standard().with_strict_dimensions(true);
-    assert!(strict.strict_dimensions);
+    assert!(strict.strict_dimensions());
 
     assert!(matches!(
         strict.eval("5 m + 5"),
@@ -116,7 +116,7 @@ fn test_strict_dimension_checking() {
 #[test]
 fn test_decimal_places_configuration() {
     let calc = Abacus::standard().with_decimal_places(2);
-    assert_eq!(calc.decimal_places, Some(2));
+    assert_eq!(calc.decimal_places(), Some(2));
 
     // 10 / 3 = 3.3333... -> 3.33
     let res = calc.eval("10 / 3").unwrap();
@@ -146,7 +146,7 @@ fn test_interval_style_configuration() {
 #[test]
 fn test_notation_modes() {
     let calc_eng = Abacus::standard().with_notation(Notation::Engineering);
-    assert_eq!(calc_eng.notation, Notation::Engineering);
+    assert_eq!(calc_eng.notation(), Notation::Engineering);
 
     let res1 = calc_eng.eval("45000").unwrap();
     assert_eq!(calc_eng.format_result(&res1), "45e3");
@@ -167,7 +167,7 @@ fn test_notation_modes() {
 fn test_default_timezone_configuration() {
     let est = TimeZone::parse("EST").unwrap();
     let calc = Abacus::standard().with_default_timezone(est);
-    assert_eq!(calc.default_timezone.as_ref().unwrap().name, "EST");
+    assert_eq!(calc.default_timezone().as_ref().unwrap().name, "EST");
 
     // Bare date evaluates and displays with default timezone
     let res = calc.eval("07-08-2026").unwrap();
@@ -183,7 +183,7 @@ fn test_default_timezone_configuration() {
 #[test]
 fn test_custom_weekend_workweek_configuration() {
     let calc = Abacus::standard().with_weekend(WeekendDays::FridaySaturday);
-    assert_eq!(calc.weekend, WeekendDays::FridaySaturday);
+    assert_eq!(calc.weekend(), WeekendDays::FridaySaturday);
 
     // 07-08-2026 is a Friday.
     // In FridaySaturday, Friday is weekend and NOT a workday.
@@ -209,7 +209,7 @@ fn test_custom_weekend_workweek_configuration() {
 #[test]
 fn test_max_recursion_depth_configuration() {
     let shallow_calc = Abacus::standard().with_max_recursion_depth(3);
-    assert_eq!(shallow_calc.max_recursion_depth, 3);
+    assert_eq!(shallow_calc.max_recursion_depth(), 3);
     assert!(matches!(
         shallow_calc.eval("1 + (2 + (3 + (4 + 5)))"),
         Err(AbacusError::RecursionLimitExceeded)
@@ -222,7 +222,7 @@ fn test_max_recursion_depth_configuration() {
 #[test]
 fn test_implicit_multiplication_configuration() {
     let calc_no_implicit = Abacus::standard().with_implicit_multiplication(false);
-    assert!(!calc_no_implicit.implicit_multiplication);
+    assert!(!calc_no_implicit.implicit_multiplication());
     assert!(matches!(
         calc_no_implicit.eval("2(3)"),
         Err(AbacusError::UnexpectedToken(_))
@@ -230,7 +230,7 @@ fn test_implicit_multiplication_configuration() {
     assert_eq!(calc_no_implicit.eval("2 * (3)").unwrap().to_display(), "6");
 
     let calc_with_implicit = Abacus::standard();
-    assert!(calc_with_implicit.implicit_multiplication);
+    assert!(calc_with_implicit.implicit_multiplication());
     assert_eq!(calc_with_implicit.eval("2(3)").unwrap().to_display(), "6");
 }
 
@@ -238,35 +238,35 @@ fn test_implicit_multiplication_configuration() {
 fn test_in_place_mutator_methods() {
     let mut calc = Abacus::standard();
 
-    calc.set_angle(AngleMode::Degrees);
-    assert_eq!(calc.angle_mode, AngleMode::Degrees);
+    calc.set_angle_mode(AngleMode::Degrees);
+    assert_eq!(calc.angle_mode(), AngleMode::Degrees);
 
-    calc.set_strict_dims(true);
-    assert!(calc.strict_dimensions);
+    calc.set_strict_dimensions(true);
+    assert!(calc.strict_dimensions());
 
-    calc.set_dec_places(Some(3));
-    assert_eq!(calc.decimal_places, Some(3));
+    calc.set_decimal_places(Some(3));
+    assert_eq!(calc.decimal_places(), Some(3));
 
-    calc.set_int_style(Some(IntervalStyle::Range));
-    assert_eq!(calc.default_interval_style, Some(IntervalStyle::Range));
+    calc.set_interval_style(Some(IntervalStyle::Range));
+    assert_eq!(calc.interval_style(), Some(IntervalStyle::Range));
 
-    calc.set_note_mode(Notation::Engineering);
-    assert_eq!(calc.notation, Notation::Engineering);
+    calc.set_notation(Notation::Engineering);
+    assert_eq!(calc.notation(), Notation::Engineering);
 
-    calc.set_def_tz(Some(TimeZone::parse("EST").unwrap()));
-    assert_eq!(calc.default_timezone.as_ref().unwrap().name, "EST");
+    calc.set_default_timezone(Some(TimeZone::parse("EST").unwrap()));
+    assert_eq!(calc.default_timezone().as_ref().unwrap().name, "EST");
 
-    calc.set_wknd(WeekendDays::FridaySaturday);
-    assert_eq!(calc.weekend, WeekendDays::FridaySaturday);
+    calc.set_weekend(WeekendDays::FridaySaturday);
+    assert_eq!(calc.weekend(), WeekendDays::FridaySaturday);
 
-    calc.set_max_depth(10);
-    assert_eq!(calc.max_recursion_depth, 10);
+    calc.set_max_recursion_depth(10);
+    assert_eq!(calc.max_recursion_depth(), 10);
 
-    calc.set_max_exp(50.0);
-    assert_eq!(calc.max_exponent, 50.0);
+    calc.set_max_exponent(50.0);
+    assert_eq!(calc.max_exponent(), 50.0);
 
-    calc.set_implicit_mul(false);
-    assert!(!calc.implicit_multiplication);
+    calc.set_implicit_multiplication(false);
+    assert!(!calc.implicit_multiplication());
 }
 
 #[cfg(feature = "units")]
@@ -274,12 +274,12 @@ fn test_in_place_mutator_methods() {
 fn test_max_exponent_configuration() {
     // Default max exponent is 1000.0
     let calc = Abacus::standard();
-    assert_eq!(calc.max_exponent, 1000.0);
+    assert_eq!(calc.max_exponent(), 1000.0);
     assert_eq!(calc.eval("2 ^ 10").unwrap().to_display(), "1024");
 
     // Configured low max exponent (e.g. 5)
     let low_calc = Abacus::standard().with_max_exponent(5.0);
-    assert_eq!(low_calc.max_exponent, 5.0);
+    assert_eq!(low_calc.max_exponent(), 5.0);
     assert_eq!(low_calc.eval("2 ^ 5").unwrap().to_display(), "32");
     assert!(matches!(
         low_calc.eval("2 ^ 6"),

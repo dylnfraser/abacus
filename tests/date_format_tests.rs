@@ -16,7 +16,7 @@ use abacus::{Abacus, DateFormat};
 #[test]
 fn test_default_date_format_is_month_day_year() {
     let abacus = Abacus::standard();
-    assert_eq!(abacus.date_format, DateFormat::MonthDayYear);
+    assert_eq!(abacus.date_format(), DateFormat::MonthDayYear);
 
     let d_res = abacus.eval("07-08-2026").unwrap();
     assert_eq!(d_res.to_display(), "August 7, 2026");
@@ -27,19 +27,19 @@ fn test_default_date_format_is_month_day_year() {
 
 #[test]
 fn test_configurable_date_format() {
-    let abacus_iso = Abacus::standard().set_date_format(DateFormat::YYYYMMDD);
+    let abacus_iso = Abacus::standard().with_date_format(DateFormat::YYYYMMDD);
     let d = abacus_iso.eval_date("07-08-2026").unwrap();
-    assert_eq!(d.format_with_style(abacus_iso.date_format), "2026-08-07");
+    assert_eq!(d.format_with_style(abacus_iso.date_format()), "2026-08-07");
 
     // With a month-first format, ambiguous input is also read month-first so output round-trips.
-    let abacus_us = Abacus::standard().set_date_format(DateFormat::MMDDYYYY);
+    let abacus_us = Abacus::standard().with_date_format(DateFormat::MMDDYYYY);
     let d2 = abacus_us.eval_date("08-07-2026").unwrap();
     assert_eq!((d2.month, d2.day), (8, 7));
-    assert_eq!(d2.format_with_style(abacus_us.date_format), "08-07-2026");
+    assert_eq!(d2.format_with_style(abacus_us.date_format()), "08-07-2026");
 
-    let abacus_eu = Abacus::standard().set_date_format(DateFormat::DDMMYYYY);
+    let abacus_eu = Abacus::standard().with_date_format(DateFormat::DDMMYYYY);
     let d3 = abacus_eu.eval_date("07-08-2026").unwrap();
-    assert_eq!(d3.format_with_style(abacus_eu.date_format), "07-08-2026");
+    assert_eq!(d3.format_with_style(abacus_eu.date_format()), "07-08-2026");
 }
 
 #[cfg(feature = "units")]

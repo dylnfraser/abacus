@@ -52,34 +52,97 @@ pub enum Notation {
 
 use crate::evaluation::parser::config::EvalConfig;
 
+/// A configured evaluation engine: unit and operator registries, variables and settings.
+///
+/// Every setting has a consuming builder `with_*` and an in-place `set_*`, plus a getter of the
+/// same name as the setting. Optional settings take `impl Into<Option<T>>`, so
+/// `with_decimal_places(2)` sets them and `set_decimal_places(None)` clears them.
+///
+/// ```rust
+/// # #[cfg(feature = "units")] {
+/// use abacus::{Abacus, AngleMode};
+///
+/// let mut calc = Abacus::standard().with_angle_mode(AngleMode::Degrees);
+/// calc.set_decimal_places(2);
+/// assert_eq!(calc.eval("sin(30)").unwrap().to_display(), "0.5");
+/// assert_eq!(calc.decimal_places(), Some(2));
+/// # }
+/// ```
+#[derive(Debug)]
 pub struct Abacus {
-    pub units: UnitRegistry,
-    pub tokens: TokenRegistry,
-    pub date_format: DateFormat,
-    pub significant_figures: Option<usize>,
-    pub follow_significant_figures: bool,
-    pub auto_derived_units: bool,
-    pub angle_mode: AngleMode,
-    pub strict_dimensions: bool,
-    pub decimal_places: Option<usize>,
-    pub default_interval_style: Option<IntervalStyle>,
-    pub notation: Notation,
-    pub default_timezone: Option<TimeZone>,
-    pub weekend: WeekendDays,
-    pub max_recursion_depth: usize,
-    /// Largest accepted exponent. Change it with [`Abacus::with_max_exponent`] /
-    /// [`Abacus::set_max_exp`] so the unit registry's limit stays in sync.
-    pub max_exponent: f64,
-    pub implicit_multiplication: bool,
-    pub number_scales: bool,
-    /// Whether currency units are enabled. Change it with [`Abacus::with_currencies`] /
-    /// [`Abacus::set_currencies`] so currency units are actually (un)registered.
-    pub currencies: bool,
-    pub live_rates: bool,
-    pub currency_cache_path: Option<std::path::PathBuf>,
-    pub unit_display_overrides: HashMap<String, String>,
-    pub variables: HashMap<String, EvalResult>,
-    pub anchor_date: Option<Date>,
+    units: UnitRegistry,
+    tokens: TokenRegistry,
+    date_format: DateFormat,
+    significant_figures: Option<usize>,
+    follow_significant_figures: bool,
+    auto_derived_units: bool,
+    angle_mode: AngleMode,
+    strict_dimensions: bool,
+    decimal_places: Option<usize>,
+    interval_style: Option<IntervalStyle>,
+    notation: Notation,
+    default_timezone: Option<TimeZone>,
+    weekend: WeekendDays,
+    max_recursion_depth: usize,
+    implicit_multiplication: bool,
+    number_scales: bool,
+    live_rates: bool,
+    currency_cache_path: Option<std::path::PathBuf>,
+    unit_display_overrides: HashMap<String, String>,
+    variables: HashMap<String, EvalResult>,
+    anchor_date: Option<Date>,
+}
+
+/// Generates `with_*` / `set_*` / getter triples for plain `Copy` settings.
+macro_rules! settings {
+    ($( $(#[$doc:meta])* $field:ident: $ty:ty => $with:ident, $set:ident; )*) => {
+        $(
+            $(#[$doc])*
+            #[must_use]
+            pub fn $with(mut self, value: $ty) -> Self {
+                self.$field = value;
+                self
+            }
+
+            $(#[$doc])*
+            pub fn $set(&mut self, value: $ty) -> &mut Self {
+                self.$field = value;
+                self
+            }
+
+            $(#[$doc])*
+            #[must_use]
+            pub fn $field(&self) -> $ty {
+                self.$field
+            }
+        )*
+    };
+}
+
+/// Generates `with_*` / `set_*` / getter triples for optional `Copy` settings.
+macro_rules! optional_settings {
+    ($( $(#[$doc:meta])* $field:ident: $ty:ty => $with:ident, $set:ident; )*) => {
+        $(
+            $(#[$doc])*
+            #[must_use]
+            pub fn $with(mut self, value: impl Into<Option<$ty>>) -> Self {
+                self.$field = value.into();
+                self
+            }
+
+            $(#[$doc])*
+            pub fn $set(&mut self, value: impl Into<Option<$ty>>) -> &mut Self {
+                self.$field = value.into();
+                self
+            }
+
+            $(#[$doc])*
+            #[must_use]
+            pub fn $field(&self) -> Option<$ty> {
+                self.$field
+            }
+        )*
+    };
 }
 
 impl Abacus {
@@ -89,13 +152,21 @@ impl Abacus {
         crate::evaluation::tokenizer::registry::constants::standard_variables_map()
     }
 
-    /// Initialize a new `Abacus` instance with default empty unit and token registries.
+    /// The standard engine; same as [`Abacus::standard`] and [`Abacus::default`].
     #[must_use]
     pub fn new() -> Self {
+        Self::standard()
+    }
+
+    /// An engine with empty unit and operator registries and no variables: even `+` must be
+    /// registered before use. Start from [`Abacus::standard`] to extend the built-ins instead.
+    #[must_use]
+    pub fn empty() -> Self {
         Self::from_registry(UnitRegistry::new(), TokenRegistry::new())
     }
 
     /// Initialize a new `Abacus` instance with custom units and tokens.
+    #[must_use]
     pub fn from_registry(units: UnitRegistry, tokens: TokenRegistry) -> Self {
         Self {
             units,
@@ -107,15 +178,13 @@ impl Abacus {
             angle_mode: AngleMode::default(),
             strict_dimensions: false,
             decimal_places: None,
-            default_interval_style: None,
+            interval_style: None,
             notation: Notation::default(),
             default_timezone: None,
             weekend: WeekendDays::default(),
             max_recursion_depth: crate::evaluation::parser::MAX_RECURSION_DEPTH,
-            max_exponent: 1_000.0,
             implicit_multiplication: true,
             number_scales: cfg!(feature = "number-scales"),
-            currencies: cfg!(feature = "currencies"),
             live_rates: false,
             // No implicit disk writes: `update_rates_from_json` only persists when a cache path
             // is configured. Live-rate methods fall back to `default_currency_cache_path()`.
@@ -146,357 +215,192 @@ impl Abacus {
         abacus
     }
 
-    /// Builder method to set the output date format.
+    // ── Registries ──
+
+    /// The unit registry.
     #[must_use]
-    pub fn with_date_format(mut self, format: DateFormat) -> Self {
-        self.date_format = format;
-        self
+    pub fn units(&self) -> &UnitRegistry {
+        &self.units
     }
 
-    /// In-place setter for the output date format.
-    pub fn set_date_fmt(&mut self, format: DateFormat) {
-        self.date_format = format;
+    /// Mutable access to the unit registry, e.g. to register units in bulk.
+    pub fn units_mut(&mut self) -> &mut UnitRegistry {
+        &mut self.units
     }
 
-    /// Sets the date format for this `Abacus` instance.
-    pub fn set_date_format(mut self, format: DateFormat) -> Self {
-        self.date_format = format;
-        self
-    }
-
-    /// Sets the significant figures for output rounding and formatting.
-    #[deprecated(
-        since = "0.1.0",
-        note = "use `with_significant_figures` (takes `usize`) or `set_sig_figs`"
-    )]
+    /// The operator and function registry.
     #[must_use]
-    pub fn set_significant_figures(mut self, sig_figs: Option<usize>) -> Self {
-        self.significant_figures = sig_figs;
-        self
+    pub fn tokens(&self) -> &TokenRegistry {
+        &self.tokens
     }
 
-    /// Builder method to configure a specific number of significant figures.
+    /// Mutable access to the operator and function registry.
+    pub fn tokens_mut(&mut self) -> &mut TokenRegistry {
+        &mut self.tokens
+    }
+
+    // ── Settings ──
+
+    settings! {
+        /// Output date format. `MMDDYYYY` also reads ambiguous `NN-NN-YYYY` input month-first.
+        date_format: DateFormat => with_date_format, set_date_format;
+        /// Round results to the fewest significant figures among the input's numeric literals.
+        follow_significant_figures: bool => with_follow_significant_figures, set_follow_significant_figures;
+        /// Reduce composite results to derived SI units (`N*m` → `J`).
+        auto_derived_units: bool => with_auto_derived_units, set_auto_derived_units;
+        /// Angle unit assumed for bare numbers passed to `sin`/`cos`/`tan` and returned by the
+        /// inverse functions.
+        angle_mode: AngleMode => with_angle_mode, set_angle_mode;
+        /// Reject adding or subtracting a bare number to a dimensioned value (`5 m + 3`).
+        strict_dimensions: bool => with_strict_dimensions, set_strict_dimensions;
+        /// Number notation used by [`Abacus::format_result`] and [`Abacus::eval_to_string`].
+        notation: Notation => with_notation, set_notation;
+        /// Days treated as the weekend in business-day calculations.
+        weekend: WeekendDays => with_weekend, set_weekend;
+        /// Allow implicit multiplication (`2(3)`, `2 pi`).
+        implicit_multiplication: bool => with_implicit_multiplication, set_implicit_multiplication;
+        /// Recognise scale words (`million`, `dozen`, ...) as multipliers.
+        number_scales: bool => with_number_scales, set_number_scales;
+    }
+
+    optional_settings! {
+        /// Round results to this many significant figures.
+        significant_figures: usize => with_significant_figures, set_significant_figures;
+        /// Round results to this many decimal places.
+        decimal_places: usize => with_decimal_places, set_decimal_places;
+        /// Display style for intervals (`[a, b]` or `a..b`); `None` keeps each interval's own.
+        interval_style: IntervalStyle => with_interval_style, set_interval_style;
+    }
+
+    /// Timezone for dates and times written without one.
     #[must_use]
-    pub fn with_significant_figures(mut self, sig_figs: usize) -> Self {
-        self.significant_figures = Some(sig_figs);
+    pub fn with_default_timezone(mut self, tz: impl Into<Option<TimeZone>>) -> Self {
+        self.set_default_timezone(tz);
         self
     }
 
-    /// Sets whether the evaluator should follow the minimum significant figures
-    /// of the input expression's numeric literals.
-    #[deprecated(since = "0.1.0", note = "use `with_follow_significant_figures`")]
+    /// Timezone for dates and times written without one.
+    pub fn set_default_timezone(&mut self, tz: impl Into<Option<TimeZone>>) -> &mut Self {
+        self.default_timezone = tz.into();
+        self
+    }
+
+    /// Timezone for dates and times written without one.
     #[must_use]
-    pub fn set_follow_significant_figures(mut self, follow: bool) -> Self {
-        self.follow_significant_figures = follow;
-        self
+    pub fn default_timezone(&self) -> Option<&TimeZone> {
+        self.default_timezone.as_ref()
     }
 
-    /// Builder method to follow the expression's input significant figures.
+    /// Fixes the reference "now" used by `today`, `now`, `ago`, relative weekdays and so on.
     #[must_use]
-    pub fn with_follow_significant_figures(mut self, follow: bool) -> Self {
-        self.follow_significant_figures = follow;
+    pub fn with_now(mut self, now: impl Into<Option<Date>>) -> Self {
+        self.set_now(now);
         self
     }
 
-    /// Sets whether automatic derived unit reduction (e.g. N*m -> J) is enabled.
-    #[deprecated(since = "0.1.0", note = "use `with_auto_derived_units`")]
+    /// Fixes the reference "now"; `None` goes back to the system clock.
+    pub fn set_now(&mut self, now: impl Into<Option<Date>>) -> &mut Self {
+        self.anchor_date = now.into();
+        self
+    }
+
+    /// The fixed reference "now", if one is set.
     #[must_use]
-    pub fn set_auto_derived_units(mut self, enabled: bool) -> Self {
-        self.auto_derived_units = enabled;
-        self
+    pub fn anchor_date(&self) -> Option<&Date> {
+        self.anchor_date.as_ref()
     }
 
-    /// Builder method to enable or disable automatic derived unit reduction.
-    #[must_use]
-    pub fn with_auto_derived_units(mut self, enabled: bool) -> Self {
-        self.auto_derived_units = enabled;
-        self
-    }
-
-    /// In-place setter for significant figures.
-    pub fn set_sig_figs(&mut self, sig_figs: Option<usize>) {
-        self.significant_figures = sig_figs;
-    }
-
-    /// In-place setter for following input significant figures.
-    pub fn set_follow_sig_figs(&mut self, follow: bool) {
-        self.follow_significant_figures = follow;
-    }
-
-    /// In-place setter for automatic derived unit reduction.
-    pub fn set_auto_derive(&mut self, enabled: bool) {
-        self.auto_derived_units = enabled;
-    }
-
-    /// Sets the angle mode for trigonometric functions (Radians, Degrees, Gradians).
-    #[deprecated(since = "0.1.0", note = "use `with_angle_mode`")]
-    #[must_use]
-    pub fn set_angle_mode(mut self, mode: AngleMode) -> Self {
-        self.angle_mode = mode;
-        self
-    }
-
-    /// Builder method to configure the angle mode.
-    #[must_use]
-    pub fn with_angle_mode(mut self, mode: AngleMode) -> Self {
-        self.angle_mode = mode;
-        self
-    }
-
-    /// In-place setter for angle mode.
-    pub fn set_angle(&mut self, mode: AngleMode) {
-        self.angle_mode = mode;
-    }
-
-    /// Sets whether strict dimension checking is enabled (disallows dimensionless promotion).
-    #[deprecated(since = "0.1.0", note = "use `with_strict_dimensions`")]
-    #[must_use]
-    pub fn set_strict_dimensions(mut self, strict: bool) -> Self {
-        self.strict_dimensions = strict;
-        self
-    }
-
-    /// Builder method to toggle strict dimension checking.
-    #[must_use]
-    pub fn with_strict_dimensions(mut self, strict: bool) -> Self {
-        self.strict_dimensions = strict;
-        self
-    }
-
-    /// Builder method to set an anchor date for relative date and event evaluations.
-    #[must_use]
-    pub fn with_now(mut self, now: Date) -> Self {
-        self.anchor_date = Some(now);
-        self
-    }
-
-    /// In-place setter for strict dimension checking.
-    pub fn set_strict_dims(&mut self, strict: bool) {
-        self.strict_dimensions = strict;
-    }
-
-    /// Sets the number of decimal places for rounding and formatting.
-    #[deprecated(
-        since = "0.1.0",
-        note = "use `with_decimal_places` (takes `usize`) or `set_dec_places`"
-    )]
-    #[must_use]
-    pub fn set_decimal_places(mut self, places: Option<usize>) -> Self {
-        self.decimal_places = places;
-        self
-    }
-
-    /// Builder method to configure fixed decimal places.
-    #[must_use]
-    pub fn with_decimal_places(mut self, places: usize) -> Self {
-        self.decimal_places = Some(places);
-        self
-    }
-
-    /// In-place setter for decimal places.
-    pub fn set_dec_places(&mut self, places: Option<usize>) {
-        self.decimal_places = places;
-    }
-
-    /// Sets the default interval display style (Bracket [a, b] or Range a..b).
-    #[deprecated(
-        since = "0.1.0",
-        note = "use `with_interval_style` (takes `IntervalStyle`) or `set_int_style`"
-    )]
-    #[must_use]
-    pub fn set_interval_style(mut self, style: Option<IntervalStyle>) -> Self {
-        self.default_interval_style = style;
-        self
-    }
-
-    /// Builder method to configure interval display style.
-    #[must_use]
-    pub fn with_interval_style(mut self, style: IntervalStyle) -> Self {
-        self.default_interval_style = Some(style);
-        self
-    }
-
-    /// In-place setter for interval display style.
-    pub fn set_int_style(&mut self, style: Option<IntervalStyle>) {
-        self.default_interval_style = style;
-    }
-
-    /// Sets the numerical notation mode (Standard, Scientific, Engineering).
-    #[deprecated(since = "0.1.0", note = "use `with_notation`")]
-    #[must_use]
-    pub fn set_notation(mut self, notation: Notation) -> Self {
-        self.notation = notation;
-        self
-    }
-
-    /// Builder method to configure notation mode.
-    #[must_use]
-    pub fn with_notation(mut self, notation: Notation) -> Self {
-        self.notation = notation;
-        self
-    }
-
-    /// In-place setter for notation mode.
-    pub fn set_note_mode(&mut self, notation: Notation) {
-        self.notation = notation;
-    }
-
-    /// Sets the default timezone for unqualified date and time evaluations.
-    #[deprecated(
-        since = "0.1.0",
-        note = "use `with_default_timezone` (takes `TimeZone`) or `set_def_tz`"
-    )]
-    #[must_use]
-    pub fn set_default_timezone(mut self, tz: Option<TimeZone>) -> Self {
-        self.default_timezone = tz;
-        self
-    }
-
-    /// Builder method to configure default timezone.
-    #[must_use]
-    pub fn with_default_timezone(mut self, tz: TimeZone) -> Self {
-        self.default_timezone = Some(tz);
-        self
-    }
-
-    /// In-place setter for default timezone.
-    pub fn set_def_tz(&mut self, tz: Option<TimeZone>) {
-        self.default_timezone = tz;
-    }
-
-    /// Sets the weekend days definition for business day calculations.
-    #[deprecated(since = "0.1.0", note = "use `with_weekend`")]
-    #[must_use]
-    pub fn set_weekend(mut self, weekend: WeekendDays) -> Self {
-        self.weekend = weekend;
-        self
-    }
-
-    /// Builder method to configure weekend days.
-    #[must_use]
-    pub fn with_weekend(mut self, weekend: WeekendDays) -> Self {
-        self.weekend = weekend;
-        self
-    }
-
-    /// In-place setter for weekend days.
-    pub fn set_wknd(&mut self, weekend: WeekendDays) {
-        self.weekend = weekend;
-    }
-
-    /// Sets the maximum expression recursion depth limit, clamped to
-    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
-    #[deprecated(since = "0.1.0", note = "use `with_max_recursion_depth`")]
-    #[must_use]
-    pub fn set_max_recursion_depth(mut self, depth: usize) -> Self {
-        self.set_max_depth(depth);
-        self
-    }
-
-    /// Builder method to configure maximum recursion depth, clamped to
-    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
+    /// Maximum parser nesting depth, clamped to
+    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] so input cannot overflow the stack.
     #[must_use]
     pub fn with_max_recursion_depth(mut self, depth: usize) -> Self {
-        self.set_max_depth(depth);
+        self.set_max_recursion_depth(depth);
         self
     }
 
-    /// In-place setter for maximum recursion depth, clamped to
-    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] to prevent stack overflow.
-    pub fn set_max_depth(&mut self, depth: usize) {
+    /// Maximum parser nesting depth, clamped to
+    /// [`evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP`] so input cannot overflow the stack.
+    pub fn set_max_recursion_depth(&mut self, depth: usize) -> &mut Self {
         self.max_recursion_depth =
             depth.min(crate::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP);
-    }
-
-    /// Sets the maximum exponent limit to prevent freezes or resource exhaustion.
-    #[deprecated(since = "0.1.0", note = "use `with_max_exponent`")]
-    #[must_use]
-    pub fn set_max_exponent(mut self, max: f64) -> Self {
-        self.max_exponent = max;
-        self.units.set_max_exponent(max);
         self
     }
 
-    /// Builder method to configure the maximum exponent limit.
+    /// Maximum parser nesting depth.
+    #[must_use]
+    pub fn max_recursion_depth(&self) -> usize {
+        self.max_recursion_depth
+    }
+
+    /// Largest exponent magnitude accepted, both for `^` and in unit symbols such as `m^3`.
+    /// Clamped to the largest exponent dimensions can represent (≈ 77 471).
     #[must_use]
     pub fn with_max_exponent(mut self, max: f64) -> Self {
-        self.max_exponent = max;
+        self.set_max_exponent(max);
+        self
+    }
+
+    /// Largest exponent magnitude accepted (see [`Abacus::with_max_exponent`]).
+    pub fn set_max_exponent(&mut self, max: f64) -> &mut Self {
         self.units.set_max_exponent(max);
         self
     }
 
-    /// In-place setter for maximum exponent limit.
-    pub fn set_max_exp(&mut self, max: f64) {
-        self.max_exponent = max;
-        self.units.set_max_exponent(max);
-    }
-
-    /// Sets whether implicit multiplication (e.g. `2(3)`) is allowed.
-    #[deprecated(since = "0.1.0", note = "use `with_implicit_multiplication`")]
+    /// Largest exponent magnitude accepted.
     #[must_use]
-    pub fn set_implicit_multiplication(mut self, enabled: bool) -> Self {
-        self.implicit_multiplication = enabled;
-        self
+    pub fn max_exponent(&self) -> f64 {
+        self.units.max_exponent()
     }
 
-    /// Builder method to toggle implicit multiplication.
-    #[must_use]
-    pub fn with_implicit_multiplication(mut self, enabled: bool) -> Self {
-        self.implicit_multiplication = enabled;
-        self
-    }
-
-    /// In-place setter for implicit multiplication.
-    pub fn set_implicit_mul(&mut self, enabled: bool) {
-        self.implicit_multiplication = enabled;
-    }
-
-    /// Sets whether natural number scale words (e.g. `million`, `billion`, `thousand`, `dozen`) are recognized as scale multipliers.
-    #[deprecated(since = "0.1.0", note = "use `with_number_scales`")]
-    #[must_use]
-    pub fn set_number_scales(mut self, enabled: bool) -> Self {
-        self.number_scales = enabled;
-        self
-    }
-
-    /// Builder method to toggle natural number scale words.
-    #[must_use]
-    pub fn with_number_scales(mut self, enabled: bool) -> Self {
-        self.number_scales = enabled;
-        self
-    }
-
-    /// In-place setter for natural number scale words.
-    pub fn set_scales(&mut self, enabled: bool) {
-        self.number_scales = enabled;
-    }
-
-    /// Builder method to enable or disable currency support.
+    /// Enables or disables currency units (`$`, `EUR`, ...).
     #[must_use]
     pub fn with_currencies(mut self, enabled: bool) -> Self {
         self.set_currencies(enabled);
         self
     }
 
-    /// In-place setter to enable or disable currency support.
-    pub fn set_currencies(&mut self, enabled: bool) {
-        self.currencies = enabled;
+    /// Enables or disables currency units (`$`, `EUR`, ...).
+    pub fn set_currencies(&mut self, enabled: bool) -> &mut Self {
         #[cfg(feature = "currencies")]
         {
             self.units.set_currencies_enabled(enabled);
         }
+        #[cfg(not(feature = "currencies"))]
+        let _ = enabled;
+        self
     }
 
-    /// Configures a custom file path for caching exchange rates.
-    pub fn set_currency_cache(&mut self, path: impl Into<std::path::PathBuf>) {
-        self.currency_cache_path = Some(path.into());
+    /// Whether currency units are registered.
+    #[must_use]
+    pub fn currencies(&self) -> bool {
+        #[cfg(feature = "currencies")]
+        {
+            self.units.currencies_enabled()
+        }
+        #[cfg(not(feature = "currencies"))]
+        {
+            false
+        }
     }
 
-    /// Builder method to configure a custom file path for caching exchange rates.
+    /// File used to cache exchange rates (defaults to [`default_currency_cache_path`] for the
+    /// live-rate methods; [`Abacus::update_rates_from_json`] only writes when one is set).
     #[must_use]
     pub fn with_currency_cache(mut self, path: impl Into<std::path::PathBuf>) -> Self {
         self.set_currency_cache(path);
         self
+    }
+
+    /// File used to cache exchange rates (see [`Abacus::with_currency_cache`]).
+    pub fn set_currency_cache(&mut self, path: impl Into<std::path::PathBuf>) -> &mut Self {
+        self.currency_cache_path = Some(path.into());
+        self
+    }
+
+    /// File used to cache exchange rates, if one is configured.
+    #[must_use]
+    pub fn currency_cache_path(&self) -> Option<&std::path::Path> {
+        self.currency_cache_path.as_deref()
     }
 
     /// Enables or disables live exchange rates fetched from the Frankfurter API
@@ -522,13 +426,17 @@ impl Abacus {
         }
     }
 
-    /// Sets whether live exchange rates should be fetched, silently ignoring fetch errors.
-    #[deprecated(
-        since = "0.1.0",
-        note = "use `try_set_live_rates`, which reports fetch errors"
-    )]
-    pub fn set_live_rates(&mut self, enabled: bool) {
-        let _ = self.try_set_live_rates(enabled);
+    /// Whether live exchange rates were requested.
+    #[must_use]
+    pub fn live_rates(&self) -> bool {
+        self.live_rates
+    }
+
+    #[cfg(feature = "currencies")]
+    fn cache_path_or_default(&self) -> std::path::PathBuf {
+        self.currency_cache_path
+            .clone()
+            .unwrap_or_else(default_currency_cache_path)
     }
 
     /// Updates currency rates according to daily cache policy:
@@ -536,11 +444,9 @@ impl Abacus {
     pub fn update_daily_rates(&mut self) -> Result<(), AbacusError> {
         #[cfg(feature = "currencies")]
         {
-            let cache_path = self.currency_cache_path.clone().unwrap_or_else(
-                crate::registry::units::currency_units::default_currency_cache_path,
-            );
-            let rates =
-                crate::registry::units::currency_units::get_or_update_daily_rates(&cache_path)?;
+            let rates = crate::registry::units::currency_units::get_or_update_daily_rates(
+                &self.cache_path_or_default(),
+            )?;
             self.units.update_currency_rates(&rates);
             Ok(())
         }
@@ -557,10 +463,9 @@ impl Abacus {
     pub fn fetch_live_rates(&mut self) -> Result<(), AbacusError> {
         #[cfg(feature = "currencies")]
         {
-            let cache_path = self.currency_cache_path.clone().unwrap_or_else(
-                crate::registry::units::currency_units::default_currency_cache_path,
-            );
-            let rates = crate::registry::units::currency_units::fetch_and_cache_rates(&cache_path)?;
+            let rates = crate::registry::units::currency_units::fetch_and_cache_rates(
+                &self.cache_path_or_default(),
+            )?;
             self.units.update_currency_rates(&rates);
             Ok(())
         }
@@ -594,11 +499,12 @@ impl Abacus {
     }
 
     /// Sets an exchange rate manually for a specific currency code (e.g. "EUR", 0.86281).
-    pub fn set_currency_rate(&mut self, _code: &str, _rate_per_usd: f64) {
+    pub fn set_currency_rate(&mut self, _code: &str, _rate_per_usd: f64) -> &mut Self {
         #[cfg(feature = "currencies")]
         {
             self.units.set_currency_rate(_code, _rate_per_usd);
         }
+        self
     }
 
     /// Builder method to set an exchange rate for a currency code.
@@ -676,6 +582,12 @@ impl Abacus {
         let raw = self.eval_unformatted(expr)?;
         self.variables.insert(name.into(), raw.clone());
         Ok(self.apply_output_settings(raw, expr))
+    }
+
+    /// All defined variables, including the standard constants.
+    #[must_use]
+    pub fn variables(&self) -> &HashMap<String, EvalResult> {
+        &self.variables
     }
 
     /// Retrieve a reference to a defined variable.
@@ -766,6 +678,12 @@ impl Abacus {
         self.unit_display_overrides.clear();
     }
 
+    /// All configured unit display overrides.
+    #[must_use]
+    pub fn unit_display_overrides(&self) -> &HashMap<String, String> {
+        &self.unit_display_overrides
+    }
+
     /// Checks if a display override is configured for a pattern.
     #[must_use]
     pub fn has_unit_display_override(&self, pattern: &str) -> bool {
@@ -832,7 +750,7 @@ impl Abacus {
     pub fn apply_output_settings(&self, res: EvalResult, expr: &str) -> EvalResult {
         // With default settings only currency rounding applies; keep that path small and put
         // the rarely used configuration handling out of line.
-        if self.default_interval_style.is_none()
+        if self.interval_style.is_none()
             && self.decimal_places.is_none()
             && self.significant_figures.is_none()
             && !self.follow_significant_figures
@@ -868,7 +786,7 @@ impl Abacus {
     #[cold]
     #[inline(never)]
     fn apply_configured_output_settings(&self, mut res: EvalResult, expr: &str) -> EvalResult {
-        if let Some(style) = self.default_interval_style {
+        if let Some(style) = self.interval_style {
             res = res.with_interval_style(style);
         }
 
@@ -897,12 +815,28 @@ impl Abacus {
         res
     }
 
+    /// Evaluates an expression and renders it with every output setting, including
+    /// [`Notation`]. Equivalent to [`Abacus::eval`] followed by [`Abacus::format_result`].
+    ///
+    /// ```rust
+    /// use abacus::{Abacus, Notation};
+    ///
+    /// let calc = Abacus::standard().with_notation(Notation::Scientific);
+    /// assert_eq!(calc.eval_to_string("12345").unwrap(), "1.2345e4");
+    /// ```
+    pub fn eval_to_string(&self, expr: &str) -> Result<String, AbacusError> {
+        Ok(self.format_result(&self.eval(expr)?))
+    }
+
     /// Formats an `EvalResult` according to this `Abacus` instance's configuration
     /// (date format, significant figures, decimal places, notation, etc.).
+    ///
+    /// `EvalResult`'s own `Display` cannot see engine settings, so [`Notation`] only takes
+    /// effect here (and in [`Abacus::eval_to_string`]).
     #[must_use]
     pub fn format_result(&self, res: &EvalResult) -> String {
         let mut res = res.clone();
-        if let Some(style) = self.default_interval_style {
+        if let Some(style) = self.interval_style {
             res = res.with_interval_style(style);
         }
         if !self.unit_display_overrides.is_empty() {
@@ -978,17 +912,10 @@ impl Abacus {
 pub static STANDARD_ABACUS: std::sync::LazyLock<Abacus> =
     std::sync::LazyLock::new(Abacus::standard);
 
-/// Alias of [`STANDARD_ABACUS`].
-#[deprecated(since = "0.1.0", note = "use `STANDARD_ABACUS` or `Abacus::shared()`")]
-pub static STANDARD: &std::sync::LazyLock<Abacus> = &STANDARD_ABACUS;
-
-/// Alias of [`STANDARD_ABACUS`].
-#[deprecated(since = "0.1.0", note = "use `STANDARD_ABACUS` or `Abacus::shared()`")]
-pub static STANDARD_CALC: &std::sync::LazyLock<Abacus> = &STANDARD_ABACUS;
-
+/// The standard engine, as [`Abacus::standard`]. Use [`Abacus::empty`] for bare registries.
 impl Default for Abacus {
     fn default() -> Self {
-        Abacus::new()
+        Abacus::standard()
     }
 }
 

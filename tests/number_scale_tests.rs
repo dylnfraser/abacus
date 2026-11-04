@@ -176,7 +176,7 @@ fn test_number_scales_config_option() {
 
     // Re-enabled in place
     let mut mutable_calc = disabled_calc;
-    mutable_calc.set_scales(true);
+    mutable_calc.set_number_scales(true);
     assert_eq!(
         mutable_calc.eval("3 million").unwrap().to_display(),
         "3000000"

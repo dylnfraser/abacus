@@ -239,7 +239,7 @@ mod currency {
     #[test]
     fn standard_engine_never_writes_a_cache_implicitly() {
         let mut calc = Abacus::standard();
-        assert!(calc.currency_cache_path.is_none());
+        assert!(calc.currency_cache_path().is_none());
         calc.update_rates_from_json(r#"{"base":"USD","rates":{"EUR":0.5}}"#)
             .unwrap();
         assert_eq!(calc.eval("100 USD in EUR").unwrap().to_display(), "50 EUR");
@@ -249,9 +249,9 @@ mod currency {
     fn fallback_rates_are_detectable() {
         assert_eq!(FALLBACK_RATES_DATE.len(), 10);
         let mut calc = Abacus::standard();
-        assert!(is_using_fallback_rates(&calc.units));
+        assert!(is_using_fallback_rates(calc.units()));
         calc.set_currency_rate("EUR", 0.5);
-        assert!(!is_using_fallback_rates(&calc.units));
+        assert!(!is_using_fallback_rates(calc.units()));
     }
 
     #[test]
@@ -284,7 +284,7 @@ mod currency {
             assert!(parse_frankfurter_json(bad).is_err(), "accepted {bad}");
             let mut calc = Abacus::standard();
             assert!(calc.update_rates_from_json(bad).is_err(), "accepted {bad}");
-            assert!(is_using_fallback_rates(&calc.units));
+            assert!(is_using_fallback_rates(calc.units()));
         }
     }
 

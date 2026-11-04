@@ -4,7 +4,7 @@ use abacus::Abacus;
 #[test]
 fn test_auto_derived_units_default_enabled() {
     let calc = Abacus::standard();
-    assert!(calc.auto_derived_units);
+    assert!(calc.auto_derived_units());
 
     // 10 N * 5 m -> 50 J
     let res = calc.eval("10 N * 5 m").unwrap();
@@ -22,7 +22,7 @@ fn test_auto_derived_units_default_enabled() {
 #[test]
 fn test_auto_derived_units_disabled() {
     let calc = Abacus::standard().with_auto_derived_units(false);
-    assert!(!calc.auto_derived_units);
+    assert!(!calc.auto_derived_units());
 
     // 10 N * 5 m -> 50 N*m (not reduced to J)
     let res = calc.eval("10 N * 5 m").unwrap();
@@ -40,7 +40,7 @@ fn test_auto_derived_units_disabled() {
 #[test]
 fn test_fixed_significant_figures() {
     let calc = Abacus::standard().with_significant_figures(3);
-    assert_eq!(calc.significant_figures, Some(3));
+    assert_eq!(calc.significant_figures(), Some(3));
 
     // 12.3456 m -> 12.3 m
     let res = calc.eval("12.3456 m").unwrap();
@@ -67,7 +67,7 @@ fn test_fixed_significant_figures() {
 #[test]
 fn test_follow_input_significant_figures() {
     let calc = Abacus::standard().with_follow_significant_figures(true);
-    assert!(calc.follow_significant_figures);
+    assert!(calc.follow_significant_figures());
 
     // 12.3 (3 sig figs) * 4.567 (4 sig figs) -> minimum is 3 sig figs
     // 12.3 * 4.567 = 56.1741 -> rounded to 3 sig figs = 56.2
@@ -83,14 +83,14 @@ fn test_follow_input_significant_figures() {
 fn test_in_place_configuration_mutators() {
     let mut calc = Abacus::standard();
 
-    calc.set_auto_derive(false);
-    assert!(!calc.auto_derived_units);
+    calc.set_auto_derived_units(false);
+    assert!(!calc.auto_derived_units());
 
-    calc.set_sig_figs(Some(4));
-    assert_eq!(calc.significant_figures, Some(4));
+    calc.set_significant_figures(Some(4));
+    assert_eq!(calc.significant_figures(), Some(4));
 
-    calc.set_follow_sig_figs(true);
-    assert!(calc.follow_significant_figures);
+    calc.set_follow_significant_figures(true);
+    assert!(calc.follow_significant_figures());
 
     let res = calc.eval("10 N * 5 m").unwrap();
     assert_eq!(res.to_display(), "50 N*m");
@@ -152,4 +152,73 @@ fn test_five_rules_of_significant_figures() {
     // Exact mathematical powers: (4.52 m) ^ 2 -> 20.4 m^2 (3 sig figs, not 1)
     let res4 = calc.eval("(4.52 m) ^ 2").unwrap();
     assert_eq!(res4.to_display(), "20.4 m^2");
+}
+
+// ── Setter conventions ──
+
+#[cfg(feature = "units")]
+#[test]
+fn builders_setters_and_getters_agree() {
+    use abacus::{AngleMode, IntervalStyle, Notation};
+    let built = Abacus::standard()
+        .with_angle_mode(AngleMode::Degrees)
+        .with_decimal_places(2)
+        .with_interval_style(IntervalStyle::Range)
+        .with_notation(Notation::Scientific)
+        .with_max_recursion_depth(usize::MAX)
+        .with_max_exponent(5.0);
+    let mut set = Abacus::standard();
+    set.set_angle_mode(AngleMode::Degrees)
+        .set_decimal_places(2)
+        .set_interval_style(IntervalStyle::Range)
+        .set_notation(Notation::Scientific)
+        .set_max_recursion_depth(usize::MAX)
+        .set_max_exponent(5.0);
+    for calc in [&built, &set] {
+        assert_eq!(calc.angle_mode(), AngleMode::Degrees);
+        assert_eq!(calc.decimal_places(), Some(2));
+        assert_eq!(calc.interval_style(), Some(IntervalStyle::Range));
+        assert_eq!(calc.notation(), Notation::Scientific);
+        assert_eq!(
+            calc.max_recursion_depth(),
+            abacus::evaluation::parser::pratt::MAX_RECURSION_DEPTH_CAP
+        );
+        // One source of truth for the exponent limit: `^` and unit symbols agree.
+        assert_eq!(calc.max_exponent(), calc.units().max_exponent());
+        assert!(calc.eval("2^6").is_err());
+        assert!(calc.eval("1 m^6").is_err());
+    }
+    set.set_decimal_places(None);
+    assert_eq!(set.decimal_places(), None);
+}
+
+#[cfg(feature = "units")]
+#[test]
+fn default_and_new_are_the_standard_engine() {
+    for calc in [Abacus::default(), Abacus::new()] {
+        assert_eq!(calc.eval("1 km in m").unwrap().to_display(), "1000 m");
+    }
+    assert!(Abacus::empty().eval("1 m").is_err());
+    assert!(Abacus::empty().eval("1 + 2").is_err());
+    assert_eq!(Abacus::empty().eval("(3)").unwrap().to_display(), "3");
+}
+
+#[test]
+fn eval_to_string_applies_notation() {
+    let calc = Abacus::standard().with_notation(abacus::Notation::Scientific);
+    assert_eq!(calc.eval_to_string("12345").unwrap(), "1.2345e4");
+    assert_eq!(calc.eval("12345").unwrap().to_display(), "12345");
+}
+
+#[cfg(feature = "currencies")]
+#[test]
+fn currency_toggle_reflects_the_registry() {
+    let mut calc = Abacus::standard();
+    assert!(calc.currencies());
+    calc.set_currencies(false);
+    assert!(!calc.currencies());
+    assert!(calc.eval("$5").is_err());
+    calc.set_currencies(true);
+    assert!(calc.currencies());
+    assert_eq!(calc.eval("$5").unwrap().to_display(), "$5");
 }

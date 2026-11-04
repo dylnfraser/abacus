@@ -217,7 +217,7 @@ fn textual_dates_followed_by_times() {
 // Finding 12: DateFormat controls ambiguous NN-NN-YYYY input
 #[test]
 fn ambiguous_dates_follow_the_configured_format() {
-    let us = Abacus::standard().set_date_format(DateFormat::MMDDYYYY);
+    let us = Abacus::standard().with_date_format(DateFormat::MMDDYYYY);
     let d = us.eval_date("08-07-2026").unwrap();
     assert_eq!((d.month, d.day), (8, 7));
     assert_eq!(us.eval("08-07-2026").unwrap().to_display(), "08-07-2026");
@@ -398,7 +398,7 @@ fn format_functions_are_not_overridden() {
     assert_eq!(display(&c, "format_dmy(07-08-2026)"), "07-08-2026");
     assert_eq!(display(&c, "format_mdy(07-08-2026)"), "08-07-2026");
     assert_eq!(display(&c, "format_date(07-08-2026)"), "August 7, 2026");
-    let iso = Abacus::standard().set_date_format(DateFormat::YYYYMMDD);
+    let iso = Abacus::standard().with_date_format(DateFormat::YYYYMMDD);
     assert_eq!(
         iso.eval("format_long(07-08-2026)").unwrap().to_display(),
         "August 7, 2026"

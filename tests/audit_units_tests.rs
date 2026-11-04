@@ -170,15 +170,15 @@ fn nan_exponents_are_rejected() {
 fn exponent_cache_is_bounded_and_normalized() {
     let calc = Abacus::standard();
     for e in ["1", "1.0", "01"] {
-        calc.units.unit(&format!("m^{e}")).unwrap();
+        calc.units().unit(&format!("m^{e}")).unwrap();
     }
-    assert_eq!(calc.units.cached_exponent_units(), 1);
+    assert_eq!(calc.units().cached_exponent_units(), 1);
     for k in 0..10_000 {
-        let _ = calc.units.unit(&format!("m^1.{k:07}"));
+        let _ = calc.units().unit(&format!("m^1.{k:07}"));
     }
-    assert!(calc.units.cached_exponent_units() <= 4_096);
+    assert!(calc.units().cached_exponent_units() <= 4_096);
     assert!(
-        calc.units
+        calc.units()
             .unit(&format!("m^{}", "1".repeat(1_000)))
             .is_err()
     );

@@ -415,7 +415,7 @@ fn test_code_review_findings_cr_007_through_cr_009() {
 
     // CR-008: UnitRegistry inherits and enforces configured max_exponent
     let low_exp_calc = Abacus::standard().with_max_exponent(5.0);
-    assert_eq!(low_exp_calc.units.max_exponent, 5.0);
+    assert_eq!(low_exp_calc.units().max_exponent(), 5.0);
     assert!(low_exp_calc.eval("5 m^5").is_ok());
     assert!(matches!(
         low_exp_calc.eval("5 m^6"),
