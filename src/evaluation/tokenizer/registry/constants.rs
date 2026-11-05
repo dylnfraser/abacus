@@ -2,7 +2,7 @@ use crate::units::{eval_result::EvalResult, value::Value};
 use std::collections::HashMap;
 
 /// Golden ratio φ = (1 + √5) / 2.
-pub const PHI: f64 = 1.618_033_988_749_895;
+pub const PHI: f64 = std::f64::consts::GOLDEN_RATIO;
 
 /// Built-in mathematical constants as `(name, value)` pairs.
 pub const STANDARD_CONSTANTS: &[(&str, f64)] = &[
