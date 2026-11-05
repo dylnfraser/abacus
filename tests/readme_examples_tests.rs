@@ -13,6 +13,8 @@
     feature = "currencies"
 ))]
 
+mod common;
+
 use abacus::{
     Abacus, AngleMode, Date, DateFormat, IntervalStyle, Notation, TimeZone, WeekendDays, eval,
 };
@@ -22,7 +24,7 @@ fn check_all(calc: &Abacus, cases: &[(&str, &str)]) {
     let mut failures = Vec::new();
     for &(expr, expected) in cases {
         match calc.eval(expr) {
-            Ok(res) if res.to_display() == expected => {}
+            Ok(res) if common::same_outcome(expected, &res.to_display()) => {}
             Ok(res) => failures.push(format!(
                 "`{expr}`: expected `{expected}`, got `{}`",
                 res.to_display()
